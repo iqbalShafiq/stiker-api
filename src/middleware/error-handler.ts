@@ -2,17 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import { config } from '../config';
 import { buildErrorResponse } from '../utils/response-builder';
-import {
-  AppError,
-  ValidationError,
-  InvalidFileTypeError,
-  FileTooLargeError,
-  AIGenerationError,
-  GridDetectionError,
-  BackgroundRemovalError,
-  ProviderError,
-  TimeoutError,
-} from '../errors';
+import { AppError, InvalidFileTypeError } from '../errors';
 
 const ALLOWED_MIME_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
 

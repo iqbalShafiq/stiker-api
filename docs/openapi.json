@@ -40,7 +40,27 @@
                   },
                   "grid": {
                     "type": "boolean",
-                    "description": "Request grid layout output",
+                    "description": "Request grid sheet output; when true you must send layout (e.g. 4x4) or both rows and cols",
+                    "default": false
+                  },
+                  "layout": {
+                    "type": "string",
+                    "description": "Grid dimensions like 4x4 (alternative to rows + cols when grid is true)",
+                    "example": "4x4"
+                  },
+                  "rows": {
+                    "type": "integer",
+                    "description": "Grid row count when grid is true (use with cols)",
+                    "minimum": 1
+                  },
+                  "cols": {
+                    "type": "integer",
+                    "description": "Grid column count when grid is true (use with rows)",
+                    "minimum": 1
+                  },
+                  "normalize": {
+                    "type": "boolean",
+                    "description": "When grid is true, optionally normalize the sheet before splitting (same as /grid/split)",
                     "default": false
                   }
                 },
@@ -273,6 +293,27 @@
           },
           "latencyMs": {
             "type": "integer"
+          },
+          "gridLayout": {
+            "type": "string"
+          },
+          "cellCount": {
+            "type": "integer"
+          },
+          "normalizedImageUrl": {
+            "type": "string"
+          },
+          "outputSize": {
+            "type": "string"
+          },
+          "normalized": {
+            "type": "boolean"
+          },
+          "backgroundRemoved": {
+            "type": "boolean"
+          },
+          "backgroundRemovalMethod": {
+            "type": "string"
           }
         }
       },

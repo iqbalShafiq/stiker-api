@@ -124,15 +124,20 @@ export class OpenRouterService {
    */
   async generateImage(
     prompt: string,
-    base64Image?: string
+    base64Image?: string,
+    imageMimeType: string = 'image/png'
   ): Promise<GenerationResult> {
     const content: Array<{ type: string; text?: string; image_url?: { url: string } }> =
       [{ type: 'text', text: prompt }];
 
     if (base64Image) {
+      const mime =
+        imageMimeType && /^image\/[a-z0-9.+-]+$/i.test(imageMimeType)
+          ? imageMimeType
+          : 'image/png';
       content.push({
         type: 'image_url',
-        image_url: { url: `data:image/png;base64,${base64Image}` },
+        image_url: { url: `data:${mime};base64,${base64Image}` },
       });
     }
 
@@ -157,19 +162,29 @@ export class OpenRouterService {
         throw new AIGenerationError('No message in response');
       }
 
+      /** OpenRouter adds `images[]` — not on upstream ChatCompletionMessage typings. */
+      const assistantMsg = message as {
+        images?: Array<{ image_url?: { url?: string } }>;
+        content?: unknown;
+      };
+
       // Extract image dari message.images[] (OpenRouter image generation format)
       let imageBuffer: Buffer | undefined;
 
-      if (message.images && Array.isArray(message.images) && message.images.length > 0) {
-        const imageData = message.images[0];
+      if (
+        assistantMsg.images &&
+        Array.isArray(assistantMsg.images) &&
+        assistantMsg.images.length > 0
+      ) {
+        const imageData = assistantMsg.images[0];
         if (imageData.image_url?.url) {
           imageBuffer = this.decodeImageUrl(imageData.image_url.url);
         }
       }
 
       // Fallback: cek content array
-      if (!imageBuffer && Array.isArray(message.content)) {
-        for (const part of message.content) {
+      if (!imageBuffer && Array.isArray(assistantMsg.content)) {
+        for (const part of assistantMsg.content) {
           if (typeof part === 'object' && part !== null && 'image_url' in part && part.image_url?.url) {
             imageBuffer = this.decodeImageUrl(part.image_url.url);
             break;
@@ -178,8 +193,8 @@ export class OpenRouterService {
       }
 
       // Fallback: cek content string
-      if (!imageBuffer && typeof message.content === 'string') {
-        const match = message.content.match(/data:image\/[^;]+;base64,([^"\s]+)/);
+      if (!imageBuffer && typeof assistantMsg.content === 'string') {
+        const match = assistantMsg.content.match(/data:image\/[^;]+;base64,([^"\s]+)/);
         if (match?.[1]) {
           imageBuffer = Buffer.from(match[1], 'base64');
         }
@@ -204,7 +219,7 @@ export class OpenRouterService {
       if (this.isProviderError(error) && base64Image) {
         // Fallback: jika image input tidak didukung, coba text-only
         console.warn('Image input not supported, falling back to text-only');
-        return this.generateImage(prompt);
+        return this.generateImage(prompt, undefined, imageMimeType);
       }
       if (this.isProviderError(error)) {
         throw new ProviderError(this.extractProviderErrorMessage(error));
@@ -485,34 +500,6 @@ Make sure boundaries cover the ENTIRE image without gaps or overlaps.`,
     }
 
     return true;
-  }
-
-  /**
-   * Extract image dari response content (bisa dari images array, content array, atau string)
-   */
-  private extractImageFromResponse(responseContent: string): Buffer {
-    // Coba parse sebagai JSON dulu (untuk handle images array)
-    try {
-      const parsed = JSON.parse(responseContent);
-      if (parsed.images && Array.isArray(parsed.images) && parsed.images.length > 0) {
-        const imageData = parsed.images[0];
-        if (imageData.image_url?.url) {
-          return this.decodeImageUrl(imageData.image_url.url);
-        }
-      }
-    } catch {
-      // Bukan JSON, coba extract dari string
-    }
-
-    // Cek kalau content sendiri adalah data URL
-    if (responseContent.includes('data:image')) {
-      const match = responseContent.match(/data:image\/[^;]+;base64,([^"\s]+)/);
-      if (match?.[1]) {
-        return Buffer.from(match[1], 'base64');
-      }
-    }
-
-    throw new AIGenerationError('No image data found in response');
   }
 
   /**

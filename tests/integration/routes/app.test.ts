@@ -78,6 +78,16 @@ describe('Integration Tests', () => {
       expect(response.status).toBe(400);
       expect(response.body.success).toBe(false);
     });
+
+    it('should return 400 when grid is true but layout and rows/cols are missing', async () => {
+      const response = await request(app)
+        .post('/api/v1/generate')
+        .field('text', 'test sticker')
+        .field('grid', 'true');
+
+      expect(response.status).toBe(400);
+      expect(response.body.success).toBe(false);
+    });
   });
 
   describe('GET /docs', () => {

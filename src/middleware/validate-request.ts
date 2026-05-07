@@ -10,7 +10,10 @@ export function validateRequest<T>(schema: z.ZodSchema<T>) {
         ...req.file,
       };
 
-      schema.parse(data);
+      const parsed = schema.parse(data);
+      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+        Object.assign(req.body, parsed);
+      }
       next();
     } catch (error) {
       if (error instanceof z.ZodError) {

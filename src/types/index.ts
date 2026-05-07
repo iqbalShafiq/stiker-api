@@ -11,6 +11,14 @@ export interface GenerationMetadata {
   tokensCompletion?: number;
   cost?: number;
   latencyMs?: number;
+  gridLayout?: string;
+  cellCount?: number;
+  normalizedImageUrl?: string;
+  outputSize?: string;
+  normalized?: boolean;
+  /** Server-side removal; /generate uses prompt-only transparency (typically false). */
+  backgroundRemoved?: boolean;
+  backgroundRemovalMethod?: string;
 }
 
 export interface ApiResponse<T> {
