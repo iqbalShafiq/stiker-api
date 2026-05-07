@@ -108,10 +108,10 @@ describe('ImageService', () => {
       expect(result?.gridLayout).toBe('2x2');
       expect(result?.boundaries).toHaveLength(4);
       expect(result?.boundaries[0]).toEqual({
-        x: 5,
-        y: 5,
-        width: 110,
-        height: 110,
+        x: 0,
+        y: 0,
+        width: 115,
+        height: 115,
       });
     });
   });

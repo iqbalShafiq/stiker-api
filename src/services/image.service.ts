@@ -166,6 +166,24 @@ export class ImageService {
       return { start: expandedStart, end: expandedEnd };
     });
 
+    // Outer cells can safely stretch to image edges without touching other cells.
+    // This reduces clipping risk for text near the outer border.
+    if (expandedIntervals.length > 0) {
+      expandedIntervals[0].start = 0;
+      expandedIntervals[expandedIntervals.length - 1].end = totalSize - 1;
+    }
+
+    // Keep intervals strictly non-overlapping to avoid pulling neighboring cells.
+    for (let index = 1; index < expandedIntervals.length; index++) {
+      const prev = expandedIntervals[index - 1];
+      const current = expandedIntervals[index];
+      if (current.start <= prev.end) {
+        const split = Math.floor((prev.end + current.start) / 2);
+        prev.end = split;
+        current.start = split + 1;
+      }
+    }
+
     return expandedIntervals;
   }
 
