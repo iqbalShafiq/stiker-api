@@ -145,7 +145,28 @@ export class ImageService {
       intervals.push({ start: cursor, end: projection.length - 1 });
     }
 
-    return intervals;
+    if (intervals.length === 0) {
+      return intervals;
+    }
+
+    // Expand each interval into surrounding gutter space to avoid clipping text near cell edges.
+    const expandedIntervals = intervals.map((interval, index) => {
+      const previous = intervals[index - 1];
+      const next = intervals[index + 1];
+
+      const prevGap = previous ? interval.start - previous.end - 1 : interval.start;
+      const nextGap = next ? next.start - interval.end - 1 : totalSize - interval.end - 1;
+
+      const expandedStart = Math.max(0, interval.start - Math.floor(Math.max(0, prevGap) / 2));
+      const expandedEnd = Math.min(
+        totalSize - 1,
+        interval.end + Math.floor(Math.max(0, nextGap) / 2)
+      );
+
+      return { start: expandedStart, end: expandedEnd };
+    });
+
+    return expandedIntervals;
   }
 
   async removeBackground(buffer: Buffer): Promise<Buffer> {
@@ -181,6 +202,16 @@ export class ImageService {
   async resizeImage(buffer: Buffer, width: number, height: number): Promise<Buffer> {
     return sharp(buffer)
       .resize(width, height, { fit: 'cover' })
+      .png()
+      .toBuffer();
+  }
+
+  async resizeToSquareContain(buffer: Buffer, size: number = 512): Promise<Buffer> {
+    return sharp(buffer)
+      .resize(size, size, {
+        fit: 'contain',
+        background: { r: 255, g: 255, b: 255, alpha: 0 },
+      })
       .png()
       .toBuffer();
   }

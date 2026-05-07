@@ -31,8 +31,9 @@ export class GridController {
       const body = req.body as Record<string, unknown>;
       const rows = body.rows ? parseInt(String(body.rows), 10) : undefined;
       const cols = body.cols ? parseInt(String(body.cols), 10) : undefined;
+      const shouldNormalize = body.normalize === 'true' || body.normalize === true;
       
-      const gridResult =
+      const initialGridResult =
         rows && cols
           ? await this.openRouterService.detectGridBoundaries(
               imageBuffer.toString('base64'),
@@ -48,15 +49,52 @@ export class GridController {
               dimensions.height
             ));
 
+      let splitSourceBuffer = imageBuffer;
+      let splitBoundaries = initialGridResult.boundaries;
+      let gridLayout = initialGridResult.gridLayout;
+      let normalizedImageUrl: string | undefined;
+
+      if (shouldNormalize) {
+        try {
+          const normalizedBuffer = await this.openRouterService.normalizeGridImage(
+            imageBuffer.toString('base64'),
+            initialGridResult.gridLayout,
+            dimensions.width,
+            dimensions.height
+          );
+
+          const normalizedGridResult =
+            (await this.imageService.detectGridBoundaries(normalizedBuffer)) ??
+            (await this.openRouterService.detectGridBoundaries(
+              normalizedBuffer.toString('base64'),
+              dimensions.width,
+              dimensions.height
+            ));
+
+          const normalizedFilename = await this.storageService.saveFile(normalizedBuffer, 'png');
+          normalizedImageUrl = this.storageService.getPublicUrl(normalizedFilename);
+
+          splitSourceBuffer = normalizedBuffer;
+          splitBoundaries = normalizedGridResult.boundaries;
+          gridLayout = normalizedGridResult.gridLayout;
+        } catch (normalizationError) {
+          console.warn(
+            'Grid normalization failed, fallback to original image split:',
+            normalizationError
+          );
+        }
+      }
+
       const splitBuffers = await this.imageService.splitImage(
-        imageBuffer,
-        gridResult.boundaries
+        splitSourceBuffer,
+        splitBoundaries
       );
 
       const images: ImageResult[] = [];
       for (const buffer of splitBuffers) {
-        const filename = await this.storageService.saveFile(buffer, 'png');
-        const dimensions = await this.imageService.getImageDimensions(buffer);
+        const squareBuffer = await this.imageService.resizeToSquareContain(buffer, 512);
+        const filename = await this.storageService.saveFile(squareBuffer, 'png');
+        const dimensions = await this.imageService.getImageDimensions(squareBuffer);
         images.push({
           id: filename.replace('.png', ''),
           url: this.storageService.getPublicUrl(filename),
@@ -69,8 +107,11 @@ export class GridController {
         buildSuccessResponse({
           images,
           metadata: {
-            gridLayout: gridResult.gridLayout,
+            gridLayout,
             cellCount: images.length,
+            normalizedImageUrl,
+            outputSize: '512x512',
+            normalized: shouldNormalize && Boolean(normalizedImageUrl),
           },
         })
       );

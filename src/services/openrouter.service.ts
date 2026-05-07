@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import sharp from 'sharp';
 import { config } from '../config';
 import {
   AIGenerationError,
@@ -212,6 +213,36 @@ export class OpenRouterService {
         error instanceof Error ? error.message : 'Unknown error'
       );
     }
+  }
+
+  async normalizeGridImage(
+    imageBase64: string,
+    gridLayout: string,
+    targetWidth: number,
+    targetHeight: number
+  ): Promise<Buffer> {
+    const prompt = `You are normalizing a sticker grid image for precise automated splitting.
+
+Task:
+- Recreate this grid image as a clean, normalized grid while preserving every original sticker and text.
+- Keep the SAME layout: ${gridLayout}.
+- Preserve all text labels fully, with complete ascenders/descenders and no clipped edges.
+- Make each cell fully visible with safe inner padding so text and faces are never cut.
+- Keep each sticker in its own cell only; no overlap between cells.
+- Preserve overall style and visual content from the input image.
+- Keep clear and consistent gutters between cells.
+- Do not crop, zoom-in, or trim any part of any sticker or text.
+- Output exactly one complete grid image.
+`;
+
+    const { imageBuffer } = await this.generateImage(prompt, imageBase64);
+
+    return sharp(imageBuffer)
+      .resize(targetWidth, targetHeight, {
+        fit: 'fill',
+      })
+      .png()
+      .toBuffer();
   }
 
   /**
