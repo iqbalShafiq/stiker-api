@@ -110,8 +110,8 @@ describe('ImageService', () => {
       expect(result?.boundaries[0]).toEqual({
         x: 0,
         y: 0,
-        width: 115,
-        height: 115,
+        width: 111,
+        height: 111,
       });
     });
   });

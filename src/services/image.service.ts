@@ -184,7 +184,56 @@ export class ImageService {
       }
     }
 
-    return expandedIntervals;
+    return this.optimizeAdjacentSplits(projection, expandedIntervals, totalSize);
+  }
+
+  private optimizeAdjacentSplits(
+    projection: number[],
+    intervals: Array<{ start: number; end: number }>,
+    totalSize: number
+  ): Array<{ start: number; end: number }> {
+    if (intervals.length < 2) {
+      return intervals;
+    }
+
+    const optimized = intervals.map((interval) => ({ ...interval }));
+    const minSegmentSize = Math.max(24, Math.round(totalSize * 0.04));
+    const searchRadius = Math.max(6, Math.round(totalSize * 0.01));
+
+    for (let index = 1; index < optimized.length; index++) {
+      const prev = optimized[index - 1];
+      const current = optimized[index];
+
+      const midpoint = Math.floor((prev.end + current.start) / 2);
+      const searchStart = Math.max(prev.start + minSegmentSize - 1, midpoint - searchRadius);
+      const searchEnd = Math.min(current.end - minSegmentSize, midpoint + searchRadius);
+
+      if (searchStart > searchEnd) {
+        continue;
+      }
+
+      let bestSplit = midpoint;
+      let bestScore = -Infinity;
+
+      for (let split = searchStart; split <= searchEnd; split++) {
+        const leftSize = split - prev.start + 1;
+        const rightSize = current.end - split;
+        if (leftSize < minSegmentSize || rightSize < minSegmentSize) {
+          continue;
+        }
+
+        const separatorScore = projection[split];
+        if (separatorScore > bestScore) {
+          bestScore = separatorScore;
+          bestSplit = split;
+        }
+      }
+
+      prev.end = bestSplit;
+      current.start = bestSplit + 1;
+    }
+
+    return optimized;
   }
 
   async removeBackground(buffer: Buffer): Promise<Buffer> {
