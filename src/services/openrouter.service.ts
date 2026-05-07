@@ -43,15 +43,57 @@ export class OpenRouterService {
     const message = response.choices[0]?.message;
     let imageBuffer: Buffer;
 
-    if (message?.content) {
+    if (!message) {
+      throw new Error('AI_GENERATION_FAILED: No message in response');
+    }
+
+    // OpenRouter image generation models return images in message.images array
+    if (message.images && Array.isArray(message.images) && message.images.length > 0) {
+      const imageData = message.images[0];
+      if (imageData.image_url?.url) {
+        const url = imageData.image_url.url;
+        if (url.startsWith('data:image')) {
+          const base64Match = url.match(/data:image\/[^;]+;base64,([^"\s]+)/);
+          if (base64Match?.[1]) {
+            imageBuffer = Buffer.from(base64Match[1], 'base64');
+          }
+        } else {
+          // Fetch image from URL
+          const imgResponse = await fetch(url);
+          imageBuffer = Buffer.from(await imgResponse.arrayBuffer());
+        }
+      }
+    }
+
+    // Fallback: check content array or string
+    if (!imageBuffer && Array.isArray(message.content)) {
+      for (const part of message.content) {
+        if (typeof part === 'object' && part !== null && 'image_url' in part && part.image_url?.url) {
+          const url = part.image_url.url;
+          if (url.startsWith('data:image')) {
+            const base64Match = url.match(/data:image\/[^;]+;base64,([^"\s]+)/);
+            if (base64Match?.[1]) {
+              imageBuffer = Buffer.from(base64Match[1], 'base64');
+              break;
+            }
+          } else {
+            const imgResponse = await fetch(url);
+            imageBuffer = Buffer.from(await imgResponse.arrayBuffer());
+            break;
+          }
+        }
+      }
+    }
+
+    if (!imageBuffer && typeof message.content === 'string') {
       const base64Match = message.content.match(/data:image\/[^;]+;base64,([^"\s]+)/);
       if (base64Match?.[1]) {
         imageBuffer = Buffer.from(base64Match[1], 'base64');
-      } else {
-        throw new Error('AI_GENERATION_FAILED: No image data in response');
       }
-    } else {
-      throw new Error('AI_GENERATION_FAILED: No content in response');
+    }
+
+    if (!imageBuffer) {
+      throw new Error('AI_GENERATION_FAILED: No image data in response');
     }
 
     return { imageBuffer, generationId };

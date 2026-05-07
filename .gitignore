@@ -24,6 +24,7 @@ Desktop.ini
 
 # Logs
 *.log
+.err
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -42,3 +43,6 @@ uploads/*
 # Temp
 tmp/
 temp/
+
+# Trial files
+*.png

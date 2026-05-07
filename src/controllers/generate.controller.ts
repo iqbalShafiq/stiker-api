@@ -30,19 +30,27 @@ export class GenerateController {
       }
 
       const prompt = `Create a WhatsApp sticker: ${text}`;
-      const { imageBuffer, generationId } = await this.openRouterService.generateImage(
-        prompt,
-        base64Image
-      );
+      let result: { imageBuffer: Buffer; generationId: string };
+      try {
+        result = await this.openRouterService.generateImage(prompt, base64Image);
+      } catch (error) {
+        // If image input fails (provider doesn't support vision), fallback to text-only
+        if (base64Image && error instanceof Error && error.message.includes('Provider returned error')) {
+          console.warn('Image input not supported by provider, falling back to text-only generation');
+          result = await this.openRouterService.generateImage(prompt);
+        } else {
+          throw error;
+        }
+      }
 
       let images: ImageResult[] = [];
 
       if (grid) {
         const gridResult = await this.openRouterService.detectGridBoundaries(
-          imageBuffer.toString('base64')
+          result.imageBuffer.toString('base64')
         );
         const splitBuffers = await this.imageService.splitImage(
-          imageBuffer,
+          result.imageBuffer,
           gridResult.boundaries
         );
 
@@ -57,8 +65,8 @@ export class GenerateController {
           });
         }
       } else {
-        const filename = await this.storageService.saveFile(imageBuffer, 'png');
-        const dimensions = await this.imageService.getImageDimensions(imageBuffer);
+        const filename = await this.storageService.saveFile(result.imageBuffer, 'png');
+        const dimensions = await this.imageService.getImageDimensions(result.imageBuffer);
         images.push({
           id: filename.replace('.png', ''),
           url: this.storageService.getPublicUrl(filename),
@@ -71,8 +79,8 @@ export class GenerateController {
         model: config.models.imageGeneration,
       };
 
-      if (generationId) {
-        const genMeta = this.openRouterService.getGenerationMetadata(generationId);
+      if (result.generationId) {
+        const genMeta = this.openRouterService.getGenerationMetadata(result.generationId);
         metadata.tokensPrompt = genMeta.tokensPrompt;
         metadata.tokensCompletion = genMeta.tokensCompletion;
         metadata.cost = genMeta.cost;

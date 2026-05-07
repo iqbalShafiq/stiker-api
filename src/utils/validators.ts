@@ -2,7 +2,17 @@ import { z } from 'zod';
 
 export const generateImageSchema = z.object({
   text: z.string().min(1).max(2000),
-  grid: z.boolean().optional().default(false),
+  grid: z
+    .union([z.boolean(), z.string()])
+    .optional()
+    .default(false)
+    .transform((val) => {
+      if (typeof val === 'boolean') return val;
+      if (typeof val === 'string') {
+        return val === 'true' || val === '1' || val === 'yes';
+      }
+      return false;
+    }),
 });
 
 export const gridSplitSchema = z.object({

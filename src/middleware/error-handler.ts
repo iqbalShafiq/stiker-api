@@ -27,6 +27,7 @@ export function errorHandler(
   res: Response,
   _next: NextFunction
 ): void {
+  console.error('ERROR:', err);
   if (err instanceof multer.MulterError) {
     if (err.code === 'LIMIT_FILE_SIZE') {
       res.status(413).json(
