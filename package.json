@@ -24,6 +24,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@imgly/background-removal-node": "^1.4.5",
     "@openrouter/sdk": "^0.12.35",
     "@scalar/express-api-reference": "^0.4.0",
     "cors": "^2.8.5",

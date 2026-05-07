@@ -1,18 +1,16 @@
 import type { Request, Response, NextFunction } from 'express';
-import { OpenRouterService } from '../services/openrouter.service';
 import { ImageService } from '../services/image.service';
 import { StorageService } from '../services/storage.service';
+import { getSegmentationBackgroundRemovalService } from '../services/segmentation-background-removal.service';
 import { buildSuccessResponse } from '../utils/response-builder';
 import { ValidationError, BackgroundRemovalError } from '../errors';
 import type { ImageResult } from '../types';
 
 export class BackgroundController {
-  private openRouterService: OpenRouterService;
   private imageService: ImageService;
   private storageService: StorageService;
 
   constructor() {
-    this.openRouterService = new OpenRouterService();
     this.imageService = new ImageService();
     this.storageService = new StorageService();
   }
@@ -25,24 +23,24 @@ export class BackgroundController {
       }
 
       const imageBuffer = file.buffer;
-      const base64Image = imageBuffer.toString('base64');
 
-      // Gunakan AI untuk generate gambar tanpa background
-      const prompt = 'Hapus background dari gambar ini, buat background menjadi transparan. Pertahankan subjek utama dengan jelas. Hasilkan dalam format PNG dengan alpha channel.';
-      
       let processedBuffer: Buffer;
+      let method: string;
       try {
-        const result = await this.openRouterService.generateImage(prompt, base64Image);
-        processedBuffer = result.imageBuffer;
+        processedBuffer = await getSegmentationBackgroundRemovalService().remove(imageBuffer);
+        method = 'imgly-onnx';
       } catch (error) {
-        // Fallback ke image processing lokal jika AI gagal
-        console.warn('AI background removal failed, falling back to local processing:', error);
+        console.warn(
+          'IMG.LY background removal failed, falling back to brightness threshold:',
+          error
+        );
         try {
           processedBuffer = await this.imageService.removeBackground(imageBuffer);
+          method = 'brightness-threshold-fallback';
         } catch (fallbackError) {
           throw new BackgroundRemovalError(
-            fallbackError instanceof Error 
-              ? fallbackError.message 
+            fallbackError instanceof Error
+              ? fallbackError.message
               : 'Failed to remove background'
           );
         }
@@ -61,7 +59,9 @@ export class BackgroundController {
       res.status(200).json(
         buildSuccessResponse({
           image,
-          metadata: {},
+          metadata: {
+            method,
+          },
         })
       );
     } catch (error) {

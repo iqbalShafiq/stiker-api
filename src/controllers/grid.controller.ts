@@ -5,6 +5,7 @@ import { StorageService } from '../services/storage.service';
 import { buildSuccessResponse } from '../utils/response-builder';
 import { ValidationError } from '../errors';
 import type { ImageResult } from '../types';
+import { getSegmentationBackgroundRemovalService } from '../services/segmentation-background-removal.service';
 
 export class GridController {
   private openRouterService: OpenRouterService;
@@ -32,6 +33,8 @@ export class GridController {
       const rows = body.rows ? parseInt(String(body.rows), 10) : undefined;
       const cols = body.cols ? parseInt(String(body.cols), 10) : undefined;
       const shouldNormalize = body.normalize === 'true' || body.normalize === true;
+      const removeBackgroundFromGrid =
+        body.removeBg === 'true' || body.removeBg === true;
       
       const initialGridResult =
         rows && cols
@@ -53,6 +56,8 @@ export class GridController {
       let splitBoundaries = initialGridResult.boundaries;
       let gridLayout = initialGridResult.gridLayout;
       let normalizedImageUrl: string | undefined;
+      let backgroundRemoved = false;
+      let backgroundRemovalMethod: string | undefined;
 
       if (shouldNormalize) {
         try {
@@ -85,6 +90,24 @@ export class GridController {
         }
       }
 
+      if (removeBackgroundFromGrid) {
+        try {
+          splitSourceBuffer = await getSegmentationBackgroundRemovalService().remove(
+            splitSourceBuffer
+          );
+          backgroundRemoved = true;
+          backgroundRemovalMethod = 'imgly-onnx';
+        } catch (bgError) {
+          console.warn(
+            'IMG.LY grid background removal failed, falling back to brightness threshold:',
+            bgError
+          );
+          splitSourceBuffer = await this.imageService.removeBackground(splitSourceBuffer);
+          backgroundRemoved = true;
+          backgroundRemovalMethod = 'brightness-threshold-fallback';
+        }
+      }
+
       const splitBuffers = await this.imageService.splitImage(
         splitSourceBuffer,
         splitBoundaries
@@ -112,6 +135,8 @@ export class GridController {
             normalizedImageUrl,
             outputSize: '512x512',
             normalized: shouldNormalize && Boolean(normalizedImageUrl),
+            backgroundRemoved,
+            backgroundRemovalMethod,
           },
         })
       );

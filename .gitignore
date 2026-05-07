@@ -33,6 +33,9 @@ yarn-error.log*
 coverage/
 .nyc_output/
 
+# Local ML / ONNX model cache (e.g. @imgly/background-removal-node)
+.cache/
+
 # Uploads (runtime generated)
 uploads/*
 !uploads/.gitkeep
@@ -48,4 +51,5 @@ temp/
 *.png
 *.jpg
 *.jpeg
+*.webp
 *.gif
