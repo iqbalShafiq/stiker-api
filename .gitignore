@@ -46,3 +46,6 @@ temp/
 
 # Trial files
 *.png
+*.jpg
+*.jpeg
+*.gif

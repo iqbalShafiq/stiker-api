@@ -3,6 +3,7 @@ import { OpenRouterService } from '../services/openrouter.service';
 import { ImageService } from '../services/image.service';
 import { StorageService } from '../services/storage.service';
 import { buildSuccessResponse } from '../utils/response-builder';
+import { ValidationError } from '../errors';
 import type { ImageResult } from '../types';
 
 export class GridController {
@@ -20,12 +21,23 @@ export class GridController {
     try {
       const file = req.file;
       if (!file) {
-        throw new Error('VALIDATION_ERROR: Image file is required');
+        throw new ValidationError('Image file is required');
       }
 
       const imageBuffer = file.buffer;
+      const dimensions = await this.imageService.getImageDimensions(imageBuffer);
+      
+      // Allow user to specify rows and cols manually
+      const body = req.body as Record<string, unknown>;
+      const rows = body.rows ? parseInt(String(body.rows), 10) : undefined;
+      const cols = body.cols ? parseInt(String(body.cols), 10) : undefined;
+      
       const gridResult = await this.openRouterService.detectGridBoundaries(
-        imageBuffer.toString('base64')
+        imageBuffer.toString('base64'),
+        dimensions.width,
+        dimensions.height,
+        rows,
+        cols
       );
 
       const splitBuffers = await this.imageService.splitImage(

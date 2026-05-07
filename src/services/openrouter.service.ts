@@ -1,11 +1,41 @@
 import OpenAI from 'openai';
 import { config } from '../config';
+import {
+  AIGenerationError,
+  GridDetectionError,
+  ProviderError,
+  TimeoutError,
+} from '../errors';
 import type { GridBoundary, GridDetectionResult } from '../types';
+
+interface ChatMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
+}
+
+interface ChatCompletionOptions {
+  model?: string;
+  messages: ChatMessage[];
+  responseFormat?: { type: 'json_object' | 'text' };
+  timeoutMs?: number;
+}
+
+interface GenerationResult {
+  imageBuffer: Buffer;
+  generationId: string;
+  metadata: {
+    tokensPrompt?: number;
+    tokensCompletion?: number;
+    cost?: number;
+    latencyMs?: number;
+  };
+}
 
 export class OpenRouterService {
   private client: OpenAI;
+  private defaultTimeout: number;
 
-  constructor() {
+  constructor(timeoutMs: number = 60000) {
     this.client = new OpenAI({
       baseURL: 'https://openrouter.ai/api/v1',
       apiKey: config.openRouterApiKey,
@@ -13,13 +43,90 @@ export class OpenRouterService {
         'HTTP-Referer': config.appUrl,
         'X-Title': 'WhatsApp Sticker API',
       },
+      timeout: timeoutMs,
     });
+    this.defaultTimeout = timeoutMs;
   }
 
-  async generateImage(prompt: string, base64Image?: string): Promise<{ imageBuffer: Buffer; generationId: string }> {
-    const content: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
-      { type: 'text', text: prompt },
-    ];
+  /**
+   * Generic chat completion - reusable untuk semua endpoint
+   */
+  async chatCompletion<T = string>(options: ChatCompletionOptions): Promise<{
+    content: T;
+    generationId: string;
+    metadata: {
+      tokensPrompt?: number;
+      tokensCompletion?: number;
+      cost?: number;
+      latencyMs?: number;
+    };
+  }> {
+    const startTime = Date.now();
+    const timeoutMs = options.timeoutMs ?? this.defaultTimeout;
+
+    try {
+      const response = await Promise.race([
+        this.client.chat.completions.create({
+          model: options.model ?? config.models.imageGeneration,
+          messages: options.messages as any,
+          response_format: options.responseFormat,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new TimeoutError()), timeoutMs)
+        ),
+      ]);
+
+      const latencyMs = Date.now() - startTime;
+      const generationId = response.id;
+      const message = response.choices[0]?.message;
+
+      if (!message) {
+        throw new AIGenerationError('No message in response');
+      }
+
+      let content: T;
+      if (typeof message.content === 'string') {
+        content = message.content as T;
+      } else if (message.content) {
+        content = JSON.stringify(message.content) as T;
+      } else {
+        content = '' as T;
+      }
+
+      const metadata = {
+        tokensPrompt: response.usage?.prompt_tokens,
+        tokensCompletion: response.usage?.completion_tokens,
+        cost: this.extractCost(response),
+        latencyMs,
+      };
+
+      return { content, generationId, metadata };
+    } catch (error) {
+      if (error instanceof TimeoutError) {
+        throw error;
+      }
+      if (error instanceof AIGenerationError) {
+        throw error;
+      }
+      if (this.isProviderError(error)) {
+        throw new ProviderError(this.extractProviderErrorMessage(error));
+      }
+      throw new AIGenerationError(
+        error instanceof Error ? error.message : 'Unknown error'
+      );
+    }
+  }
+
+  /**
+   * Generate image dengan prompt text (dan opsional image input)
+   * Direct API call untuk bisa akses message.images[]
+   */
+  async generateImage(
+    prompt: string,
+    base64Image?: string
+  ): Promise<GenerationResult> {
+    const content: Array<{ type: string; text?: string; image_url?: { url: string } }> =
+      [{ type: 'text', text: prompt }];
 
     if (base64Image) {
       content.push({
@@ -28,134 +135,416 @@ export class OpenRouterService {
       });
     }
 
-    const response = await this.client.chat.completions.create({
-      model: config.models.imageGeneration,
-      messages: [
-        {
-          role: 'user',
-          content: content as unknown as string,
-        },
-      ],
-    });
+    const startTime = Date.now();
 
-    const generationId = response.id;
+    try {
+      const response = await Promise.race([
+        this.client.chat.completions.create({
+          model: config.models.imageGeneration,
+          messages: [{ role: 'user', content: content as any }],
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new TimeoutError()), this.defaultTimeout)
+        ),
+      ]);
 
-    const message = response.choices[0]?.message;
-    let imageBuffer: Buffer;
+      const latencyMs = Date.now() - startTime;
+      const generationId = response.id;
+      const message = response.choices[0]?.message;
 
-    if (!message) {
-      throw new Error('AI_GENERATION_FAILED: No message in response');
-    }
+      if (!message) {
+        throw new AIGenerationError('No message in response');
+      }
 
-    // OpenRouter image generation models return images in message.images array
-    if (message.images && Array.isArray(message.images) && message.images.length > 0) {
-      const imageData = message.images[0];
-      if (imageData.image_url?.url) {
-        const url = imageData.image_url.url;
-        if (url.startsWith('data:image')) {
-          const base64Match = url.match(/data:image\/[^;]+;base64,([^"\s]+)/);
-          if (base64Match?.[1]) {
-            imageBuffer = Buffer.from(base64Match[1], 'base64');
-          }
-        } else {
-          // Fetch image from URL
-          const imgResponse = await fetch(url);
-          imageBuffer = Buffer.from(await imgResponse.arrayBuffer());
+      // Extract image dari message.images[] (OpenRouter image generation format)
+      let imageBuffer: Buffer | undefined;
+
+      if (message.images && Array.isArray(message.images) && message.images.length > 0) {
+        const imageData = message.images[0];
+        if (imageData.image_url?.url) {
+          imageBuffer = this.decodeImageUrl(imageData.image_url.url);
         }
       }
-    }
 
-    // Fallback: check content array or string
-    if (!imageBuffer && Array.isArray(message.content)) {
-      for (const part of message.content) {
-        if (typeof part === 'object' && part !== null && 'image_url' in part && part.image_url?.url) {
-          const url = part.image_url.url;
-          if (url.startsWith('data:image')) {
-            const base64Match = url.match(/data:image\/[^;]+;base64,([^"\s]+)/);
-            if (base64Match?.[1]) {
-              imageBuffer = Buffer.from(base64Match[1], 'base64');
-              break;
-            }
-          } else {
-            const imgResponse = await fetch(url);
-            imageBuffer = Buffer.from(await imgResponse.arrayBuffer());
+      // Fallback: cek content array
+      if (!imageBuffer && Array.isArray(message.content)) {
+        for (const part of message.content) {
+          if (typeof part === 'object' && part !== null && 'image_url' in part && part.image_url?.url) {
+            imageBuffer = this.decodeImageUrl(part.image_url.url);
             break;
           }
         }
       }
+
+      // Fallback: cek content string
+      if (!imageBuffer && typeof message.content === 'string') {
+        const match = message.content.match(/data:image\/[^;]+;base64,([^"\s]+)/);
+        if (match?.[1]) {
+          imageBuffer = Buffer.from(match[1], 'base64');
+        }
+      }
+
+      if (!imageBuffer) {
+        throw new AIGenerationError('No image data in response');
+      }
+
+      const metadata = {
+        tokensPrompt: response.usage?.prompt_tokens,
+        tokensCompletion: response.usage?.completion_tokens,
+        cost: this.extractCost(response),
+        latencyMs,
+      };
+
+      return { imageBuffer, generationId, metadata };
+    } catch (error) {
+      if (error instanceof TimeoutError || error instanceof AIGenerationError) {
+        throw error;
+      }
+      if (this.isProviderError(error) && base64Image) {
+        // Fallback: jika image input tidak didukung, coba text-only
+        console.warn('Image input not supported, falling back to text-only');
+        return this.generateImage(prompt);
+      }
+      if (this.isProviderError(error)) {
+        throw new ProviderError(this.extractProviderErrorMessage(error));
+      }
+      throw new AIGenerationError(
+        error instanceof Error ? error.message : 'Unknown error'
+      );
+    }
+  }
+
+  /**
+   * Detect grid boundaries dari image
+   * Menggunakan AI vision untuk deteksi, dengan fallback ke auto-detection
+   */
+  async detectGridBoundaries(
+    imageBase64: string,
+    imageWidth?: number,
+    imageHeight?: number,
+    forceRows?: number,
+    forceCols?: number
+  ): Promise<GridDetectionResult> {
+    // Jika user spesifikkan rows dan cols, gunakan langsung tanpa AI
+    if (forceRows && forceCols && imageWidth && imageHeight) {
+      console.log(`Using user-specified grid layout: ${forceRows}x${forceCols}`);
+      return this.generateGridBoundaries(imageWidth, imageHeight, forceRows, forceCols);
     }
 
-    if (!imageBuffer && typeof message.content === 'string') {
-      const base64Match = message.content.match(/data:image\/[^;]+;base64,([^"\s]+)/);
-      if (base64Match?.[1]) {
-        imageBuffer = Buffer.from(base64Match[1], 'base64');
+    // Coba AI detection dulu
+    try {
+      const { content } = await this.chatCompletion({
+        model: config.models.agent,
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are an image analysis assistant. Analyze grid images and identify cell boundaries. You must detect ALL cells including those with stickers/images and text overlays. Account for padding and gaps between cells. Return ONLY a JSON object.',
+          },
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: `Analyze this grid image carefully. The image contains a grid layout with multiple cells arranged in rows and columns.
+
+IMPORTANT INSTRUCTIONS:
+1. Count the total number of rows and columns
+2. Identify the boundaries of EACH individual cell
+3. Include the FULL cell area including any white space, borders, or gaps between cells
+4. Do NOT crop too tightly - include some margin around each cell content
+5. Return exact pixel coordinates based on the image dimensions
+
+Return a JSON object with this exact format:
+{
+  "gridLayout": "ROWSxCOLS",
+  "boundaries": [
+    { "x": 0, "y": 0, "width": 100, "height": 100 },
+    ...
+  ]
+}
+
+Make sure boundaries cover the ENTIRE image without gaps or overlaps.`,
+              },
+              {
+                type: 'image_url',
+                image_url: { url: `data:image/png;base64,${imageBase64}` },
+              },
+            ] as any,
+          },
+        ],
+        responseFormat: { type: 'json_object' },
+        timeoutMs: 30000,
+      });
+
+      const parsed = JSON.parse(content) as GridDetectionResult;
+      this.validateBoundaries(parsed.boundaries);
+
+      // Validasi: cek apakah boundaries cover gambar dengan baik
+      if (imageWidth && imageHeight) {
+        const isValid = this.validateGridCoverage(parsed.boundaries, imageWidth, imageHeight);
+        if (!isValid) {
+          throw new Error('Grid coverage invalid');
+        }
+      }
+
+      return parsed;
+    } catch (aiError) {
+      console.warn('AI grid detection failed, falling back to auto-detection:', aiError);
+
+      // Fallback ke auto-detection jika AI gagal atau hasil tidak valid
+      if (imageWidth && imageHeight) {
+        return this.autoDetectGrid(imageWidth, imageHeight);
+      }
+
+      throw new GridDetectionError(
+        aiError instanceof Error ? aiError.message : 'Grid detection failed'
+      );
+    }
+  }
+
+  /**
+   * Generate grid boundaries dengan layout spesifik (tanpa margin)
+   */
+  private generateGridBoundaries(
+    width: number,
+    height: number,
+    rows: number,
+    cols: number
+  ): GridDetectionResult {
+    const cellWidth = Math.floor(width / cols);
+    const cellHeight = Math.floor(height / rows);
+
+    const boundaries: GridBoundary[] = [];
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        boundaries.push({
+          x: col * cellWidth,
+          y: row * cellHeight,
+          width: cellWidth,
+          height: cellHeight,
+        });
       }
     }
 
-    if (!imageBuffer) {
-      throw new Error('AI_GENERATION_FAILED: No image data in response');
-    }
-
-    return { imageBuffer, generationId };
+    return {
+      gridLayout: `${rows}x${cols}`,
+      boundaries,
+    };
   }
 
-  async detectGridBoundaries(imageBase64: string): Promise<GridDetectionResult> {
-    const response = await this.client.chat.completions.create({
-      model: config.models.agent,
-      messages: [
-        {
-          role: 'system',
-          content: 'You are an image analysis assistant. Analyze grid images and identify cell boundaries. Return ONLY a JSON object with gridLayout and boundaries array.',
-        },
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: 'Analyze this grid image and identify the boundaries of each individual cell. Return a JSON object with format: { "gridLayout": "2x2", "boundaries": [{ "x": 0, "y": 0, "width": 100, "height": 100 }] }',
-            },
-            {
-              type: 'image_url',
-              image_url: { url: `data:image/png;base64,${imageBase64}` },
-            },
-          ] as unknown as string,
-        },
-      ],
-      response_format: { type: 'json_object' },
-    });
+  /**
+   * Auto-detect grid dengan equal spacing (fallback)
+   * Mencoba beberapa kemungkinan layout dan memilih yang paling masuk akal
+   */
+  private autoDetectGrid(width: number, height: number): GridDetectionResult {
+    const ratio = width / height;
+    const minCellSize = 120; // Minimum ukuran cell yang masuk akal untuk stiker
+    const maxCellSize = 600; // Maximum ukuran cell
 
-    const content = response.choices[0]?.message?.content;
-    if (!content) {
-      throw new Error('GRID_DETECTION_FAILED: No response from AI');
+    // Generate kemungkinan layout berdasarkan ukuran gambar
+    const possibleLayouts: Array<{ rows: number; cols: number }> = [];
+    const maxCols = Math.floor(width / minCellSize);
+    const maxRows = Math.floor(height / minCellSize);
+
+    for (let rows = 1; rows <= Math.min(maxRows, 8); rows++) {
+      for (let cols = 1; cols <= Math.min(maxCols, 8); cols++) {
+        const cellW = width / cols;
+        const cellH = height / rows;
+        if (cellW >= minCellSize && cellW <= maxCellSize &&
+            cellH >= minCellSize && cellH <= maxCellSize) {
+          possibleLayouts.push({ rows, cols });
+        }
+      }
     }
 
+    // Pilih layout terbaik berdasarkan aspect ratio dan jumlah cell
+    let bestLayout = { rows: 2, cols: 2 };
+    let bestScore = -1;
+
+    for (const layout of possibleLayouts) {
+      const cellW = width / layout.cols;
+      const cellH = height / layout.rows;
+      const cellRatio = cellW / cellH;
+      const ratioDiff = Math.abs(cellRatio - 1); // Prefer square cells
+      const cellCount = layout.rows * layout.cols;
+      
+      // Score: prefer square cells, common sticker counts (4,6,8,9,12,16,20,24), dan ukuran yang pas
+      let countScore = 0;
+      if ([4, 6, 8, 9, 12, 16, 20, 24].includes(cellCount)) countScore = 10;
+      else if ([2, 3, 15, 18, 25].includes(cellCount)) countScore = 5;
+      
+      const score = countScore - ratioDiff * 5 + (cellCount > 4 ? 2 : 0);
+      
+      if (score > bestScore) {
+        bestScore = score;
+        bestLayout = layout;
+      }
+    }
+
+    // Override untuk kasus umum berdasarkan ukuran gambar
+    const minDim = Math.min(width, height);
+    if (minDim >= 1000) {
+      // Gambar besar: biasanya 4x4 atau 3x4
+      if (ratio >= 0.9 && ratio <= 1.1) {
+        bestLayout = { rows: 4, cols: 4 };
+      }
+    } else if (minDim >= 700) {
+      // Gambar medium: 3x3 atau 2x3
+      if (ratio >= 0.9 && ratio <= 1.1) {
+        bestLayout = { rows: 3, cols: 3 };
+      }
+    }
+
+    const rows = bestLayout.rows;
+    const cols = bestLayout.cols;
+
+    // Hitung cell size dengan margin (2% dari ukuran gambar)
+    const marginX = Math.round(width * 0.02);
+    const marginY = Math.round(height * 0.02);
+    const cellWidth = Math.floor((width - marginX * (cols - 1)) / cols);
+    const cellHeight = Math.floor((height - marginY * (rows - 1)) / rows);
+
+    const boundaries: GridBoundary[] = [];
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        boundaries.push({
+          x: col * (cellWidth + marginX),
+          y: row * (cellHeight + marginY),
+          width: Math.min(cellWidth, width - col * (cellWidth + marginX)),
+          height: Math.min(cellHeight, height - row * (cellHeight + marginY)),
+        });
+      }
+    }
+
+    return {
+      gridLayout: `${rows}x${cols}`,
+      boundaries,
+    };
+  }
+
+  /**
+   * Validasi apakah grid boundaries cover gambar dengan baik
+   */
+  private validateGridCoverage(
+    boundaries: GridBoundary[],
+    imageWidth: number,
+    imageHeight: number
+  ): boolean {
+    if (boundaries.length === 0) return false;
+
+    // Hitung total area boundaries
+    const totalBoundaryArea = boundaries.reduce(
+      (sum, b) => sum + b.width * b.height,
+      0
+    );
+    const imageArea = imageWidth * imageHeight;
+
+    // Boundaries harus cover minimal 60% area gambar
+    const coverage = totalBoundaryArea / imageArea;
+    if (coverage < 0.6 || coverage > 1.1) {
+      return false;
+    }
+
+    // Cek apakah ada boundaries yang keluar dari gambar
+    for (const b of boundaries) {
+      if (b.x + b.width > imageWidth + 10 || b.y + b.height > imageHeight + 10) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * Extract image dari response content (bisa dari images array, content array, atau string)
+   */
+  private extractImageFromResponse(responseContent: string): Buffer {
+    // Coba parse sebagai JSON dulu (untuk handle images array)
     try {
-      const parsed = JSON.parse(content) as GridDetectionResult;
-      this.validateBoundaries(parsed.boundaries);
-      return parsed;
+      const parsed = JSON.parse(responseContent);
+      if (parsed.images && Array.isArray(parsed.images) && parsed.images.length > 0) {
+        const imageData = parsed.images[0];
+        if (imageData.image_url?.url) {
+          return this.decodeImageUrl(imageData.image_url.url);
+        }
+      }
     } catch {
-      throw new Error('GRID_DETECTION_FAILED: Invalid response format');
+      // Bukan JSON, coba extract dari string
     }
+
+    // Cek kalau content sendiri adalah data URL
+    if (responseContent.includes('data:image')) {
+      const match = responseContent.match(/data:image\/[^;]+;base64,([^"\s]+)/);
+      if (match?.[1]) {
+        return Buffer.from(match[1], 'base64');
+      }
+    }
+
+    throw new AIGenerationError('No image data found in response');
   }
 
-  getGenerationMetadata(_generationId: string): {
-    tokensPrompt?: number;
-    tokensCompletion?: number;
-    cost?: number;
-    latencyMs?: number;
-  } {
-    // OpenRouter OpenAI-compatible endpoint doesn't expose generation metadata directly.
-    // Use OpenRouter native API or SDK for detailed metadata.
-    return {};
+  /**
+   * Decode image dari data URL atau remote URL
+   */
+  private decodeImageUrl(url: string): Buffer {
+    if (url.startsWith('data:image')) {
+      const match = url.match(/data:image\/[^;]+;base64,([^"\s]+)/);
+      if (match?.[1]) {
+        return Buffer.from(match[1], 'base64');
+      }
+      throw new AIGenerationError('Invalid base64 image data');
+    }
+
+    // Remote URL - fetch
+    throw new AIGenerationError('Remote image URLs not yet supported');
   }
 
+  /**
+   * Cek apakah error berasal dari provider
+   */
+  private isProviderError(error: unknown): boolean {
+    if (error instanceof Error) {
+      return (
+        error.message.includes('Provider returned error') ||
+        error.message.includes('502') ||
+        (error as any).status === 502
+      );
+    }
+    return false;
+  }
+
+  /**
+   * Extract error message dari provider error
+   */
+  private extractProviderErrorMessage(error: unknown): string {
+    if (error instanceof Error) {
+      const anyError = error as any;
+      if (anyError.error?.metadata?.raw) {
+        return `${anyError.message}: ${anyError.error.metadata.raw}`;
+      }
+      return error.message;
+    }
+    return 'Provider error';
+  }
+
+  /**
+   * Extract cost dari response
+   */
+  private extractCost(response: any): number | undefined {
+    return response.usage?.cost ?? response.cost ?? undefined;
+  }
+
+  /**
+   * Validasi grid boundaries
+   */
   private validateBoundaries(boundaries: GridBoundary[]): void {
     for (const boundary of boundaries) {
       if (boundary.x < 0 || boundary.y < 0) {
-        throw new Error('GRID_DETECTION_FAILED: Invalid boundary coordinates');
+        throw new GridDetectionError('Invalid boundary coordinates');
       }
       if (boundary.width <= 0 || boundary.height <= 0) {
-        throw new Error('GRID_DETECTION_FAILED: Invalid boundary dimensions');
+        throw new GridDetectionError('Invalid boundary dimensions');
       }
     }
   }
