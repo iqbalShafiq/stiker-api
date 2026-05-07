@@ -32,13 +32,21 @@ export class GridController {
       const rows = body.rows ? parseInt(String(body.rows), 10) : undefined;
       const cols = body.cols ? parseInt(String(body.cols), 10) : undefined;
       
-      const gridResult = await this.openRouterService.detectGridBoundaries(
-        imageBuffer.toString('base64'),
-        dimensions.width,
-        dimensions.height,
-        rows,
-        cols
-      );
+      const gridResult =
+        rows && cols
+          ? await this.openRouterService.detectGridBoundaries(
+              imageBuffer.toString('base64'),
+              dimensions.width,
+              dimensions.height,
+              rows,
+              cols
+            )
+          : (await this.imageService.detectGridBoundaries(imageBuffer)) ??
+            (await this.openRouterService.detectGridBoundaries(
+              imageBuffer.toString('base64'),
+              dimensions.width,
+              dimensions.height
+            ));
 
       const splitBuffers = await this.imageService.splitImage(
         imageBuffer,

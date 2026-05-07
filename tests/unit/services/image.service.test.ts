@@ -52,6 +52,70 @@ describe('ImageService', () => {
     });
   });
 
+  describe('detectGridBoundaries', () => {
+    it('should detect boundaries from a simple 2x2 grid with white separators', async () => {
+      const width = 220;
+      const height = 220;
+      const separator = 10;
+      const cell = 100;
+      const channels = 3;
+      const raw = Buffer.alloc(width * height * channels, 255);
+
+      for (let y = separator; y < separator + cell; y++) {
+        for (let x = separator; x < separator + cell; x++) {
+          const idx = (y * width + x) * channels;
+          raw[idx] = 200;
+          raw[idx + 1] = 30;
+          raw[idx + 2] = 30;
+        }
+      }
+
+      for (let y = separator; y < separator + cell; y++) {
+        for (let x = separator * 2 + cell; x < separator * 2 + cell * 2; x++) {
+          const idx = (y * width + x) * channels;
+          raw[idx] = 30;
+          raw[idx + 1] = 200;
+          raw[idx + 2] = 30;
+        }
+      }
+
+      for (let y = separator * 2 + cell; y < separator * 2 + cell * 2; y++) {
+        for (let x = separator; x < separator + cell; x++) {
+          const idx = (y * width + x) * channels;
+          raw[idx] = 30;
+          raw[idx + 1] = 30;
+          raw[idx + 2] = 200;
+        }
+      }
+
+      for (let y = separator * 2 + cell; y < separator * 2 + cell * 2; y++) {
+        for (let x = separator * 2 + cell; x < separator * 2 + cell * 2; x++) {
+          const idx = (y * width + x) * channels;
+          raw[idx] = 120;
+          raw[idx + 1] = 120;
+          raw[idx + 2] = 30;
+        }
+      }
+
+      const buffer = await sharp(raw, {
+        raw: { width, height, channels },
+      })
+        .png()
+        .toBuffer();
+
+      const result = await service.detectGridBoundaries(buffer);
+      expect(result).not.toBeNull();
+      expect(result?.gridLayout).toBe('2x2');
+      expect(result?.boundaries).toHaveLength(4);
+      expect(result?.boundaries[0]).toEqual({
+        x: 10,
+        y: 10,
+        width: 100,
+        height: 100,
+      });
+    });
+  });
+
   describe('removeBackground', () => {
     it('should process image and return buffer', async () => {
       const buffer = await sharp({
