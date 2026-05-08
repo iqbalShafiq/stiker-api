@@ -27,7 +27,11 @@ function buildPromptGrid(text: string, rows: number, cols: number): string {
 Layout (critical):
 - Exactly ${rows} rows and ${cols} columns (${rows * cols} cells total).
 - Use straight horizontal and vertical separators (lines or clear gutters) so each cell can be cropped automatically.
-- One distinct sticker per cell; keep all artwork and text fully inside its cell with safe margins.
+- Every cell must contain BOTH:
+  1) a clear visual subject (photo-style portrait/object/character), and
+  2) a short readable caption text inside the same cell.
+- Do not leave any cell without text. Do not place text outside the cell boundaries.
+- One distinct sticker per cell; keep all artwork and caption text fully inside its cell with safe margins.
 
 ${PROMPT_TRANSPARENT_STICKER_BG}`;
 }
