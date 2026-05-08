@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -13,16 +15,24 @@ import { BackgroundController } from './controllers/background.controller';
 
 const app = express();
 
+/** Inline spec so Scalar does not fetch /openapi.json (avoids mistaken https + ERR_SSL_PROTOCOL_ERROR on LAN HTTP). */
+const openApiSpecPath = path.join(process.cwd(), 'docs', 'openapi.json');
+const openApiSpec: Record<string, unknown> = JSON.parse(
+  fs.readFileSync(openApiSpecPath, 'utf-8')
+) as Record<string, unknown>;
+
 app.use(
   helmet({
+    // HTTP on a LAN IP is not a "trustworthy" document; COOP adds noise and is ignored by the browser.
+    crossOriginOpenerPolicy: false,
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
         styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://fonts.googleapis.com"],
-        fontSrc: ["'self'", "https://fonts.gstatic.com"],
+        fontSrc: ["'self'", "https://fonts.gstatic.com", "https://cdn.jsdelivr.net", "data:"],
         imgSrc: ["'self'", "data:", "https://cdn.jsdelivr.net"],
-        connectSrc: ["'self'"],
+        connectSrc: ["'self'", "https://cdn.jsdelivr.net"],
       },
     },
   })
@@ -65,7 +75,7 @@ app.get(
   '/docs',
   apiReference({
     spec: {
-      url: '/openapi.json',
+      content: openApiSpec,
     },
   })
 );

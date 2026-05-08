@@ -11,8 +11,8 @@
   },
   "servers": [
     {
-      "url": "http://localhost:3000",
-      "description": "Local development server"
+      "url": "/",
+      "description": "Same host as this OpenAPI document (works for localhost and LAN IP)"
     }
   ],
   "paths": {

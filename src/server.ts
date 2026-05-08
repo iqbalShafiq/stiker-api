@@ -1,9 +1,9 @@
 import app from './app';
 import { config } from './config';
 
-const server = app.listen(config.port, () => {
+const server = app.listen(config.port, config.host, () => {
   // eslint-disable-next-line no-console
-  console.log(`Server running on port ${config.port} in ${config.nodeEnv} mode`);
+  console.log(`Server running on ${config.host}:${config.port} in ${config.nodeEnv} mode`);
 });
 
 process.on('SIGTERM', () => {

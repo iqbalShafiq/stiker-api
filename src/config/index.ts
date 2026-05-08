@@ -18,6 +18,7 @@ const defaultImglyAssetsDir = path.join(
 
 export const config = {
   port: parseInt(process.env.PORT ?? '3000', 10),
+  host: process.env.HOST ?? '0.0.0.0',
   nodeEnv: process.env.NODE_ENV ?? 'development',
   openRouterApiKey: process.env.OPENROUTER_API_KEY ?? '',
   appUrl: process.env.APP_URL ?? 'http://localhost:3000',
