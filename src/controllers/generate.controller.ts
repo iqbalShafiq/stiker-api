@@ -129,8 +129,10 @@ export class GenerateController {
         return;
       }
 
-      const filename = await this.storageService.saveFile(imageBuffer, 'png');
-      const dimensions = await this.imageService.getImageDimensions(imageBuffer);
+      // Keep WhatsApp-ready 512x512 output without stretching subject proportions.
+      const squareBuffer = await this.imageService.resizeToSquareContain(imageBuffer, 512);
+      const filename = await this.storageService.saveFile(squareBuffer, 'png');
+      const dimensions = await this.imageService.getImageDimensions(squareBuffer);
       images.push({
         id: filename.replace('.png', ''),
         url: this.storageService.getPublicUrl(filename),
@@ -141,6 +143,7 @@ export class GenerateController {
       const metadata: GenerationMetadata = {
         model: config.models.imageGeneration,
         ...aiMetadata,
+        outputSize: '512x512',
         backgroundRemoved: false,
         backgroundRemovalMethod: 'none',
       };

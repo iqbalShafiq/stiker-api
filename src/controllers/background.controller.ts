@@ -46,8 +46,10 @@ export class BackgroundController {
         }
       }
 
-      const filename = await this.storageService.saveFile(processedBuffer, 'png');
-      const dimensions = await this.imageService.getImageDimensions(processedBuffer);
+      // Output stays square 512x512 with transparent padding to avoid aspect distortion.
+      const squareBuffer = await this.imageService.resizeToSquareContain(processedBuffer, 512);
+      const filename = await this.storageService.saveFile(squareBuffer, 'png');
+      const dimensions = await this.imageService.getImageDimensions(squareBuffer);
 
       const image: ImageResult = {
         id: filename.replace('.png', ''),
