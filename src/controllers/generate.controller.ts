@@ -95,6 +95,7 @@ export class GenerateController {
       );
 
       let images: ImageResult[] = [];
+      const requestTimestamp = Date.now();
 
       if (grid && gridDims) {
         const { images: gridImages, metadata: gridMeta } = await this.gridSplitService.split(
@@ -103,7 +104,7 @@ export class GenerateController {
             rows: gridDims.rows,
             cols: gridDims.cols,
             normalize,
-            removeBg: false,
+            outputSubDir: `generate-grid/${requestTimestamp}`,
           }
         );
         images = gridImages;
@@ -131,10 +132,14 @@ export class GenerateController {
 
       // Keep WhatsApp-ready 512x512 output without stretching subject proportions.
       const squareBuffer = await this.imageService.resizeToSquareContain(imageBuffer, 512);
-      const filename = await this.storageService.saveFile(squareBuffer, 'png');
+      const filename = await this.storageService.saveFile(squareBuffer, {
+        extension: 'png',
+        subDir: `generate/${requestTimestamp}`,
+        baseName: 'generated-sticker',
+      });
       const dimensions = await this.imageService.getImageDimensions(squareBuffer);
       images.push({
-        id: filename.replace('.png', ''),
+        id: filename.split('/').pop()?.replace('.png', '') ?? `generated-sticker-${requestTimestamp}`,
         url: this.storageService.getPublicUrl(filename),
         width: dimensions.width,
         height: dimensions.height,

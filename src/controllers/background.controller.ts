@@ -48,11 +48,16 @@ export class BackgroundController {
 
       // Output stays square 512x512 with transparent padding to avoid aspect distortion.
       const squareBuffer = await this.imageService.resizeToSquareContain(processedBuffer, 512);
-      const filename = await this.storageService.saveFile(squareBuffer, 'png');
+      const requestTimestamp = Date.now();
+      const filename = await this.storageService.saveFile(squareBuffer, {
+        extension: 'png',
+        subDir: `background-remove/${requestTimestamp}`,
+        baseName: 'background-removed',
+      });
       const dimensions = await this.imageService.getImageDimensions(squareBuffer);
 
       const image: ImageResult = {
-        id: filename.replace('.png', ''),
+        id: filename.split('/').pop()?.replace('.png', '') ?? `background-removed-${requestTimestamp}`,
         url: this.storageService.getPublicUrl(filename),
         width: dimensions.width,
         height: dimensions.height,

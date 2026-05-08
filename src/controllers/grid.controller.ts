@@ -32,14 +32,14 @@ export class GridController {
       const rows = body.rows ? parseInt(String(body.rows), 10) : undefined;
       const cols = body.cols ? parseInt(String(body.cols), 10) : undefined;
       const shouldNormalize = body.normalize === 'true' || body.normalize === true;
-      const removeBackgroundFromGrid =
-        body.removeBg === 'true' || body.removeBg === true;
+      const requestTimestamp = Date.now();
+      const outputSubDir = `grid-split/${requestTimestamp}`;
 
       const { images, metadata } = await this.gridSplitService.split(imageBuffer, {
         rows,
         cols,
         normalize: shouldNormalize,
-        removeBg: removeBackgroundFromGrid,
+        outputSubDir,
       });
 
       res.status(200).json(

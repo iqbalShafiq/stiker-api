@@ -32,6 +32,10 @@ interface GenerationResult {
   };
 }
 
+interface ExtractedImage {
+  imageBuffer: Buffer;
+}
+
 export class OpenRouterService {
   private client: OpenAI;
   private defaultTimeout: number;
@@ -125,7 +129,9 @@ export class OpenRouterService {
   async generateImage(
     prompt: string,
     base64Image?: string,
-    imageMimeType: string = 'image/png'
+    imageMimeType: string = 'image/png',
+    model: string = config.models.imageGeneration,
+    allowTextOnlyFallback: boolean = true
   ): Promise<GenerationResult> {
     const content: Array<{ type: string; text?: string; image_url?: { url: string } }> =
       [{ type: 'text', text: prompt }];
@@ -146,7 +152,7 @@ export class OpenRouterService {
     try {
       const response = await Promise.race([
         this.client.chat.completions.create({
-          model: config.models.imageGeneration,
+          model,
           messages: [{ role: 'user', content: content as any }],
         }),
         new Promise<never>((_, reject) =>
@@ -162,47 +168,7 @@ export class OpenRouterService {
         throw new AIGenerationError('No message in response');
       }
 
-      /** OpenRouter adds `images[]` — not on upstream ChatCompletionMessage typings. */
-      const assistantMsg = message as {
-        images?: Array<{ image_url?: { url?: string } }>;
-        content?: unknown;
-      };
-
-      // Extract image dari message.images[] (OpenRouter image generation format)
-      let imageBuffer: Buffer | undefined;
-
-      if (
-        assistantMsg.images &&
-        Array.isArray(assistantMsg.images) &&
-        assistantMsg.images.length > 0
-      ) {
-        const imageData = assistantMsg.images[0];
-        if (imageData.image_url?.url) {
-          imageBuffer = this.decodeImageUrl(imageData.image_url.url);
-        }
-      }
-
-      // Fallback: cek content array
-      if (!imageBuffer && Array.isArray(assistantMsg.content)) {
-        for (const part of assistantMsg.content) {
-          if (typeof part === 'object' && part !== null && 'image_url' in part && part.image_url?.url) {
-            imageBuffer = this.decodeImageUrl(part.image_url.url);
-            break;
-          }
-        }
-      }
-
-      // Fallback: cek content string
-      if (!imageBuffer && typeof assistantMsg.content === 'string') {
-        const match = assistantMsg.content.match(/data:image\/[^;]+;base64,([^"\s]+)/);
-        if (match?.[1]) {
-          imageBuffer = Buffer.from(match[1], 'base64');
-        }
-      }
-
-      if (!imageBuffer) {
-        throw new AIGenerationError('No image data in response');
-      }
+      const extractedImage = await this.extractImageFromMessage(message);
 
       const metadata = {
         tokensPrompt: response.usage?.prompt_tokens,
@@ -211,15 +177,15 @@ export class OpenRouterService {
         latencyMs,
       };
 
-      return { imageBuffer, generationId, metadata };
+      return { imageBuffer: extractedImage.imageBuffer, generationId, metadata };
     } catch (error) {
       if (error instanceof TimeoutError || error instanceof AIGenerationError) {
         throw error;
       }
-      if (this.isProviderError(error) && base64Image) {
+      if (allowTextOnlyFallback && this.isProviderError(error) && base64Image) {
         // Fallback: jika image input tidak didukung, coba text-only
         console.warn('Image input not supported, falling back to text-only');
-        return this.generateImage(prompt, undefined, imageMimeType);
+        return this.generateImage(prompt, undefined, imageMimeType, model, allowTextOnlyFallback);
       }
       if (this.isProviderError(error)) {
         throw new ProviderError(this.extractProviderErrorMessage(error));
@@ -505,7 +471,105 @@ Make sure boundaries cover the ENTIRE image without gaps or overlaps.`,
   /**
    * Decode image dari data URL atau remote URL
    */
-  private decodeImageUrl(url: string): Buffer {
+  private async extractImageFromMessage(message: unknown): Promise<ExtractedImage> {
+    const assistantMsg = message as {
+      images?: Array<
+        | { image_url?: { url?: string } | string; b64_json?: string; image_base64?: string }
+        | unknown
+      >;
+      content?: unknown;
+    };
+
+    const decodeCandidates = async (value: unknown): Promise<Buffer | null> => {
+      if (!value) {
+        return null;
+      }
+
+      if (typeof value === 'string') {
+        return this.tryDecodeFromString(value);
+      }
+
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          const fromItem = await decodeCandidates(item);
+          if (fromItem) {
+            return fromItem;
+          }
+        }
+        return null;
+      }
+
+      if (typeof value === 'object') {
+        const obj = value as Record<string, unknown>;
+        const directFields = [
+          obj.image_url,
+          obj.url,
+          obj.b64_json,
+          obj.image_base64,
+          obj.base64,
+          obj.data,
+        ];
+
+        for (const field of directFields) {
+          const fromField = await decodeCandidates(field);
+          if (fromField) {
+            return fromField;
+          }
+        }
+      }
+
+      return null;
+    };
+
+    const fromImages = await decodeCandidates(assistantMsg.images);
+    if (fromImages) {
+      return { imageBuffer: fromImages };
+    }
+
+    const fromContent = await decodeCandidates(assistantMsg.content);
+    if (fromContent) {
+      return { imageBuffer: fromContent };
+    }
+
+    throw new AIGenerationError('No image data in response');
+  }
+
+  private async tryDecodeFromString(value: string): Promise<Buffer | null> {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    if (trimmed.startsWith('data:image')) {
+      return this.decodeImageUrl(trimmed);
+    }
+
+    if (/^https?:\/\//i.test(trimmed)) {
+      return this.decodeImageUrl(trimmed);
+    }
+
+    const dataUriMatch = trimmed.match(/data:image\/[^;]+;base64,([^"\s)]+)/i);
+    if (dataUriMatch?.[1]) {
+      return Buffer.from(dataUriMatch[1], 'base64');
+    }
+
+    const markdownUrlMatch = trimmed.match(/!\[[^\]]*]\((https?:\/\/[^)\s]+)\)/i);
+    if (markdownUrlMatch?.[1]) {
+      return this.decodeImageUrl(markdownUrlMatch[1]);
+    }
+
+    if (/^[A-Za-z0-9+/=\r\n]+$/.test(trimmed) && trimmed.length > 128) {
+      try {
+        return Buffer.from(trimmed, 'base64');
+      } catch {
+        return null;
+      }
+    }
+
+    return null;
+  }
+
+  private async decodeImageUrl(url: string): Promise<Buffer> {
     if (url.startsWith('data:image')) {
       const match = url.match(/data:image\/[^;]+;base64,([^"\s]+)/);
       if (match?.[1]) {
@@ -514,8 +578,16 @@ Make sure boundaries cover the ENTIRE image without gaps or overlaps.`,
       throw new AIGenerationError('Invalid base64 image data');
     }
 
-    // Remote URL - fetch
-    throw new AIGenerationError('Remote image URLs not yet supported');
+    if (/^https?:\/\//i.test(url)) {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new AIGenerationError(`Failed to fetch generated image URL: ${response.status}`);
+      }
+      const bytes = await response.arrayBuffer();
+      return Buffer.from(bytes);
+    }
+
+    throw new AIGenerationError('Unsupported image URL format');
   }
 
   /**

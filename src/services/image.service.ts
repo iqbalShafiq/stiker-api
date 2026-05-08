@@ -266,6 +266,31 @@ export class ImageService {
       .toBuffer();
   }
 
+  async hasMeaningfulTransparency(
+    buffer: Buffer,
+    minTransparentRatio: number = 0.02
+  ): Promise<boolean> {
+    const { data } = await sharp(buffer)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    const pixelCount = data.length / 4;
+    if (pixelCount === 0) {
+      return false;
+    }
+
+    let transparentPixels = 0;
+    for (let i = 3; i < data.length; i += 4) {
+      if (data[i] < 245) {
+        transparentPixels += 1;
+      }
+    }
+
+    const transparentRatio = transparentPixels / pixelCount;
+    return transparentRatio >= minTransparentRatio;
+  }
+
   async resizeImage(buffer: Buffer, width: number, height: number): Promise<Buffer> {
     return sharp(buffer)
       .resize(width, height, { fit: 'cover' })
