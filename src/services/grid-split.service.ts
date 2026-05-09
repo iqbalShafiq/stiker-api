@@ -1,5 +1,8 @@
 import type { ImageResult } from '../types';
-import { OpenRouterService } from './openrouter.service';
+import {
+  OpenRouterService,
+  type OutsideForegroundTextDetection,
+} from './openrouter.service';
 import { ImageService } from './image.service';
 import { StorageService } from './storage.service';
 import { removeBackgroundWithFallback } from './background-removal.service';
@@ -21,6 +24,11 @@ export interface GridSplitMetadata {
   normalized: boolean;
   backgroundRemoved: boolean;
   backgroundRemovalMethod?: string;
+  textOutsideForegroundByCell: Array<{
+    cellId: string;
+    text: string;
+    style: OutsideForegroundTextDetection['style'];
+  }>;
 }
 
 /**
@@ -65,6 +73,7 @@ export class GridSplitService {
     let gridLayout = initialGridResult.gridLayout;
     let normalizedImageUrl: string | undefined;
     let backgroundRemovedCellCount = 0;
+    const textOutsideForegroundByCell: GridSplitMetadata['textOutsideForegroundByCell'] = [];
 
     if (shouldNormalize) {
       try {
@@ -108,7 +117,22 @@ export class GridSplitService {
     const images: ImageResult[] = [];
     const methodsUsed = new Set<string>();
     for (const [index, buffer] of splitBuffers.entries()) {
+      const cellId = `cell-${String(index + 1).padStart(2, '0')}`;
       let processedCellBuffer = buffer;
+      try {
+        const textAnalysis = await this.analyzeCellTextWithRetry(buffer, cellId);
+        const mergedOutsideText = this.mergeOutsideForegroundText(textAnalysis.textOutsideForeground);
+        if (mergedOutsideText) {
+          textOutsideForegroundByCell.push({
+            cellId,
+            text: mergedOutsideText.text,
+            style: mergedOutsideText.style,
+          });
+        }
+      } catch (cellTextAnalysisError) {
+        console.warn(`Grid cell text analysis failed for ${cellId}:`, cellTextAnalysisError);
+      }
+
       try {
         const result = await removeBackgroundWithFallback(buffer);
         processedCellBuffer = result.processedBuffer;
@@ -116,7 +140,7 @@ export class GridSplitService {
         backgroundRemovedCellCount += 1;
       } catch (cellBackgroundRemovalError) {
         console.warn(
-          `Grid cell background removal failed for cell-${String(index + 1).padStart(2, '0')}:`,
+          `Grid cell background removal failed for ${cellId}:`,
           cellBackgroundRemovalError
         );
       }
@@ -125,7 +149,7 @@ export class GridSplitService {
       const filename = await this.storageService.saveFile(squareBuffer, {
         extension: 'png',
         subDir: outputSubDir,
-        baseName: `cell-${String(index + 1).padStart(2, '0')}`,
+        baseName: cellId,
       });
       const cellDimensions = await this.imageService.getImageDimensions(squareBuffer);
       images.push({
@@ -147,7 +171,41 @@ export class GridSplitService {
         backgroundRemoved: backgroundRemovedCellCount > 0,
         backgroundRemovalMethod:
           methodsUsed.size > 0 ? `post-split:${Array.from(methodsUsed).join('|')}` : undefined,
+        textOutsideForegroundByCell,
       },
+    };
+  }
+
+  private async analyzeCellTextWithRetry(buffer: Buffer, cellId: string) {
+    try {
+      return await this.openRouterService.analyzeCellTextOutsideForeground(buffer);
+    } catch (firstError) {
+      console.warn(`Grid cell text analysis retry for ${cellId} after first failure:`, firstError);
+      return this.openRouterService.analyzeCellTextOutsideForeground(buffer);
+    }
+  }
+
+  private mergeOutsideForegroundText(
+    detections: OutsideForegroundTextDetection[]
+  ): OutsideForegroundTextDetection | null {
+    if (detections.length === 0) {
+      return null;
+    }
+
+    const mergedText = detections
+      .map((item) => item.text.trim())
+      .filter((text) => text.length > 0)
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!mergedText) {
+      return null;
+    }
+
+    return {
+      text: mergedText,
+      style: detections[0].style,
     };
   }
 }

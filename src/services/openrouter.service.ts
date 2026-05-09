@@ -36,6 +36,22 @@ interface ExtractedImage {
   imageBuffer: Buffer;
 }
 
+export interface TextStyleMetadata {
+  fontFamily: string;
+  color: string;
+  weight: string;
+}
+
+export interface OutsideForegroundTextDetection {
+  text: string;
+  style: TextStyleMetadata;
+}
+
+export interface CellTextAnalysisResult {
+  hasTextOutsideForeground: boolean;
+  textOutsideForeground: OutsideForegroundTextDetection[];
+}
+
 export class OpenRouterService {
   private client: OpenAI;
   private defaultTimeout: number;
@@ -224,6 +240,151 @@ Task:
       })
       .png()
       .toBuffer();
+  }
+
+  async analyzeCellTextOutsideForeground(imageBuffer: Buffer): Promise<CellTextAnalysisResult> {
+    const imageDataUrl = `data:image/png;base64,${imageBuffer.toString('base64')}`;
+    const baseMessages = [
+      {
+        role: 'system' as const,
+        content:
+          'You are a visual text extraction assistant for sticker cells. Return ONLY JSON. Do not include markdown.',
+      },
+    ];
+
+    const { content: primaryContent } = await this.chatCompletion({
+      model: config.models.agent,
+      messages: [
+        ...baseMessages,
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: `Analyze this single sticker-grid cell image.
+
+Task:
+- Detect every caption/word that is visually outside the main foreground subject (usually the person/object cutout).
+- Text around the subject on empty/background area counts as outside foreground and must be included.
+- Text drawn on top of the subject itself (face/body/object) must NOT be included.
+
+Return exact JSON:
+{
+  "hasTextOutsideForeground": boolean,
+  "textOutsideForeground": [
+    {
+      "text": "string",
+      "style": {
+        "fontFamily": "string",
+        "color": "string",
+        "weight": "string"
+      }
+    }
+  ]
+}
+
+Style metadata:
+- fontFamily: best estimate such as "sans-serif", "serif", "script", "display", "monospace".
+- color: dominant text color in hex when possible (e.g. "#FFAA00"), otherwise color name.
+- weight: one of "light", "regular", "medium", "semibold", "bold", "heavy".
+
+Rules:
+- Prioritize recall for outside-foreground captions.
+- Keep textOutsideForeground empty only when truly no outside text exists.
+- No additional keys.`,
+            },
+            {
+              type: 'image_url',
+              image_url: { url: imageDataUrl },
+            },
+          ],
+        },
+      ],
+      responseFormat: { type: 'json_object' },
+      timeoutMs: 20000,
+    });
+
+    const primaryResult = this.normalizeCellTextAnalysis(primaryContent);
+    if (primaryResult.textOutsideForeground.length > 0) {
+      return primaryResult;
+    }
+
+    const { content: fallbackContent } = await this.chatCompletion({
+      model: config.models.agent,
+      messages: [
+        ...baseMessages,
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: `Second pass OCR check for this sticker cell.
+
+If there is ANY readable caption text around (not covering the face/body main subject), return it.
+If no such text exists, return an empty list.
+
+Return exact JSON only:
+{
+  "hasTextOutsideForeground": boolean,
+  "textOutsideForeground": [
+    {
+      "text": "string",
+      "style": {
+        "fontFamily": "string",
+        "color": "string",
+        "weight": "string"
+      }
+    }
+  ]
+}`,
+            },
+            {
+              type: 'image_url',
+              image_url: { url: imageDataUrl },
+            },
+          ],
+        },
+      ],
+      responseFormat: { type: 'json_object' },
+      timeoutMs: 20000,
+    });
+
+    return this.normalizeCellTextAnalysis(fallbackContent);
+  }
+
+  private normalizeCellTextAnalysis(content: string): CellTextAnalysisResult {
+    const parsed = JSON.parse(content) as Partial<CellTextAnalysisResult>;
+    const normalizedItems = Array.isArray(parsed.textOutsideForeground)
+      ? parsed.textOutsideForeground
+          .map((item) => {
+            const text = typeof item?.text === 'string' ? item.text.trim() : '';
+            const style = item?.style;
+            const fontFamily =
+              typeof style?.fontFamily === 'string' ? style.fontFamily.trim() : '';
+            const color = typeof style?.color === 'string' ? style.color.trim() : '';
+            const weight = typeof style?.weight === 'string' ? style.weight.trim() : '';
+            if (!text || !fontFamily || !color || !weight) {
+              return null;
+            }
+            return {
+              text,
+              style: {
+                fontFamily,
+                color,
+                weight,
+              },
+            } satisfies OutsideForegroundTextDetection;
+          })
+          .filter((item): item is OutsideForegroundTextDetection => Boolean(item))
+      : [];
+
+    return {
+      hasTextOutsideForeground:
+        typeof parsed.hasTextOutsideForeground === 'boolean'
+          ? parsed.hasTextOutsideForeground || normalizedItems.length > 0
+          : normalizedItems.length > 0,
+      textOutsideForeground: normalizedItems,
+    };
   }
 
   /**

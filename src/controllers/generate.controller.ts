@@ -119,6 +119,7 @@ export class GenerateController {
           normalized: gridMeta.normalized,
           backgroundRemoved: gridMeta.backgroundRemoved,
           backgroundRemovalMethod: gridMeta.backgroundRemovalMethod ?? 'none',
+          textOutsideForegroundByCell: gridMeta.textOutsideForegroundByCell,
         };
 
         res.status(200).json(

@@ -19,6 +19,15 @@ export interface GenerationMetadata {
   /** Server-side removal; /generate uses prompt-only transparency (typically false). */
   backgroundRemoved?: boolean;
   backgroundRemovalMethod?: string;
+  textOutsideForegroundByCell?: Array<{
+    cellId: string;
+    text: string;
+    style: {
+      fontFamily: string;
+      color: string;
+      weight: string;
+    };
+  }>;
 }
 
 export interface ApiResponse<T> {
