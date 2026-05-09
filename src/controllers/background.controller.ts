@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { ImageService } from '../services/image.service';
 import { StorageService } from '../services/storage.service';
-import { getSegmentationBackgroundRemovalService } from '../services/segmentation-background-removal.service';
+import { removeBackgroundWithFallback } from '../services/background-removal.service';
 import { buildSuccessResponse } from '../utils/response-builder';
 import { ValidationError, BackgroundRemovalError } from '../errors';
 import type { ImageResult } from '../types';
@@ -27,23 +27,13 @@ export class BackgroundController {
       let processedBuffer: Buffer;
       let method: string;
       try {
-        processedBuffer = await getSegmentationBackgroundRemovalService().remove(imageBuffer);
-        method = 'imgly-onnx';
+        const result = await removeBackgroundWithFallback(imageBuffer);
+        processedBuffer = result.processedBuffer;
+        method = result.method;
       } catch (error) {
-        console.warn(
-          'IMG.LY background removal failed, falling back to brightness threshold:',
-          error
+        throw new BackgroundRemovalError(
+          error instanceof Error ? error.message : 'Failed to remove background'
         );
-        try {
-          processedBuffer = await this.imageService.removeBackground(imageBuffer);
-          method = 'brightness-threshold-fallback';
-        } catch (fallbackError) {
-          throw new BackgroundRemovalError(
-            fallbackError instanceof Error
-              ? fallbackError.message
-              : 'Failed to remove background'
-          );
-        }
       }
 
       // Output stays square 512x512 with transparent padding to avoid aspect distortion.

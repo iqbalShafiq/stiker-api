@@ -31,7 +31,7 @@ export const config = {
     maxConcurrency: Math.max(1, parseInt(process.env.IMGLY_BG_MAX_CONCURRENCY ?? '2', 10)),
   },
   models: {
-    imageGeneration: 'sourceful/riverflow-v2-standard-preview',
+    imageGeneration: 'google/gemini-2.5-flash-image',
     agent: 'google/gemma-4-31b-it',
   },
 } as const;

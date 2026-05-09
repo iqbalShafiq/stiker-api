@@ -2,6 +2,7 @@ import type { ImageResult } from '../types';
 import { OpenRouterService } from './openrouter.service';
 import { ImageService } from './image.service';
 import { StorageService } from './storage.service';
+import { removeBackgroundWithFallback } from './background-removal.service';
 
 export interface GridSplitPipelineOptions {
   normalize?: boolean;
@@ -27,68 +28,18 @@ export interface GridSplitMetadata {
  * Keep behavior identical between both entrypoints.
  */
 export class GridSplitService {
-  private static readonly GRID_PREPROCESS_PROMPT =
-    'tolong hapuskan background nya tanpa menghilangkan elemen dari gambar dan text di fotonya.';
-
-  private static readonly GRID_PREPROCESS_MODEL = 'google/gemini-2.5-flash-image';
-  private static readonly LLM_RETRY_MAX_ATTEMPTS = 3;
-
   constructor(
     private readonly openRouterService: OpenRouterService,
     private readonly imageService: ImageService,
     private readonly storageService: StorageService
   ) {}
 
-  private async generateImageWithRetry(
-    prompt: string,
-    sourceBuffer: Buffer,
-    model: string
-  ): Promise<Buffer> {
-    let lastError: unknown;
-    for (let attempt = 1; attempt <= GridSplitService.LLM_RETRY_MAX_ATTEMPTS; attempt++) {
-      try {
-        const response = await this.openRouterService.generateImage(
-          prompt,
-          sourceBuffer.toString('base64'),
-          'image/png',
-          model,
-          false
-        );
-        return response.imageBuffer;
-      } catch (error) {
-        lastError = error;
-        console.warn(`Grid split LLM attempt ${attempt} failed:`, error);
-      }
-    }
-
-    throw lastError instanceof Error
-      ? lastError
-      : new Error('Grid split LLM failed after maximum retries');
-  }
-
   async split(
     imageBuffer: Buffer,
     options: GridSplitPipelineOptions
   ): Promise<{ images: ImageResult[]; metadata: GridSplitMetadata }> {
     const outputSubDir = options.outputSubDir?.trim() ?? '';
-
-    // Preprocess first with image-edit model to remove backgrounds before any grid analysis.
-    const preprocessedBuffer = await this.generateImageWithRetry(
-      GridSplitService.GRID_PREPROCESS_PROMPT,
-      imageBuffer,
-      GridSplitService.GRID_PREPROCESS_MODEL
-    );
-
-    const llmBackgroundRemovedFilename = await this.storageService.saveFile(preprocessedBuffer, {
-      extension: 'png',
-      subDir: outputSubDir,
-      baseName: 'llm-bg-removed',
-    });
-    const llmBackgroundRemovedImageUrl = this.storageService.getPublicUrl(
-      llmBackgroundRemovedFilename
-    );
-
-    const dimensions = await this.imageService.getImageDimensions(preprocessedBuffer);
+    const dimensions = await this.imageService.getImageDimensions(imageBuffer);
     const shouldNormalize = options.normalize ?? false;
     const rows = options.rows;
     const cols = options.cols;
@@ -96,30 +47,29 @@ export class GridSplitService {
     const initialGridResult =
       rows && cols
         ? await this.openRouterService.detectGridBoundaries(
-            preprocessedBuffer.toString('base64'),
+            imageBuffer.toString('base64'),
             dimensions.width,
             dimensions.height,
             rows,
             cols
           )
-        : (await this.imageService.detectGridBoundaries(preprocessedBuffer)) ??
+        : (await this.imageService.detectGridBoundaries(imageBuffer)) ??
           (await this.openRouterService.detectGridBoundaries(
-            preprocessedBuffer.toString('base64'),
+            imageBuffer.toString('base64'),
             dimensions.width,
             dimensions.height
           ));
 
-    let splitSourceBuffer = preprocessedBuffer;
+    let splitSourceBuffer = imageBuffer;
     let splitBoundaries = initialGridResult.boundaries;
     let gridLayout = initialGridResult.gridLayout;
     let normalizedImageUrl: string | undefined;
-    const backgroundRemoved = true;
-    const backgroundRemovalMethod = `llm-${GridSplitService.GRID_PREPROCESS_MODEL}`;
+    let backgroundRemovedCellCount = 0;
 
     if (shouldNormalize) {
       try {
         const normalizedBuffer = await this.openRouterService.normalizeGridImage(
-          preprocessedBuffer.toString('base64'),
+          imageBuffer.toString('base64'),
           initialGridResult.gridLayout,
           dimensions.width,
           dimensions.height
@@ -130,7 +80,9 @@ export class GridSplitService {
           (await this.openRouterService.detectGridBoundaries(
             normalizedBuffer.toString('base64'),
             dimensions.width,
-            dimensions.height
+            dimensions.height,
+            rows,
+            cols
           ));
 
         const normalizedFilename = await this.storageService.saveFile(normalizedBuffer, {
@@ -154,8 +106,22 @@ export class GridSplitService {
     const splitBuffers = await this.imageService.splitImage(splitSourceBuffer, splitBoundaries);
 
     const images: ImageResult[] = [];
+    const methodsUsed = new Set<string>();
     for (const [index, buffer] of splitBuffers.entries()) {
-      const squareBuffer = await this.imageService.resizeToSquareContain(buffer, 512);
+      let processedCellBuffer = buffer;
+      try {
+        const result = await removeBackgroundWithFallback(buffer);
+        processedCellBuffer = result.processedBuffer;
+        methodsUsed.add(result.method);
+        backgroundRemovedCellCount += 1;
+      } catch (cellBackgroundRemovalError) {
+        console.warn(
+          `Grid cell background removal failed for cell-${String(index + 1).padStart(2, '0')}:`,
+          cellBackgroundRemovalError
+        );
+      }
+
+      const squareBuffer = await this.imageService.resizeToSquareContain(processedCellBuffer, 512);
       const filename = await this.storageService.saveFile(squareBuffer, {
         extension: 'png',
         subDir: outputSubDir,
@@ -176,11 +142,11 @@ export class GridSplitService {
         gridLayout,
         cellCount: images.length,
         normalizedImageUrl,
-        llmBackgroundRemovedImageUrl,
         outputSize: '512x512',
         normalized: shouldNormalize && Boolean(normalizedImageUrl),
-        backgroundRemoved,
-        backgroundRemovalMethod,
+        backgroundRemoved: backgroundRemovedCellCount > 0,
+        backgroundRemovalMethod:
+          methodsUsed.size > 0 ? `post-split:${Array.from(methodsUsed).join('|')}` : undefined,
       },
     };
   }
