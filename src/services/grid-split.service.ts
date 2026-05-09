@@ -24,11 +24,6 @@ export interface GridSplitMetadata {
   normalized: boolean;
   backgroundRemoved: boolean;
   backgroundRemovalMethod?: string;
-  textOutsideForegroundByCell: Array<{
-    cellId: string;
-    text: string;
-    style: OutsideForegroundTextDetection['style'];
-  }>;
 }
 
 /**
@@ -73,7 +68,6 @@ export class GridSplitService {
     let gridLayout = initialGridResult.gridLayout;
     let normalizedImageUrl: string | undefined;
     let backgroundRemovedCellCount = 0;
-    const textOutsideForegroundByCell: GridSplitMetadata['textOutsideForegroundByCell'] = [];
 
     if (shouldNormalize) {
       try {
@@ -119,15 +113,15 @@ export class GridSplitService {
     for (const [index, buffer] of splitBuffers.entries()) {
       const cellId = `cell-${String(index + 1).padStart(2, '0')}`;
       let processedCellBuffer = buffer;
+      let textOutsideForeground: ImageResult['textOutsideForeground'];
       try {
         const textAnalysis = await this.analyzeCellTextWithRetry(buffer, cellId);
         const mergedOutsideText = this.mergeOutsideForegroundText(textAnalysis.textOutsideForeground);
         if (mergedOutsideText) {
-          textOutsideForegroundByCell.push({
-            cellId,
+          textOutsideForeground = {
             text: mergedOutsideText.text,
             style: mergedOutsideText.style,
-          });
+          };
         }
       } catch (cellTextAnalysisError) {
         console.warn(`Grid cell text analysis failed for ${cellId}:`, cellTextAnalysisError);
@@ -157,6 +151,7 @@ export class GridSplitService {
         url: this.storageService.getPublicUrl(filename),
         width: cellDimensions.width,
         height: cellDimensions.height,
+        ...(textOutsideForeground ? { textOutsideForeground } : {}),
       });
     }
 
@@ -171,7 +166,6 @@ export class GridSplitService {
         backgroundRemoved: backgroundRemovedCellCount > 0,
         backgroundRemovalMethod:
           methodsUsed.size > 0 ? `post-split:${Array.from(methodsUsed).join('|')}` : undefined,
-        textOutsideForegroundByCell,
       },
     };
   }

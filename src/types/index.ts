@@ -1,8 +1,20 @@
+/** Caption-like text detected outside the sticker subject for one cell image (grid split / generate grid). */
+export interface TextOutsideForeground {
+  text: string;
+  style: {
+    fontFamily: string;
+    color: string;
+    weight: string;
+  };
+}
+
 export interface ImageResult {
   id: string;
   url: string;
   width: number;
   height: number;
+  /** Present when analysis found caption-style text outside the sticker foreground for this cell. */
+  textOutsideForeground?: TextOutsideForeground;
 }
 
 export interface GenerationMetadata {
@@ -19,15 +31,6 @@ export interface GenerationMetadata {
   /** Server-side removal; /generate uses prompt-only transparency (typically false). */
   backgroundRemoved?: boolean;
   backgroundRemovalMethod?: string;
-  textOutsideForegroundByCell?: Array<{
-    cellId: string;
-    text: string;
-    style: {
-      fontFamily: string;
-      color: string;
-      weight: string;
-    };
-  }>;
 }
 
 export interface ApiResponse<T> {
