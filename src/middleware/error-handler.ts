@@ -4,7 +4,7 @@ import { config } from '../config';
 import { buildErrorResponse } from '../utils/response-builder';
 import { AppError, InvalidFileTypeError } from '../errors';
 
-const ALLOWED_MIME_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+const ALLOWED_MIME_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif'];
 
 const storage = multer.memoryStorage();
 

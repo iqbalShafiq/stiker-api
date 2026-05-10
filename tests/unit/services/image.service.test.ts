@@ -135,6 +135,56 @@ describe('ImageService', () => {
     });
   });
 
+  describe('removeNeutralBrightBackground', () => {
+    it('clears near-white neutral but keeps saturated bright colours', async () => {
+      const buffer = await sharp({
+        create: {
+          width: 4,
+          height: 1,
+          channels: 4,
+          background: { r: 0, g: 0, b: 0, alpha: 1 },
+        },
+      })
+        .composite([
+          { input: { create: { width: 1, height: 1, channels: 4, background: { r: 250, g: 250, b: 250, alpha: 1 } } }, left: 0, top: 0 },
+          { input: { create: { width: 1, height: 1, channels: 4, background: { r: 255, g: 240, b: 240, alpha: 1 } } }, left: 1, top: 0 },
+          { input: { create: { width: 1, height: 1, channels: 4, background: { r: 255, g: 200, b: 200, alpha: 1 } } }, left: 2, top: 0 },
+          { input: { create: { width: 1, height: 1, channels: 4, background: { r: 255, g: 0, b: 0, alpha: 1 } } }, left: 3, top: 0 },
+        ])
+        .png()
+        .toBuffer();
+
+      const result = await service.removeNeutralBrightBackground(buffer);
+      const { data } = await sharp(result).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      const a0 = data[3];
+      const a1 = data[7];
+      const a3 = data[15];
+      expect(a0).toBe(0);
+      expect(a1).toBe(0);
+      expect(a3).toBe(255);
+    });
+  });
+
+  describe('reinforceAlphaForGifQuantization', () => {
+    it('increases partial alpha', async () => {
+      const buffer = await sharp({
+        create: {
+          width: 1,
+          height: 1,
+          channels: 4,
+          background: { r: 100, g: 100, b: 100, alpha: 0.4 },
+        },
+      })
+        .png()
+        .toBuffer();
+
+      const out = await service.reinforceAlphaForGifQuantization(buffer, 0.9);
+      const { data } = await sharp(out).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      expect(data[3]).toBeGreaterThan(100);
+      expect(data[3]).toBeLessThanOrEqual(255);
+    });
+  });
+
   describe('resizeImage', () => {
     it('should resize image to specified dimensions', async () => {
       const buffer = await sharp({

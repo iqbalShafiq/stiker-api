@@ -228,7 +228,7 @@
     "/api/v1/background/remove": {
       "post": {
         "summary": "Remove background",
-        "description": "Remove background from an image",
+        "description": "Remove background from a raster image. Static inputs (PNG, JPEG, WebP, single-frame GIF) return a 512×512 PNG with transparent letterboxing. Animated GIFs (multiple frames) return an animated GIF re-encoded after per-frame segmentation; GIF transparency uses a palette so edges may differ from PNG. Tuning env vars include `ANIMATED_GIF_DITHER`, `ANIMATED_GIF_ALPHA_BOOST_DIVISOR`, `ANIMATED_GIF_ALPHA_CLOSE_KERNEL`, `ANIMATED_GIF_CORNER_BG_STRIP_DIST`, `ANIMATED_GIF_TEMPORAL_ALPHA_MAX_HALF` (rolling max ±neighbours in time), `ANIMATED_GIF_TEMPORAL_ALPHA_PASSES`, `ANIMATED_GIF_TEMPORAL_DILATE_ALPHA` (post-merge alpha dilate), `ANIMATED_GIF_REUSE_PALETTE=true` (smaller files), plus frame limits (`ANIMATED_GIF_MAX_FRAMES`, default 120; `ANIMATED_GIF_MAX_MEGAPIXELS_PER_FRAME`, default 12 MP). If those temporal and alpha vars are unset, defaults lean toward fuller, time-stable sticker edges (temporal half 3, 3 passes, dilate kernel 5, alpha boost divisor ~0.76—raise dilate/halos sparingly if fringes appear). Response `metadata.outputFormat` is `gif` or `png`; animated responses include `metadata.frameCount`.",
         "tags": ["Background"],
         "requestBody": {
           "required": true,
@@ -240,7 +240,7 @@
                   "image": {
                     "type": "string",
                     "format": "binary",
-                    "description": "Image to remove background from"
+                    "description": "Image to remove background from (PNG, JPG, JPEG, WebP, or GIF including animated GIF)"
                   }
                 },
                 "required": ["image"]

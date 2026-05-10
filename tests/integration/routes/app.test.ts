@@ -56,6 +56,24 @@ describe('Integration Tests', () => {
       expect(response.status).toBe(415);
       expect(response.body.success).toBe(false);
     });
+
+    it(
+      'processes animated GIF (contoh_gif.gif)',
+      async () => {
+        const gifPath = path.join(process.cwd(), 'contoh_gif.gif');
+        await fs.access(gifPath);
+        const response = await request(app)
+          .post('/api/v1/background/remove')
+          .attach('image', await fs.readFile(gifPath), 'contoh_gif.gif');
+
+        expect(response.status).toBe(200);
+        expect(response.body.success).toBe(true);
+        expect(response.body.data?.metadata?.outputFormat).toBe('gif');
+        expect(response.body.data?.metadata?.frameCount).toBe(11);
+        expect(response.body.data?.image?.url).toContain('background-removed.gif');
+      },
+      180000
+    );
   });
 
   describe('POST /api/v1/grid/split', () => {

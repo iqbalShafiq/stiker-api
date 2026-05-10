@@ -2,13 +2,14 @@ import path from 'path';
 import multer from 'multer';
 import { config } from '../config';
 
-const ALLOWED_MIME_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+const ALLOWED_MIME_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif'];
 
 const EXTENSION_TO_MIME: Record<string, string> = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.webp': 'image/webp',
+  '.gif': 'image/gif',
 };
 
 const storage = multer.memoryStorage();
@@ -32,7 +33,7 @@ export const upload = multer({
     if (ALLOWED_MIME_TYPES.includes(effectiveMime)) {
       cb(null, true);
     } else {
-      cb(new Error('INVALID_FILE_TYPE: Only PNG, JPG, JPEG, and WebP are allowed'));
+      cb(new Error('INVALID_FILE_TYPE: Only PNG, JPG, JPEG, WebP, and GIF are allowed'));
     }
   },
 });

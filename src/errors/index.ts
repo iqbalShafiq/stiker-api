@@ -18,7 +18,7 @@ export class ValidationError extends AppError {
 }
 
 export class InvalidFileTypeError extends AppError {
-  constructor(message: string = 'Only PNG, JPG, JPEG, and WebP are allowed') {
+  constructor(message: string = 'Only PNG, JPG, JPEG, WebP, and GIF are allowed') {
     super(message, 415, 'INVALID_FILE_TYPE');
   }
 }
