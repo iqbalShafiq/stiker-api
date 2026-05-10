@@ -32,7 +32,7 @@ export const config = {
   },
   models: {
     imageGeneration: 'google/gemini-2.5-flash-image',
-    agent: 'google/gemma-4-31b-it',
+    agent: 'google/gemini-2.5-flash-lite',
   },
 } as const;
 
