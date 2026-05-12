@@ -58,3 +58,27 @@ export class TimeoutError extends AppError {
     super(message, 504, 'TIMEOUT_ERROR');
   }
 }
+
+export class UnauthorizedError extends AppError {
+  constructor(message: string = 'Authentication required') {
+    super(message, 401, 'UNAUTHORIZED');
+  }
+}
+
+export class ForbiddenError extends AppError {
+  constructor(message: string = 'Access denied') {
+    super(message, 403, 'FORBIDDEN');
+  }
+}
+
+export class ConflictError extends AppError {
+  constructor(message: string = 'Resource already exists') {
+    super(message, 409, 'CONFLICT');
+  }
+}
+
+export class RateLimitError extends AppError {
+  constructor(message: string = 'Too many requests') {
+    super(message, 429, 'RATE_LIMITED');
+  }
+}
