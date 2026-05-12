@@ -3,20 +3,19 @@ import { OpenRouterService } from '../services/openrouter.service';
 import { ImageService } from '../services/image.service';
 import { LocalStorageProvider } from '../storage/local.provider';
 import { GridSplitService } from '../services/grid-split.service';
-import { StickerService } from '../services/sticker.service';
+import { ProcessingHistoryService } from '../services/processing-history.service';
 import { buildSuccessResponse } from '../utils/response-builder';
 import { ValidationError } from '../errors';
 import { resolveGridRowsCols } from '../utils/grid-layout';
 import { config } from '../config';
 import type { ImageResult, GenerationMetadata } from '../types';
 import type { AuthRequest } from '../middleware/auth.middleware';
-import { StickerVisibility } from '@prisma/client';
 
 /** Ask the model for transparent margins so we avoid server-side matting on /generate. */
 const PROMPT_TRANSPARENT_STICKER_BG = `
 Visual requirements (critical):
 - The sticker subject must have NO rectangular backdrop: use real transparency (alpha) in all areas outside the subject outline.
-- Do not paste the artwork on a white, gray, or full-bleed colored panel or “card”.
+- Do not paste the artwork on a white, gray, or full-bleed colored panel or "card".
 - The PNG must have meaningful alpha: flat white fills behind the whole image are not acceptable.`;
 
 function buildPromptSingle(text: string): string {
@@ -44,7 +43,7 @@ export class GenerateController {
   private imageService: ImageService;
   private storageProvider: LocalStorageProvider;
   private gridSplitService: GridSplitService;
-  private stickerService: StickerService;
+  private processingHistoryService: ProcessingHistoryService;
 
   constructor() {
     this.openRouterService = new OpenRouterService();
@@ -55,7 +54,7 @@ export class GenerateController {
       this.imageService,
       this.storageProvider
     );
-    this.stickerService = new StickerService();
+    this.processingHistoryService = new ProcessingHistoryService();
   }
 
   async generate(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
@@ -119,18 +118,19 @@ export class GenerateController {
         );
         images = gridImages;
 
-        // Save each grid cell as a separate sticker
-        for (const image of images) {
-          await this.stickerService.create({
-            ownerId: userId,
-            name: image.id || 'Generated Sticker',
-            filename: image.id || 'generated-sticker',
+        // Log to processing history instead of creating stickers
+        await this.processingHistoryService.create({
+          userId,
+          type: 'generate',
+          inputData: { text, grid: true, rows: gridDims.rows, cols: gridDims.cols, normalize },
+          outputFiles: images.map(image => ({
             url: image.url,
+            path: image.url.replace(`${config.appUrl}/uploads/`, ''),
+            filename: image.id || 'generated-sticker',
             width: image.width,
             height: image.height,
-            visibility: StickerVisibility.PRIVATE,
-          });
-        }
+          })),
+        });
 
         const metadata: GenerationMetadata = {
           model: config.models.imageGeneration,
@@ -170,15 +170,18 @@ export class GenerateController {
       };
       images.push(imageResult);
 
-      // Save the generated sticker to the database
-      await this.stickerService.create({
-        ownerId: userId,
-        name: imageResult.id,
-        filename: filename,
-        url: imageResult.url,
-        width: imageResult.width,
-        height: imageResult.height,
-        visibility: StickerVisibility.PRIVATE,
+      // Log to processing history instead of creating stickers
+      await this.processingHistoryService.create({
+        userId,
+        type: 'generate',
+        inputData: { text, grid: false, normalize },
+        outputFiles: [{
+          url: imageResult.url,
+          path: imageResult.url.replace(`${config.appUrl}/uploads/`, ''),
+          filename: imageResult.id,
+          width: imageResult.width,
+          height: imageResult.height,
+        }],
       });
 
       const metadata: GenerationMetadata = {

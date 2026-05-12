@@ -7,18 +7,15 @@ import { prisma } from '../../../src/prisma/client';
 
 describe('Integration Tests', () => {
   const testUploadDir = 'uploads';
-  const testEmail = `integration-routes-${Date.now()}@example.com`;
-  const testUsername = `routesuser${Date.now()}`;
+  let testEmail: string;
+  let testUsername: string;
   const testPassword = 'StrongPass1!';
   let accessToken: string;
 
-  beforeAll(async () => {
-    try {
-      await fs.mkdir(testUploadDir, { recursive: true });
-    } catch {
-      // Directory may already exist
-    }
-
+  async function setupTestUser() {
+    testEmail = `integration-routes-${Date.now()}@example.com`;
+    testUsername = `routesuser${Date.now()}`;
+    
     // Register and login test user
     const registerResponse = await request(app)
       .post('/api/v1/auth/register')
@@ -41,6 +38,27 @@ describe('Integration Tests', () => {
         });
       accessToken = loginResponse.body.data.accessToken;
     }
+  }
+
+  beforeAll(async () => {
+    try {
+      await fs.mkdir(testUploadDir, { recursive: true });
+    } catch {
+      // Directory may already exist
+    }
+
+    await setupTestUser();
+  });
+
+  beforeEach(async () => {
+    // Re-create user if token is invalid
+    const checkResponse = await request(app)
+      .get('/api/v1/auth/me')
+      .set('Authorization', `Bearer ${accessToken}`);
+    
+    if (checkResponse.status !== 200) {
+      await setupTestUser();
+    }
   });
 
   afterAll(async () => {
@@ -61,7 +79,6 @@ describe('Integration Tests', () => {
         where: {
           OR: [
             { email: { startsWith: 'integration-routes-' } },
-            { email: testEmail },
           ],
         },
       });
@@ -76,7 +93,6 @@ describe('Integration Tests', () => {
         where: {
           OR: [
             { email: { startsWith: 'integration-routes-' } },
-            { email: testEmail },
           ],
         },
       });

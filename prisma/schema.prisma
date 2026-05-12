@@ -63,6 +63,13 @@ model User {
   grantedShares  StickerShare[]  @relation("GrantedBy")
   shareLinks     StickerShareLink[]
   refreshTokens  RefreshToken[]
+  
+  // Sticker Pack relations
+  stickerPacks       StickerPack[]
+  sharedStickerPacks StickerPackShare[]  @relation("PackSharedWith")
+  grantedPackShares  StickerPackShare[]  @relation("PackGrantedBy")
+  packShareLinks     StickerPackShareLink[] @relation("PackLinkCreator")
+  processingHistory  ProcessingHistory[]
 
   @@index([email])
   @@index([username])
@@ -94,6 +101,9 @@ model Sticker {
   owner   User             @relation(fields: [ownerId], references: [id])
   shares  StickerShare[]
   shareLinks StickerShareLink[]
+  
+  // Sticker Pack relation
+  stickerPacks StickerPackSticker[]
 
   @@index([ownerId])
   @@index([visibility])
@@ -160,4 +170,101 @@ model RefreshToken {
   @@index([userId])
   @@index([token])
   @@index([expiresAt])
+}
+
+// Sticker Pack Models
+model StickerPack {
+  id          String              @id @default(uuid())
+  ownerId     String
+  name        String
+  description String?
+  visibility  StickerVisibility   @default(PRIVATE)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  deletedAt   DateTime?
+
+  owner       User                 @relation(fields: [ownerId], references: [id])
+  stickers    StickerPackSticker[]
+  shares      StickerPackShare[]
+  shareLinks  StickerPackShareLink[]
+
+  @@index([ownerId])
+  @@index([visibility])
+  @@index([deletedAt])
+  @@index([updatedAt])
+}
+
+model StickerPackSticker {
+  id            String    @id @default(uuid())
+  stickerPackId String
+  stickerId     String
+  order         Int       @default(0)
+  createdAt     DateTime  @default(now())
+
+  stickerPack   StickerPack @relation(fields: [stickerPackId], references: [id], onDelete: Cascade)
+  sticker       Sticker     @relation(fields: [stickerId], references: [id], onDelete: Cascade)
+
+  @@unique([stickerPackId, stickerId])
+  @@index([stickerPackId])
+  @@index([stickerId])
+}
+
+model StickerPackShare {
+  id            String          @id @default(uuid())
+  stickerPackId String
+  sharedWithId  String
+  permission    SharePermission @default(VIEW)
+  grantedBy     String
+  createdAt     DateTime        @default(now())
+  expiresAt     DateTime?
+
+  stickerPack   StickerPack @relation(fields: [stickerPackId], references: [id], onDelete: Cascade)
+  sharedWith    User        @relation("PackSharedWith", fields: [sharedWithId], references: [id], onDelete: Cascade)
+  granter       User        @relation("PackGrantedBy", fields: [grantedBy], references: [id], onDelete: Cascade)
+
+  @@unique([stickerPackId, sharedWithId])
+  @@index([stickerPackId])
+  @@index([sharedWithId])
+  @@index([grantedBy])
+  @@index([expiresAt])
+}
+
+model StickerPackShareLink {
+  id            String          @id @default(uuid())
+  stickerPackId String
+  token         String          @unique
+  permission    SharePermission @default(VIEW)
+  createdBy     String
+  expiresAt     DateTime?
+  maxUses       Int?
+  usesCount     Int             @default(0)
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+
+  stickerPack   StickerPack @relation(fields: [stickerPackId], references: [id], onDelete: Cascade)
+  creator       User        @relation("PackLinkCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+
+  @@index([stickerPackId])
+  @@index([token])
+  @@index([createdBy])
+  @@index([expiresAt])
+  @@index([isActive])
+}
+
+// Processing History for generate/grid-split/background-remove
+model ProcessingHistory {
+  id          String   @id @default(uuid())
+  userId      String
+  type        String   // 'generate' | 'grid-split' | 'background-remove'
+  inputData   Json?    // prompt, rows/cols, etc
+  outputFiles Json     // array of {url, path, filename, width, height}
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+  @@index([expiresAt])
+  @@index([createdAt])
 }

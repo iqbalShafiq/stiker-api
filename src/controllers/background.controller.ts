@@ -1,13 +1,16 @@
-import type { Request, Response, NextFunction } from 'express';
+import type { Response, NextFunction } from 'express';
+import type { AuthRequest } from '../middleware/auth.middleware';
 import sharp from 'sharp';
 import { removeBackgroundFromAnimatedGif } from '../services/animated-gif-background-removal.service';
 import { ImageService } from '../services/image.service';
 import { StorageService } from '../services/storage.service';
 import { removeBackgroundWithFallback } from '../services/background-removal.service';
+import { ProcessingHistoryService } from '../services/processing-history.service';
 import { classifyRasterInput } from '../utils/image-input-classifier';
 import { buildSuccessResponse } from '../utils/response-builder';
 import { AppError, ValidationError, BackgroundRemovalError } from '../errors';
 import type { ImageResult } from '../types';
+import { config } from '../config';
 
 function fileIdFromUploadedPath(filename: string): string {
   const base = filename.split('/').pop() ?? filename;
@@ -17,13 +20,15 @@ function fileIdFromUploadedPath(filename: string): string {
 export class BackgroundController {
   private imageService: ImageService;
   private storageService: StorageService;
+  private processingHistoryService: ProcessingHistoryService;
 
   constructor() {
     this.imageService = new ImageService();
     this.storageService = new StorageService();
+    this.processingHistoryService = new ProcessingHistoryService();
   }
 
-  async remove(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async remove(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const file = req.file;
       if (!file) {
@@ -68,6 +73,20 @@ export class BackgroundController {
           height: dimensions.pageHeight ?? dimensions.height ?? 512,
         };
 
+        // Log to processing history
+        await this.processingHistoryService.create({
+          userId: req.user?.id ?? 'anonymous',
+          type: 'background-remove',
+          inputData: { kind: 'animated-gif' },
+          outputFiles: [{
+            url: image.url,
+            path: image.url.replace(`${config.appUrl}/uploads/`, ''),
+            filename: image.id,
+            width: image.width,
+            height: image.height,
+          }],
+        });
+
         res.status(200).json(
           buildSuccessResponse({
             image,
@@ -110,6 +129,20 @@ export class BackgroundController {
         width: dimensions.width,
         height: dimensions.height,
       };
+
+      // Log to processing history
+      await this.processingHistoryService.create({
+        userId: req.user?.id ?? 'anonymous',
+        type: 'background-remove',
+        inputData: { kind: 'static-image' },
+        outputFiles: [{
+          url: image.url,
+          path: image.url.replace(`${config.appUrl}/uploads/`, ''),
+          filename: image.id,
+          width: image.width,
+          height: image.height,
+        }],
+      });
 
       res.status(200).json(
         buildSuccessResponse({
