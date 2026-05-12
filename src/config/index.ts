@@ -102,8 +102,8 @@ export const config = {
     temporalDilateAlphaKernel: temporalDilateAlphaKernel,
   },
   models: {
-    imageGeneration: 'google/gemini-2.5-flash-image',
-    agent: 'google/gemini-2.5-flash-lite',
+    imageGeneration: process.env.IMAGE_GENERATION_MODEL ?? 'google/gemini-2.5-flash-image',
+    agent: process.env.AGENT_MODEL ?? 'google/gemini-2.5-flash-lite',
   },
   databaseUrl: process.env.DATABASE_URL ?? 'postgresql://localhost:5432/sticker_api',
   redisUrl: process.env.REDIS_URL ?? 'redis://localhost:6379',
