@@ -1,0 +1,164 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+
+  users       User[]
+  permissions RolePermission[]
+
+  @@index([name])
+}
+
+model Permission {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  resource    String
+  action      String
+  createdAt   DateTime @default(now())
+
+  roles RolePermission[]
+
+  @@index([name])
+  @@index([resource, action])
+}
+
+model RolePermission {
+  id           String @id @default(uuid())
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  passwordHash  String
+  username      String    @unique
+  displayName   String?
+  roleId        String
+  isActive      Boolean   @default(true)
+  emailVerified Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  role           Role            @relation(fields: [roleId], references: [id])
+  stickers       Sticker[]
+  sharedStickers StickerShare[]  @relation("SharedWith")
+  grantedShares  StickerShare[]  @relation("GrantedBy")
+  shareLinks     StickerShareLink[]
+  refreshTokens  RefreshToken[]
+
+  @@index([email])
+  @@index([username])
+  @@index([roleId])
+}
+
+enum StickerVisibility {
+  PUBLIC
+  PRIVATE
+  UNLISTED
+}
+
+model Sticker {
+  id         String            @id @default(uuid())
+  ownerId    String
+  name       String
+  filename   String
+  url        String
+  visibility StickerVisibility @default(PRIVATE)
+  width      Int?
+  height     Int?
+  fileSize   Int?
+  mimeType   String?
+  metadata   Json?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  deletedAt  DateTime?
+
+  owner   User             @relation(fields: [ownerId], references: [id])
+  shares  StickerShare[]
+  shareLinks StickerShareLink[]
+
+  @@index([ownerId])
+  @@index([visibility])
+  @@index([createdAt])
+  @@index([deletedAt])
+}
+
+enum SharePermission {
+  VIEW
+  EDIT
+}
+
+model StickerShare {
+  id           String          @id @default(uuid())
+  stickerId    String
+  sharedWithId String
+  permission   SharePermission @default(VIEW)
+  grantedBy    String
+  createdAt    DateTime        @default(now())
+  expiresAt    DateTime?
+
+  sticker    Sticker @relation(fields: [stickerId], references: [id], onDelete: Cascade)
+  sharedWith User    @relation("SharedWith", fields: [sharedWithId], references: [id], onDelete: Cascade)
+  granter    User    @relation("GrantedBy", fields: [grantedBy], references: [id], onDelete: Cascade)
+
+  @@unique([stickerId, sharedWithId])
+  @@index([stickerId])
+  @@index([sharedWithId])
+  @@index([grantedBy])
+  @@index([expiresAt])
+}
+
+model StickerShareLink {
+  id        String          @id @default(uuid())
+  stickerId String
+  token     String          @unique
+  permission SharePermission @default(VIEW)
+  createdBy String
+  expiresAt DateTime?
+  maxUses   Int?
+  usesCount Int             @default(0)
+  isActive  Boolean         @default(true)
+  createdAt DateTime        @default(now())
+
+  sticker Sticker @relation(fields: [stickerId], references: [id], onDelete: Cascade)
+  creator User    @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+
+  @@index([stickerId])
+  @@index([token])
+  @@index([createdBy])
+  @@index([expiresAt])
+  @@index([isActive])
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+}
