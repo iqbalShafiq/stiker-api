@@ -20,7 +20,7 @@ export async function authenticateToken(
   try {
     const authHeader = req.headers.authorization;
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (!authHeader?.startsWith('Bearer ')) {
       return next(new UnauthorizedError('Authentication required'));
     }
 

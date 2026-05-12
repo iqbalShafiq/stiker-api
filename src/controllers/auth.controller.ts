@@ -84,9 +84,9 @@ export class AuthController {
 
   async logout(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const refreshToken = req.cookies?.refresh_token;
+      const refreshToken: unknown = req.cookies?.refresh_token;
 
-      if (refreshToken) {
+      if (typeof refreshToken === 'string' && refreshToken) {
         await this.authService.logout(refreshToken);
       }
 
@@ -100,9 +100,9 @@ export class AuthController {
 
   async refresh(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const refreshToken = req.cookies?.refresh_token;
+      const refreshToken: unknown = req.cookies?.refresh_token;
 
-      if (!refreshToken) {
+      if (typeof refreshToken !== 'string' || !refreshToken) {
         throw new ValidationError('Refresh token is required');
       }
 
@@ -134,7 +134,7 @@ export class AuthController {
     }
   }
 
-  async updateMe(_req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  updateMe(_req: AuthRequest, res: Response, next: NextFunction): void {
     try {
       res.status(200).json(buildSuccessResponse({ message: 'Update profile endpoint - placeholder' }));
     } catch (error) {

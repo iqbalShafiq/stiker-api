@@ -18,6 +18,7 @@ import { BackgroundController } from './controllers/background.controller';
 import { AuthController } from './controllers/auth.controller';
 import { StickerController } from './controllers/sticker.controller';
 import { AdminController } from './controllers/admin.controller';
+import { asyncHandler } from './utils/async-handler';
 
 const app = express();
 
@@ -57,121 +58,83 @@ const stickerController = new StickerController();
 const adminController = new AdminController();
 
 // Auth routes (public)
-app.post('/api/v1/auth/register', (req, res, next) => {
-  authController.register(req, res, next).catch(next);
-});
-
-app.post('/api/v1/auth/login', (req, res, next) => {
-  authController.login(req, res, next).catch(next);
-});
-
-app.post('/api/v1/auth/refresh', (req, res, next) => {
-  authController.refresh(req, res, next).catch(next);
-});
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/auth/register', asyncHandler((req, res, next) => authController.register(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/auth/login', asyncHandler((req, res, next) => authController.login(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/auth/refresh', asyncHandler((req, res, next) => authController.refresh(req, res, next)));
 
 // Auth routes (protected)
-app.post('/api/v1/auth/logout', authenticateToken, (req, res, next) => {
-  authController.logout(req, res, next).catch(next);
-});
-
-app.get('/api/v1/auth/me', authenticateToken, (req, res, next) => {
-  authController.getMe(req, res, next).catch(next);
-});
-
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/auth/logout', authenticateToken, asyncHandler((req, res, next) => authController.logout(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/auth/me', authenticateToken, asyncHandler((req, res, next) => authController.getMe(req, res, next)));
 app.put('/api/v1/auth/me', authenticateToken, (req, res, next) => {
-  authController.updateMe(req, res, next).catch(next);
+  authController.updateMe(req, res, next);
 });
-
-app.post('/api/v1/auth/change-password', authenticateToken, (req, res, next) => {
-  authController.changePassword(req, res, next).catch(next);
-});
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/auth/change-password', authenticateToken, asyncHandler((req, res, next) => authController.changePassword(req, res, next)));
 
 // Sticker routes (public)
-app.get('/api/v1/stickers/public', (req, res, next) => {
-  stickerController.getPublicStickers(req, res, next).catch(next);
-});
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/stickers/public', asyncHandler((req, res, next) => stickerController.getPublicStickers(req, res, next)));
 
 // Sticker routes (protected)
-app.get('/api/v1/stickers', authenticateToken, (req, res, next) => {
-  stickerController.getMyStickers(req, res, next).catch(next);
-});
-
-app.get('/api/v1/stickers/:id', authenticateToken, (req, res, next) => {
-  stickerController.getSticker(req, res, next).catch(next);
-});
-
-app.put('/api/v1/stickers/:id', authenticateToken, (req, res, next) => {
-  stickerController.updateSticker(req, res, next).catch(next);
-});
-
-app.delete('/api/v1/stickers/:id', authenticateToken, (req, res, next) => {
-  stickerController.deleteSticker(req, res, next).catch(next);
-});
-
-app.post('/api/v1/stickers/:id/share', authenticateToken, (req, res, next) => {
-  stickerController.shareWithUser(req, res, next).catch(next);
-});
-
-app.delete('/api/v1/stickers/:id/share', authenticateToken, (req, res, next) => {
-  stickerController.removeUserShare(req, res, next).catch(next);
-});
-
-app.post('/api/v1/stickers/:id/link', authenticateToken, (req, res, next) => {
-  stickerController.createShareLink(req, res, next).catch(next);
-});
-
-app.delete('/api/v1/stickers/:id/link', authenticateToken, (req, res, next) => {
-  stickerController.revokeShareLink(req, res, next).catch(next);
-});
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/stickers', authenticateToken, asyncHandler((req, res, next) => stickerController.getMyStickers(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/stickers/:id', authenticateToken, asyncHandler((req, res, next) => stickerController.getSticker(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.put('/api/v1/stickers/:id', authenticateToken, asyncHandler((req, res, next) => stickerController.updateSticker(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.delete('/api/v1/stickers/:id', authenticateToken, asyncHandler((req, res, next) => stickerController.deleteSticker(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/stickers/:id/share', authenticateToken, asyncHandler((req, res, next) => stickerController.shareWithUser(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.delete('/api/v1/stickers/:id/share', authenticateToken, asyncHandler((req, res, next) => stickerController.removeUserShare(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/stickers/:id/link', authenticateToken, asyncHandler((req, res, next) => stickerController.createShareLink(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.delete('/api/v1/stickers/:id/link', authenticateToken, asyncHandler((req, res, next) => stickerController.revokeShareLink(req, res, next)));
 
 // Admin routes (protected + admin only)
-app.get('/api/v1/users', authenticateToken, requireRole('admin'), (req, res, next) => {
-  adminController.getUsers(req, res, next).catch(next);
-});
-
-app.get('/api/v1/users/:id', authenticateToken, requireRole('admin'), (req, res, next) => {
-  adminController.getUser(req, res, next).catch(next);
-});
-
-app.put('/api/v1/users/:id', authenticateToken, requireRole('admin'), (req, res, next) => {
-  adminController.updateUser(req, res, next).catch(next);
-});
-
-app.delete('/api/v1/users/:id', authenticateToken, requireRole('admin'), (req, res, next) => {
-  adminController.deleteUser(req, res, next).catch(next);
-});
-
-app.put('/api/v1/users/:id/role', authenticateToken, requireRole('admin'), (req, res, next) => {
-  adminController.changeUserRole(req, res, next).catch(next);
-});
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/users', authenticateToken, requireRole('admin'), asyncHandler((req, res, next) => adminController.getUsers(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/users/:id', authenticateToken, requireRole('admin'), asyncHandler((req, res, next) => adminController.getUser(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.put('/api/v1/users/:id', authenticateToken, requireRole('admin'), asyncHandler((req, res, next) => adminController.updateUser(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.delete('/api/v1/users/:id', authenticateToken, requireRole('admin'), asyncHandler((req, res, next) => adminController.deleteUser(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.put('/api/v1/users/:id/role', authenticateToken, requireRole('admin'), asyncHandler((req, res, next) => adminController.changeUserRole(req, res, next)));
 
 // Protected existing routes
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.post(
   '/api/v1/generate',
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises
   authenticateToken,
   upload.single('image'),
   validateRequest(generateImageSchema),
-  (req, res, next) => {
-    generateController.generate(req, res, next).catch(next);
-  }
+  asyncHandler((req, res, next) => generateController.generate(req, res, next))
 );
-
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.post(
   '/api/v1/grid/split',
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises
   authenticateToken,
   upload.single('image'),
-  (req, res, next) => {
-    gridController.split(req, res, next).catch(next);
-  }
+  asyncHandler((req, res, next) => gridController.split(req, res, next))
 );
-
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.post(
   '/api/v1/background/remove',
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises
   authenticateToken,
   upload.single('image'),
-  (req, res, next) => {
-    backgroundController.remove(req, res, next).catch(next);
-  }
+  asyncHandler((req, res, next) => backgroundController.remove(req, res, next))
 );
 
 app.get(

@@ -46,7 +46,7 @@ function validatePassword(password: string): void {
   if (!/[0-9]/.test(password)) {
     throw new ValidationError('Password must contain at least one number');
   }
-  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+  if (!/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password)) {
     throw new ValidationError('Password must contain at least one special character');
   }
 }

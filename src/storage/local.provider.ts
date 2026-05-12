@@ -69,7 +69,7 @@ export class LocalStorageProvider implements IStorageProvider {
     try {
       await fs.unlink(this.getFilePathInternal(filename));
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      if ((error as { code?: string }).code !== 'ENOENT') {
         throw error;
       }
     }
