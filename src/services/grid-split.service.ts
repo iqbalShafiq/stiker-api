@@ -4,7 +4,7 @@ import {
   type OutsideForegroundTextDetection,
 } from './openrouter.service';
 import { ImageService } from './image.service';
-import { StorageService } from './storage.service';
+import { IStorageProvider } from '../storage/interface';
 import { removeBackgroundWithFallback } from './background-removal.service';
 
 export interface GridSplitPipelineOptions {
@@ -34,7 +34,7 @@ export class GridSplitService {
   constructor(
     private readonly openRouterService: OpenRouterService,
     private readonly imageService: ImageService,
-    private readonly storageService: StorageService
+    private readonly storageService: IStorageProvider
   ) {}
 
   async split(

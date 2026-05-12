@@ -1,13 +1,16 @@
-import type { Request, Response, NextFunction } from 'express';
+import type { Response, NextFunction } from 'express';
 import { OpenRouterService } from '../services/openrouter.service';
 import { ImageService } from '../services/image.service';
-import { StorageService } from '../services/storage.service';
+import { LocalStorageProvider } from '../storage/local.provider';
 import { GridSplitService } from '../services/grid-split.service';
+import { StickerService } from '../services/sticker.service';
 import { buildSuccessResponse } from '../utils/response-builder';
 import { ValidationError } from '../errors';
 import { resolveGridRowsCols } from '../utils/grid-layout';
 import { config } from '../config';
 import type { ImageResult, GenerationMetadata } from '../types';
+import type { AuthRequest } from '../middleware/auth.middleware';
+import { StickerVisibility } from '@prisma/client';
 
 /** Ask the model for transparent margins so we avoid server-side matting on /generate. */
 const PROMPT_TRANSPARENT_STICKER_BG = `
@@ -39,22 +42,29 @@ ${PROMPT_TRANSPARENT_STICKER_BG}`;
 export class GenerateController {
   private openRouterService: OpenRouterService;
   private imageService: ImageService;
-  private storageService: StorageService;
+  private storageProvider: LocalStorageProvider;
   private gridSplitService: GridSplitService;
+  private stickerService: StickerService;
 
   constructor() {
     this.openRouterService = new OpenRouterService();
     this.imageService = new ImageService();
-    this.storageService = new StorageService();
+    this.storageProvider = new LocalStorageProvider();
     this.gridSplitService = new GridSplitService(
       this.openRouterService,
       this.imageService,
-      this.storageService
+      this.storageProvider
     );
+    this.stickerService = new StickerService();
   }
 
-  async generate(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async generate(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
+      const userId = req.user?.id;
+      if (!userId) {
+        throw new ValidationError('Authentication required');
+      }
+
       const body = req.body as Record<string, unknown>;
       const text = String(body.text ?? '');
       const grid = Boolean(body.grid);
@@ -109,6 +119,19 @@ export class GenerateController {
         );
         images = gridImages;
 
+        // Save each grid cell as a separate sticker
+        for (const image of images) {
+          await this.stickerService.create({
+            ownerId: userId,
+            name: image.id || 'Generated Sticker',
+            filename: image.id || 'generated-sticker',
+            url: image.url,
+            width: image.width,
+            height: image.height,
+            visibility: StickerVisibility.PRIVATE,
+          });
+        }
+
         const metadata: GenerationMetadata = {
           model: config.models.imageGeneration,
           ...aiMetadata,
@@ -132,17 +155,30 @@ export class GenerateController {
 
       // Keep WhatsApp-ready 512x512 output without stretching subject proportions.
       const squareBuffer = await this.imageService.resizeToSquareContain(imageBuffer, 512);
-      const filename = await this.storageService.saveFile(squareBuffer, {
+      const filename = await this.storageProvider.saveFile(squareBuffer, {
         extension: 'png',
         subDir: `generate/${requestTimestamp}`,
         baseName: 'generated-sticker',
+        ownerId: userId,
       });
       const dimensions = await this.imageService.getImageDimensions(squareBuffer);
-      images.push({
+      const imageResult: ImageResult = {
         id: filename.split('/').pop()?.replace('.png', '') ?? `generated-sticker-${requestTimestamp}`,
-        url: this.storageService.getPublicUrl(filename),
+        url: this.storageProvider.getPublicUrl(filename),
         width: dimensions.width,
         height: dimensions.height,
+      };
+      images.push(imageResult);
+
+      // Save the generated sticker to the database
+      await this.stickerService.create({
+        ownerId: userId,
+        name: imageResult.id,
+        filename: filename,
+        url: imageResult.url,
+        width: imageResult.width,
+        height: imageResult.height,
+        visibility: StickerVisibility.PRIVATE,
       });
 
       const metadata: GenerationMetadata = {
