@@ -77,6 +77,12 @@ export class ConflictError extends AppError {
   }
 }
 
+export class NotFoundError extends AppError {
+  constructor(message: string = 'Resource not found') {
+    super(message, 404, 'NOT_FOUND');
+  }
+}
+
 export class RateLimitError extends AppError {
   constructor(message: string = 'Too many requests') {
     super(message, 429, 'RATE_LIMITED');
