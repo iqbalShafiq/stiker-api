@@ -134,7 +134,7 @@ export class AuthController {
     }
   }
 
-  async updateMe(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  async updateMe(_req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       res.status(200).json(buildSuccessResponse({ message: 'Update profile endpoint - placeholder' }));
     } catch (error) {

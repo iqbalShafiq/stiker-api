@@ -5,7 +5,7 @@ import { buildSuccessResponse } from '../utils/response-builder';
 import { ValidationError, ForbiddenError } from '../errors';
 
 export class AdminController {
-  async getUsers(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  async getUsers(_req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const users = await prisma.user.findMany({
         include: {

@@ -50,6 +50,7 @@ export async function authenticateToken(
 
     const user = await prisma.user.findUnique({
       where: { id: decoded.sub },
+      include: { role: true },
     });
 
     if (!user) {
@@ -63,7 +64,7 @@ export async function authenticateToken(
     req.user = {
       id: user.id,
       email: user.email,
-      role: user.role,
+      role: user.role.name,
     };
 
     next();
