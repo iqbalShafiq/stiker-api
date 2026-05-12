@@ -5,6 +5,56 @@ import { prisma } from '../../src/prisma/client';
 import { StickerService } from '../../src/services/sticker.service';
 import { StickerVisibility, SharePermission } from '@prisma/client';
 
+// ─── HTTP Status Constants ──────────────────────────────────────────────────
+
+const HTTP_STATUS = {
+  OK: 200,
+  CREATED: 201,
+  BAD_REQUEST: 400,
+  UNAUTHORIZED: 401,
+  FORBIDDEN: 403,
+  NOT_FOUND: 404,
+  CONFLICT: 409,
+  UNSUPPORTED_MEDIA_TYPE: 415,
+} as const;
+
+// ─── Type Interfaces ────────────────────────────────────────────────────────
+
+interface UserData {
+  id: string;
+  email: string;
+  username: string;
+  displayName?: string;
+  isActive?: boolean;
+  role?: { name: string };
+}
+
+interface StickerData {
+  id: string;
+  name: string;
+  visibility: string;
+  ownerId?: string;
+  url?: string;
+  filename?: string;
+  width?: number;
+  height?: number;
+}
+
+interface ShareData {
+  id?: string;
+  sharedWithId?: string;
+  permission?: string;
+  token?: string;
+  expiresAt?: string;
+  maxUses?: number;
+}
+
+interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  message?: string;
+}
+
 // ─── Shared State ───────────────────────────────────────────────────────────
 
 interface TestState {
@@ -589,7 +639,7 @@ describe('Sticker CRUD', () => {
       .get('/api/v1/stickers/nonexistent-id')
       .set('Authorization', `Bearer ${reg.accessToken}`);
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(HTTP_STATUS.NOT_FOUND);
     expect(response.body.success).toBe(false);
   });
 
@@ -605,7 +655,7 @@ describe('Sticker CRUD', () => {
       .get(`/api/v1/stickers/${sticker.id}`)
       .set('Authorization', `Bearer ${reg2.accessToken}`);
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(HTTP_STATUS.FORBIDDEN);
     expect(response.body.success).toBe(false);
   });
 
@@ -647,10 +697,10 @@ describe('Sticker CRUD', () => {
     const response = await request(app)
       .put(`/api/v1/stickers/${sticker.id}`)
       .set('Authorization', `Bearer ${reg.accessToken}`)
-      .send({ visibility: 'PUBLIC' });
+      .send({ visibility: 'public' });
 
     expect(response.status).toBe(200);
-    expect(response.body.data.visibility).toBe('PUBLIC');
+    expect(response.body.data.visibility).toBe('public');
   });
 
   test.sequential('should return 404 when updating nonexistent sticker', async () => {
@@ -700,7 +750,7 @@ describe('Sticker CRUD', () => {
     const getResponse = await request(app)
       .get(`/api/v1/stickers/${sticker.id}`)
       .set('Authorization', `Bearer ${reg.accessToken}`);
-    expect(getResponse.status).toBe(400);
+    expect(getResponse.status).toBe(HTTP_STATUS.NOT_FOUND);
   });
 
   test.sequential('should return 404 when deleting nonexistent sticker', async () => {
@@ -762,10 +812,10 @@ describe('Sticker CRUD', () => {
     const updateResponse = await request(app)
       .put(`/api/v1/stickers/${sticker.id}`)
       .set('Authorization', `Bearer ${reg.accessToken}`)
-      .send({ visibility: 'PUBLIC' });
+      .send({ visibility: 'public' });
 
     expect(updateResponse.status).toBe(200);
-    expect(updateResponse.body.data.visibility).toBe('PUBLIC');
+    expect(updateResponse.body.data.visibility).toBe('public');
 
     const publicResponse = await request(app).get('/api/v1/stickers/public');
     expect(publicResponse.body.data.some((s: any) => s.id === sticker.id)).toBe(true);
@@ -787,7 +837,7 @@ describe('Sticker CRUD', () => {
     const response = await request(app)
       .get(`/api/v1/stickers/${sticker.id}`)
       .set('Authorization', `Bearer ${reg2.accessToken}`);
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(HTTP_STATUS.NOT_FOUND);
   });
 
   test.sequential('should require auth for my stickers', async () => {
@@ -817,7 +867,7 @@ describe('Sharing', () => {
     const response = await request(app)
       .post(`/api/v1/stickers/${sticker.id}/share`)
       .set('Authorization', `Bearer ${reg1.accessToken}`)
-      .send({ userId: reg2.user.id, permission: 'VIEW' });
+      .send({ userId: reg2.user.id, permission: 'view' });
 
     expect(response.status).toBe(201);
     expect(response.body.success).toBe(true);
@@ -827,7 +877,7 @@ describe('Sharing', () => {
   test.sequential('should require auth to share sticker', async () => {
     const response = await request(app)
       .post('/api/v1/stickers/some-id/share')
-      .send({ userId: 'some-user', permission: 'VIEW' });
+      .send({ userId: 'some-user', permission: 'view' });
 
     expect(response.status).toBe(401);
     expect(response.body.success).toBe(false);
@@ -842,7 +892,7 @@ describe('Sharing', () => {
     const response = await request(app)
       .post(`/api/v1/stickers/${sticker.id}/share`)
       .set('Authorization', `Bearer ${reg.accessToken}`)
-      .send({ userId: 'nonexistent-user-id', permission: 'VIEW' });
+      .send({ userId: 'nonexistent-user-id', permission: 'view' });
 
     expect(response.status).toBe(404);
     expect(response.body.success).toBe(false);
@@ -859,7 +909,7 @@ describe('Sharing', () => {
     await request(app)
       .post(`/api/v1/stickers/${sticker.id}/share`)
       .set('Authorization', `Bearer ${reg1.accessToken}`)
-      .send({ userId: reg2.user.id, permission: 'VIEW' });
+      .send({ userId: reg2.user.id, permission: 'view' });
 
     const response = await request(app)
       .delete(`/api/v1/stickers/${sticker.id}/share`)
@@ -888,7 +938,7 @@ describe('Sharing', () => {
     const response = await request(app)
       .post(`/api/v1/stickers/${sticker.id}/link`)
       .set('Authorization', `Bearer ${reg.accessToken}`)
-      .send({ permission: 'VIEW' });
+      .send({ permission: 'view' });
 
     expect(response.status).toBe(201);
     expect(response.body.success).toBe(true);
@@ -900,7 +950,7 @@ describe('Sharing', () => {
   test.sequential('should require auth to create share link', async () => {
     const response = await request(app)
       .post('/api/v1/stickers/some-id/link')
-      .send({ permission: 'VIEW' });
+      .send({ permission: 'view' });
 
     expect(response.status).toBe(401);
     expect(response.body.success).toBe(false);
@@ -916,7 +966,7 @@ describe('Sharing', () => {
     const response = await request(app)
       .post(`/api/v1/stickers/${sticker.id}/link`)
       .set('Authorization', `Bearer ${reg.accessToken}`)
-      .send({ permission: 'VIEW', expiresAt });
+      .send({ permission: 'view', expiresAt });
 
     expect(response.status).toBe(201);
     expect(response.body.success).toBe(true);
@@ -932,7 +982,7 @@ describe('Sharing', () => {
     const response = await request(app)
       .post(`/api/v1/stickers/${sticker.id}/link`)
       .set('Authorization', `Bearer ${reg.accessToken}`)
-      .send({ permission: 'VIEW', maxUses: 5 });
+      .send({ permission: 'view', maxUses: 5 });
 
     expect(response.status).toBe(201);
     expect(response.body.success).toBe(true);
@@ -948,7 +998,7 @@ describe('Sharing', () => {
     const linkResponse = await request(app)
       .post(`/api/v1/stickers/${sticker.id}/link`)
       .set('Authorization', `Bearer ${reg.accessToken}`)
-      .send({ permission: 'VIEW' });
+      .send({ permission: 'view' });
 
     const linkId = linkResponse.body.data.id;
 
@@ -993,7 +1043,7 @@ describe('Sharing', () => {
     await request(app)
       .post(`/api/v1/stickers/${sticker.id}/share`)
       .set('Authorization', `Bearer ${reg1.accessToken}`)
-      .send({ userId: reg2.user.id, permission: 'VIEW' });
+      .send({ userId: reg2.user.id, permission: 'view' });
 
     const response = await request(app)
       .get(`/api/v1/stickers/${sticker.id}`)
@@ -1014,17 +1064,17 @@ describe('Sharing', () => {
     const share1 = await request(app)
       .post(`/api/v1/stickers/${sticker.id}/share`)
       .set('Authorization', `Bearer ${reg1.accessToken}`)
-      .send({ userId: reg2.user.id, permission: 'VIEW' });
+      .send({ userId: reg2.user.id, permission: 'view' });
 
-    expect(share1.body.data.permission).toBe('VIEW');
+    expect(share1.body.data.permission).toBe('view');
 
     const share2 = await request(app)
       .post(`/api/v1/stickers/${sticker.id}/share`)
       .set('Authorization', `Bearer ${reg1.accessToken}`)
-      .send({ userId: reg2.user.id, permission: 'EDIT' });
+      .send({ userId: reg2.user.id, permission: 'full' });
 
     expect(share2.status).toBe(201);
-    expect(share2.body.data.permission).toBe('EDIT');
+    expect(share2.body.data.permission).toBe('full');
   });
 
   test.sequential('should return 404 when removing nonexistent share', async () => {
@@ -1094,7 +1144,7 @@ describe('Admin', () => {
       .get('/api/v1/users/nonexistent-id')
       .set('Authorization', `Bearer ${state.adminToken}`);
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(HTTP_STATUS.NOT_FOUND);
     expect(response.body.success).toBe(false);
   });
 
@@ -1132,7 +1182,7 @@ describe('Admin', () => {
       .set('Authorization', `Bearer ${state.adminToken}`)
       .send({ displayName: 'Nobody' });
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(HTTP_STATUS.NOT_FOUND);
     expect(response.body.success).toBe(false);
   });
 
@@ -1151,7 +1201,7 @@ describe('Admin', () => {
     const getResponse = await request(app)
       .get(`/api/v1/users/${reg.user.id}`)
       .set('Authorization', `Bearer ${state.adminToken}`);
-    expect(getResponse.status).toBe(400);
+    expect(getResponse.status).toBe(HTTP_STATUS.NOT_FOUND);
   });
 
   test.sequential('should return 404 when deleting nonexistent user as admin', async () => {
@@ -1159,7 +1209,7 @@ describe('Admin', () => {
       .delete('/api/v1/users/nonexistent-id')
       .set('Authorization', `Bearer ${state.adminToken}`);
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(HTTP_STATUS.NOT_FOUND);
     expect(response.body.success).toBe(false);
   });
 
@@ -1196,7 +1246,7 @@ describe('Admin', () => {
       .set('Authorization', `Bearer ${state.adminToken}`)
       .send({ roleId: adminRole?.id });
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(HTTP_STATUS.NOT_FOUND);
     expect(response.body.success).toBe(false);
   });
 
@@ -1209,7 +1259,7 @@ describe('Admin', () => {
       .set('Authorization', `Bearer ${state.adminToken}`)
       .send({ roleId: 'nonexistent-role-id' });
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(HTTP_STATUS.NOT_FOUND);
     expect(response.body.success).toBe(false);
   });
 

@@ -2,7 +2,7 @@ import type { Response, NextFunction } from 'express';
 import { prisma } from '../prisma/client';
 import type { AuthRequest } from '../middleware/auth.middleware';
 import { buildSuccessResponse } from '../utils/response-builder';
-import { ValidationError, ForbiddenError } from '../errors';
+import { ValidationError, ForbiddenError, NotFoundError } from '../errors';
 
 export class AdminController {
   async getUsers(_req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
@@ -38,7 +38,7 @@ export class AdminController {
       });
 
       if (!user) {
-        throw new ValidationError('User not found');
+        throw new NotFoundError('User not found');
       }
 
       res.status(200).json(buildSuccessResponse(user));
@@ -61,7 +61,7 @@ export class AdminController {
       });
 
       if (!existingUser) {
-        throw new ValidationError('User not found');
+        throw new NotFoundError('User not found');
       }
 
       const updateData: { displayName?: string; isActive?: boolean } = {};
@@ -106,7 +106,7 @@ export class AdminController {
       });
 
       if (!existingUser) {
-        throw new ValidationError('User not found');
+        throw new NotFoundError('User not found');
       }
 
       await prisma.user.delete({
@@ -137,7 +137,7 @@ export class AdminController {
       });
 
       if (!existingUser) {
-        throw new ValidationError('User not found');
+        throw new NotFoundError('User not found');
       }
 
       const role = await prisma.role.findUnique({
@@ -145,7 +145,7 @@ export class AdminController {
       });
 
       if (!role) {
-        throw new ValidationError('Role not found');
+        throw new NotFoundError('Role not found');
       }
 
       const user = await prisma.user.update({

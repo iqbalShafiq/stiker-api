@@ -3,7 +3,7 @@ import { StickerService } from '../services/sticker.service';
 import { ShareService } from '../services/share.service';
 import type { AuthRequest } from '../middleware/auth.middleware';
 import { buildSuccessResponse } from '../utils/response-builder';
-import { ValidationError } from '../errors';
+import { ValidationError, NotFoundError, ForbiddenError } from '../errors';
 import { SharePermission } from '@prisma/client';
 
 export class StickerController {
@@ -13,6 +13,20 @@ export class StickerController {
   constructor() {
     this.stickerService = new StickerService();
     this.shareService = new ShareService();
+  }
+
+  private mapStickerResponse(sticker: Record<string, unknown>): Record<string, unknown> {
+    if (sticker && typeof sticker.visibility === 'string') {
+      sticker.visibility = sticker.visibility.toLowerCase();
+    }
+    return sticker;
+  }
+
+  private mapShareResponse(share: Record<string, unknown>): Record<string, unknown> {
+    if (share && typeof share.permission === 'string') {
+      share.permission = share.permission === 'EDIT' ? 'full' : share.permission.toLowerCase();
+    }
+    return share;
   }
 
   async getMyStickers(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
@@ -48,19 +62,19 @@ export class StickerController {
       const sticker = await this.stickerService.findById(id);
 
       if (!sticker) {
-        throw new ValidationError('Sticker not found');
+        throw new NotFoundError('Sticker not found');
       }
 
       if (req.user?.id) {
         const hasAccess = await this.stickerService.checkAccess(id, req.user.id, 'read');
         if (!hasAccess && sticker.visibility !== 'PUBLIC') {
-          throw new ValidationError('You do not have permission to view this sticker');
+          throw new ForbiddenError('You do not have permission to view this sticker');
         }
       } else if (sticker.visibility !== 'PUBLIC') {
         throw new ValidationError('Authentication required');
       }
 
-      res.status(200).json(buildSuccessResponse(sticker));
+      res.status(200).json(buildSuccessResponse(this.mapStickerResponse(sticker as Record<string, unknown>)));
     } catch (error) {
       next(error);
     }
@@ -86,11 +100,11 @@ export class StickerController {
       }
 
       if (visibility !== undefined) {
-        updateData.visibility = String(visibility) as 'PUBLIC' | 'PRIVATE' | 'UNLISTED';
+        updateData.visibility = String(visibility).toUpperCase() as 'PUBLIC' | 'PRIVATE' | 'UNLISTED';
       }
 
       const sticker = await this.stickerService.update(id, req.user.id, updateData);
-      res.status(200).json(buildSuccessResponse(sticker));
+      res.status(200).json(buildSuccessResponse(this.mapStickerResponse(sticker as Record<string, unknown>)));
     } catch (error) {
       next(error);
     }
@@ -132,7 +146,10 @@ export class StickerController {
         throw new ValidationError('User ID is required');
       }
 
-      const sharePermission = permission ? String(permission).toUpperCase() as SharePermission : SharePermission.VIEW;
+      const permissionStr = String(permission).toLowerCase();
+      const sharePermission = permission
+        ? (permissionStr === 'full' ? SharePermission.EDIT : (permissionStr.toUpperCase() as SharePermission))
+        : SharePermission.VIEW;
       const expirationDate = expiresAt ? new Date(String(expiresAt)) : undefined;
 
       const share = await this.shareService.shareWithUser(
@@ -143,7 +160,7 @@ export class StickerController {
         expirationDate
       );
 
-      res.status(201).json(buildSuccessResponse(share));
+      res.status(201).json(buildSuccessResponse(this.mapShareResponse(share as Record<string, unknown>)));
     } catch (error) {
       next(error);
     }
@@ -186,7 +203,10 @@ export class StickerController {
         throw new ValidationError('Sticker ID is required');
       }
 
-      const sharePermission = permission ? String(permission).toUpperCase() as SharePermission : SharePermission.VIEW;
+      const permissionStr = String(permission).toLowerCase();
+      const sharePermission = permission
+        ? (permissionStr === 'full' ? SharePermission.EDIT : (permissionStr.toUpperCase() as SharePermission))
+        : SharePermission.VIEW;
       const expirationDate = expiresAt ? new Date(String(expiresAt)) : undefined;
       const usesLimit = maxUses ? Number(maxUses) : undefined;
 
@@ -198,7 +218,7 @@ export class StickerController {
         usesLimit
       );
 
-      res.status(201).json(buildSuccessResponse(link));
+      res.status(201).json(buildSuccessResponse(this.mapShareResponse(link as Record<string, unknown>)));
     } catch (error) {
       next(error);
     }
