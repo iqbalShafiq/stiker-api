@@ -105,6 +105,13 @@ export const config = {
     imageGeneration: 'google/gemini-2.5-flash-image',
     agent: 'google/gemini-2.5-flash-lite',
   },
+  databaseUrl: process.env.DATABASE_URL ?? 'postgresql://localhost:5432/sticker_api',
+  redisUrl: process.env.REDIS_URL ?? 'redis://localhost:6379',
+  jwtSecret: process.env.JWT_SECRET ?? 'your-jwt-secret-key-change-in-production',
+  jwtRefreshSecret: process.env.JWT_REFRESH_SECRET ?? 'your-jwt-refresh-secret-key-change-in-production',
+  jwtAccessExpiration: process.env.JWT_ACCESS_EXPIRATION ?? '15m',
+  jwtRefreshExpiration: process.env.JWT_REFRESH_EXPIRATION ?? '7d',
+  storageProvider: process.env.STORAGE_PROVIDER ?? 'local',
 } as const;
 
 export type Config = typeof config;
