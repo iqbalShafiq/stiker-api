@@ -16,21 +16,59 @@
     }
   ],
   "tags": [
-    { "name": "Auth", "description": "Authentication endpoints" },
-    { "name": "Stickers", "description": "Sticker management endpoints" },
-    { "name": "Sharing", "description": "Sticker sharing endpoints" },
-    { "name": "Admin", "description": "Admin user management endpoints" },
-    { "name": "Generation", "description": "AI sticker generation endpoints" },
-    { "name": "Grid", "description": "Grid splitting endpoints" },
-    { "name": "Background", "description": "Background removal endpoints" },
-    { "name": "Health", "description": "Health check endpoints" }
+    {
+      "name": "Auth",
+      "description": "Authentication endpoints"
+    },
+    {
+      "name": "Stickers",
+      "description": "Sticker management endpoints"
+    },
+    {
+      "name": "Sharing",
+      "description": "Sticker sharing endpoints"
+    },
+    {
+      "name": "Admin",
+      "description": "Admin user management endpoints"
+    },
+    {
+      "name": "Generation",
+      "description": "AI sticker generation endpoints"
+    },
+    {
+      "name": "Grid",
+      "description": "Grid splitting endpoints"
+    },
+    {
+      "name": "Background",
+      "description": "Background removal endpoints"
+    },
+    {
+      "name": "Health",
+      "description": "Health check endpoints"
+    },
+    {
+      "name": "Sticker Packs",
+      "description": "Sticker pack grouping and management"
+    },
+    {
+      "name": "Upload",
+      "description": "Batch sticker upload to packs"
+    },
+    {
+      "name": "Sync",
+      "description": "Offline-first sync API"
+    }
   ],
   "paths": {
     "/api/v1/auth/register": {
       "post": {
         "summary": "Register new user",
         "description": "Create a new user account",
-        "tags": ["Auth"],
+        "tags": [
+          "Auth"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -89,7 +127,9 @@
       "post": {
         "summary": "Login",
         "description": "Authenticate user and return tokens",
-        "tags": ["Auth"],
+        "tags": [
+          "Auth"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -148,7 +188,9 @@
       "post": {
         "summary": "Logout",
         "description": "Logout current user and invalidate tokens",
-        "tags": ["Auth"],
+        "tags": [
+          "Auth"
+        ],
         "security": [
           {
             "BearerAuth": []
@@ -193,7 +235,9 @@
       "post": {
         "summary": "Refresh access token",
         "description": "Refresh access token using refresh token from cookie",
-        "tags": ["Auth"],
+        "tags": [
+          "Auth"
+        ],
         "responses": {
           "200": {
             "description": "Token refreshed successfully",
@@ -232,7 +276,9 @@
       "get": {
         "summary": "Get current user",
         "description": "Get the currently authenticated user's profile",
-        "tags": ["Auth"],
+        "tags": [
+          "Auth"
+        ],
         "security": [
           {
             "BearerAuth": []
@@ -277,7 +323,9 @@
       "post": {
         "summary": "Change password",
         "description": "Change the current user's password",
-        "tags": ["Auth"],
+        "tags": [
+          "Auth"
+        ],
         "security": [
           {
             "BearerAuth": []
@@ -342,7 +390,9 @@
       "post": {
         "summary": "Create sticker",
         "description": "Create a new sticker entry",
-        "tags": ["Stickers"],
+        "tags": [
+          "Stickers"
+        ],
         "security": [
           {
             "BearerAuth": []
@@ -405,7 +455,9 @@
       "get": {
         "summary": "Get my stickers",
         "description": "Get all stickers belonging to the authenticated user",
-        "tags": ["Stickers"],
+        "tags": [
+          "Stickers"
+        ],
         "security": [
           {
             "BearerAuth": []
@@ -453,7 +505,9 @@
       "get": {
         "summary": "Get sticker by ID",
         "description": "Get a specific sticker by ID. Checks ownership or sharing permissions.",
-        "tags": ["Stickers"],
+        "tags": [
+          "Stickers"
+        ],
         "security": [
           {
             "BearerAuth": []
@@ -527,7 +581,9 @@
       "put": {
         "summary": "Update sticker",
         "description": "Update a sticker. Owner only.",
-        "tags": ["Stickers"],
+        "tags": [
+          "Stickers"
+        ],
         "security": [
           {
             "BearerAuth": []
@@ -621,7 +677,9 @@
       "delete": {
         "summary": "Delete sticker",
         "description": "Soft delete a sticker. Owner only.",
-        "tags": ["Stickers"],
+        "tags": [
+          "Stickers"
+        ],
         "security": [
           {
             "BearerAuth": []
@@ -697,7 +755,9 @@
       "get": {
         "summary": "Check access level for sticker",
         "description": "Check the current user's access level for a specific sticker",
-        "tags": ["Stickers"],
+        "tags": [
+          "Stickers"
+        ],
         "security": [
           {
             "BearerAuth": []
@@ -730,11 +790,20 @@
                       "properties": {
                         "access": {
                           "type": "string",
-                          "enum": ["owner", "shared", "link", "none"]
+                          "enum": [
+                            "owner",
+                            "shared",
+                            "link",
+                            "none"
+                          ]
                         },
                         "permission": {
                           "type": "string",
-                          "enum": ["view", "full", "none"]
+                          "enum": [
+                            "view",
+                            "full",
+                            "none"
+                          ]
                         }
                       }
                     }
@@ -773,7 +842,9 @@
       "post": {
         "summary": "Share sticker with user",
         "description": "Share a sticker with another user. Owner only.",
-        "tags": ["Sharing"],
+        "tags": [
+          "Sharing"
+        ],
         "security": [
           {
             "BearerAuth": []
@@ -869,7 +940,9 @@
       "delete": {
         "summary": "Remove share",
         "description": "Remove a share from a sticker. Owner only.",
-        "tags": ["Sharing"],
+        "tags": [
+          "Sharing"
+        ],
         "security": [
           {
             "BearerAuth": []
@@ -954,7 +1027,9 @@
       "post": {
         "summary": "Create shareable link",
         "description": "Create a shareable link for a sticker. Owner only.",
-        "tags": ["Sharing"],
+        "tags": [
+          "Sharing"
+        ],
         "security": [
           {
             "BearerAuth": []
@@ -1050,7 +1125,9 @@
       "delete": {
         "summary": "Revoke shareable link",
         "description": "Revoke a shareable link for a sticker. Owner only.",
-        "tags": ["Sharing"],
+        "tags": [
+          "Sharing"
+        ],
         "security": [
           {
             "BearerAuth": []
@@ -1135,7 +1212,9 @@
       "get": {
         "summary": "Access sticker via share link",
         "description": "Access a sticker using a shareable link token. Public access.",
-        "tags": ["Sharing"],
+        "tags": [
+          "Sharing"
+        ],
         "parameters": [
           {
             "name": "linkId",
@@ -1203,7 +1282,9 @@
       "get": {
         "summary": "List all users",
         "description": "Get a paginated list of all users. Admin only.",
-        "tags": ["Admin"],
+        "tags": [
+          "Admin"
+        ],
         "security": [
           {
             "BearerAuth": []
@@ -1263,7 +1344,9 @@
       "get": {
         "summary": "Get user by ID",
         "description": "Get a specific user by ID. Admin only.",
-        "tags": ["Admin"],
+        "tags": [
+          "Admin"
+        ],
         "security": [
           {
             "BearerAuth": []
@@ -1330,7 +1413,9 @@
       "put": {
         "summary": "Update user",
         "description": "Update a user's details. Admin only.",
-        "tags": ["Admin"],
+        "tags": [
+          "Admin"
+        ],
         "security": [
           {
             "BearerAuth": []
@@ -1417,7 +1502,9 @@
       "delete": {
         "summary": "Delete user",
         "description": "Delete a user. Admin only.",
-        "tags": ["Admin"],
+        "tags": [
+          "Admin"
+        ],
         "security": [
           {
             "BearerAuth": []
@@ -1486,7 +1573,9 @@
       "put": {
         "summary": "Change user role",
         "description": "Change a user's role. Admin only.",
-        "tags": ["Admin"],
+        "tags": [
+          "Admin"
+        ],
         "security": [
           {
             "BearerAuth": []
@@ -1575,7 +1664,9 @@
       "post": {
         "summary": "Generate WhatsApp sticker image",
         "description": "Generate a sticker image from text prompt with optional image context",
-        "tags": ["Generation"],
+        "tags": [
+          "Generation"
+        ],
         "security": [
           {
             "BearerAuth": []
@@ -1624,7 +1715,9 @@
                     "default": false
                   }
                 },
-                "required": ["text"]
+                "required": [
+                  "text"
+                ]
               }
             }
           }
@@ -1689,8 +1782,10 @@
     "/api/v1/grid/split": {
       "post": {
         "summary": "Split grid image",
-        "description": "Splits a sticker grid sheet into per-cell PNGs. Grid lines are detected with image heuristics, optionally combined with AI. When both `rows` and `cols` are sent, boundary detection is aligned to that row×column lattice. When `normalize` is true, the sheet is LLM-normalized and re-detected when possible; on failure the API falls back to splitting the original image. Each cell is optionally analyzed for caption-style text outside the sticker foreground, passed through background removal, then resized to a square 512×512 contain fit.",
-        "tags": ["Grid"],
+        "description": "Splits a sticker grid sheet into per-cell PNGs. Grid lines are detected with image heuristics, optionally combined with AI. When both `rows` and `cols` are sent, boundary detection is aligned to that row\u00d7column lattice. When `normalize` is true, the sheet is LLM-normalized and re-detected when possible; on failure the API falls back to splitting the original image. Each cell is optionally analyzed for caption-style text outside the sticker foreground, passed through background removal, then resized to a square 512\u00d7512 contain fit.",
+        "tags": [
+          "Grid"
+        ],
         "security": [
           {
             "BearerAuth": []
@@ -1711,7 +1806,7 @@
                   "rows": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "Optional row count. Use together with `cols` so split boundaries follow a fixed rows×cols lattice (same lattice behavior as `generate` with `grid=true`)."
+                    "description": "Optional row count. Use together with `cols` so split boundaries follow a fixed rows\u00d7cols lattice (same lattice behavior as `generate` with `grid=true`)."
                   },
                   "cols": {
                     "type": "integer",
@@ -1724,7 +1819,9 @@
                     "default": false
                   }
                 },
-                "required": ["image"]
+                "required": [
+                  "image"
+                ]
               }
             }
           }
@@ -1799,8 +1896,10 @@
     "/api/v1/background/remove": {
       "post": {
         "summary": "Remove background",
-        "description": "Remove background from a raster image. Static inputs (PNG, JPEG, WebP, single-frame GIF) return a 512×512 PNG with transparent letterboxing. Animated GIFs (multiple frames) return an animated GIF re-encoded after per-frame segmentation; GIF transparency uses a palette so edges may differ from PNG. Tuning env vars include `ANIMATED_GIF_DITHER`, `ANIMATED_GIF_ALPHA_BOOST_DIVISOR`, `ANIMATED_GIF_ALPHA_CLOSE_KERNEL`, `ANIMATED_GIF_CORNER_BG_STRIP_DIST`, `ANIMATED_GIF_TEMPORAL_ALPHA_MAX_HALF` (rolling max ±neighbours in time), `ANIMATED_GIF_TEMPORAL_ALPHA_PASSES`, `ANIMATED_GIF_TEMPORAL_DILATE_ALPHA` (post-merge alpha dilate), `ANIMATED_GIF_REUSE_PALETTE=true` (smaller files), plus frame limits (`ANIMATED_GIF_MAX_FRAMES`, default 120; `ANIMATED_GIF_MAX_MEGAPIXELS_PER_FRAME`, default 12 MP). If those temporal and alpha vars are unset, defaults lean toward fuller, time-stable sticker edges (temporal half 3, 3 passes, dilate kernel 5, alpha boost divisor ~0.76—raise dilate/halos sparingly if fringes appear). Response `metadata.outputFormat` is `gif` or `png`; animated responses include `metadata.frameCount`.",
-        "tags": ["Background"],
+        "description": "Remove background from a raster image. Static inputs (PNG, JPEG, WebP, single-frame GIF) return a 512\u00d7512 PNG with transparent letterboxing. Animated GIFs (multiple frames) return an animated GIF re-encoded after per-frame segmentation; GIF transparency uses a palette so edges may differ from PNG. Tuning env vars include `ANIMATED_GIF_DITHER`, `ANIMATED_GIF_ALPHA_BOOST_DIVISOR`, `ANIMATED_GIF_ALPHA_CLOSE_KERNEL`, `ANIMATED_GIF_CORNER_BG_STRIP_DIST`, `ANIMATED_GIF_TEMPORAL_ALPHA_MAX_HALF` (rolling max \u00b1neighbours in time), `ANIMATED_GIF_TEMPORAL_ALPHA_PASSES`, `ANIMATED_GIF_TEMPORAL_DILATE_ALPHA` (post-merge alpha dilate), `ANIMATED_GIF_REUSE_PALETTE=true` (smaller files), plus frame limits (`ANIMATED_GIF_MAX_FRAMES`, default 120; `ANIMATED_GIF_MAX_MEGAPIXELS_PER_FRAME`, default 12 MP). If those temporal and alpha vars are unset, defaults lean toward fuller, time-stable sticker edges (temporal half 3, 3 passes, dilate kernel 5, alpha boost divisor ~0.76\u2014raise dilate/halos sparingly if fringes appear). Response `metadata.outputFormat` is `gif` or `png`; animated responses include `metadata.frameCount`.",
+        "tags": [
+          "Background"
+        ],
         "security": [
           {
             "BearerAuth": []
@@ -1819,7 +1918,9 @@
                     "description": "Image to remove background from (PNG, JPG, JPEG, WebP, or GIF including animated GIF)"
                   }
                 },
-                "required": ["image"]
+                "required": [
+                  "image"
+                ]
               }
             }
           }
@@ -1865,7 +1966,9 @@
       "get": {
         "summary": "Health check",
         "description": "Check API health status",
-        "tags": ["Health"],
+        "tags": [
+          "Health"
+        ],
         "responses": {
           "200": {
             "description": "API is healthy",
@@ -1886,6 +1989,869 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/sticker-packs": {
+      "get": {
+        "summary": "Get my sticker packs",
+        "description": "Get all sticker packs belonging to the authenticated user",
+        "tags": [
+          "Sticker Packs"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sticker packs retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/StickerPack"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create sticker pack",
+        "description": "Create a new sticker pack with optional stickers",
+        "tags": [
+          "Sticker Packs"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateStickerPackRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Sticker pack created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/StickerPack"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          }
+        }
+      }
+    },
+    "/api/v1/sticker-packs/public": {
+      "get": {
+        "summary": "Get public sticker packs",
+        "description": "Get all publicly visible sticker packs",
+        "tags": [
+          "Sticker Packs"
+        ],
+        "responses": {
+          "200": {
+            "description": "Public sticker packs retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/StickerPack"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sticker-packs/{id}": {
+      "get": {
+        "summary": "Get sticker pack by ID",
+        "description": "Get a specific sticker pack by ID with all stickers",
+        "tags": [
+          "Sticker Packs"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Sticker Pack ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sticker pack retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/StickerPack"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "description": "Access denied"
+          },
+          "404": {
+            "description": "Sticker pack not found"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update sticker pack",
+        "description": "Update a sticker pack. Owner only.",
+        "tags": [
+          "Sticker Packs"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Sticker Pack ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateStickerPackRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sticker pack updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/StickerPack"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "description": "Access denied - not owner"
+          },
+          "404": {
+            "description": "Sticker pack not found"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete sticker pack",
+        "description": "Soft delete a sticker pack. Owner only.",
+        "tags": [
+          "Sticker Packs"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Sticker Pack ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sticker pack deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "description": "Access denied - not owner"
+          },
+          "404": {
+            "description": "Sticker pack not found"
+          }
+        }
+      }
+    },
+    "/api/v1/sticker-packs/{id}/stickers": {
+      "post": {
+        "summary": "Add sticker to pack",
+        "description": "Add a new sticker to an existing pack",
+        "tags": [
+          "Sticker Packs"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Sticker Pack ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddStickerToPackRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Sticker added successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/StickerPackSticker"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "description": "Sticker pack not found"
+          }
+        }
+      }
+    },
+    "/api/v1/sticker-packs/{id}/stickers/{stickerId}": {
+      "delete": {
+        "summary": "Remove sticker from pack",
+        "description": "Remove a sticker from a pack",
+        "tags": [
+          "Sticker Packs"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Sticker Pack ID"
+          },
+          {
+            "name": "stickerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Sticker ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sticker removed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "description": "Access denied"
+          },
+          "404": {
+            "description": "Sticker pack or sticker not found"
+          }
+        }
+      }
+    },
+    "/api/v1/sticker-packs/{id}/reorder": {
+      "put": {
+        "summary": "Reorder stickers in pack",
+        "description": "Update the order of stickers within a pack",
+        "tags": [
+          "Sticker Packs"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Sticker Pack ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReorderStickersRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Stickers reordered successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "description": "Access denied"
+          }
+        }
+      }
+    },
+    "/api/v1/sticker-packs/{id}/share": {
+      "post": {
+        "summary": "Share sticker pack with user",
+        "description": "Share a sticker pack with another user. Owner only.",
+        "tags": [
+          "Sticker Packs"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Sticker Pack ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShareStickerPackRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Sticker pack shared successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/StickerPackShare"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "description": "Access denied - not owner"
+          },
+          "404": {
+            "description": "Pack or user not found"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Remove sticker pack share",
+        "description": "Remove a share from a sticker pack. Owner only.",
+        "tags": [
+          "Sticker Packs"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Sticker Pack ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "userId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "userId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Share removed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "description": "Access denied - not owner"
+          },
+          "404": {
+            "description": "Pack or share not found"
+          }
+        }
+      }
+    },
+    "/api/v1/sticker-packs/{id}/link": {
+      "post": {
+        "summary": "Create shareable link for pack",
+        "description": "Create a shareable link for a sticker pack. Owner only.",
+        "tags": [
+          "Sticker Packs"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Sticker Pack ID"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateStickerPackLinkRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Shareable link created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/StickerPackShareLink"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "description": "Access denied - not owner"
+          },
+          "404": {
+            "description": "Pack not found"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Revoke shareable link for pack",
+        "description": "Revoke a shareable link for a sticker pack. Owner only.",
+        "tags": [
+          "Sticker Packs"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Sticker Pack ID"
+          },
+          {
+            "name": "linkId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Link ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Link revoked successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "description": "Access denied - not owner"
+          },
+          "404": {
+            "description": "Pack or link not found"
+          }
+        }
+      }
+    },
+    "/api/v1/upload": {
+      "post": {
+        "summary": "Upload stickers to pack",
+        "description": "Upload multiple sticker images. Optionally assign to a sticker pack (new or existing).",
+        "tags": [
+          "Upload"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "images": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    },
+                    "description": "Sticker images to upload (up to 30)"
+                  },
+                  "stickerPackId": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "Existing sticker pack ID to add stickers to"
+                  },
+                  "stickerPackName": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "Name for new sticker pack (if stickerPackId not provided)"
+                  },
+                  "stickerPackDescription": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "Description for new sticker pack"
+                  },
+                  "visibility": {
+                    "type": "string",
+                    "enum": [
+                      "public",
+                      "private",
+                      "unlisted"
+                    ],
+                    "default": "private"
+                  },
+                  "existingStickerIds": {
+                    "type": "string",
+                    "description": "JSON array of existing sticker IDs to add to pack"
+                  }
+                },
+                "required": [
+                  "images"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Stickers uploaded successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          }
+        }
+      }
+    },
+    "/api/v1/sync": {
+      "get": {
+        "summary": "Sync data for offline-first",
+        "description": "Get incremental changes since last sync for offline-first support",
+        "tags": [
+          "Sync"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "lastSyncAt",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "ISO 8601 timestamp of last sync. Omit for full sync."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sync data retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
           }
         }
       }
@@ -1932,7 +2898,14 @@
             "format": "date-time"
           }
         },
-        "required": ["id", "email", "username", "roleId", "isActive", "createdAt"]
+        "required": [
+          "id",
+          "email",
+          "username",
+          "roleId",
+          "isActive",
+          "createdAt"
+        ]
       },
       "Role": {
         "type": "object",
@@ -1966,7 +2939,10 @@
             }
           }
         },
-        "required": ["id", "name"]
+        "required": [
+          "id",
+          "name"
+        ]
       },
       "Sticker": {
         "type": "object",
@@ -1993,7 +2969,11 @@
           },
           "visibility": {
             "type": "string",
-            "enum": ["public", "private"]
+            "enum": [
+              "public",
+              "private",
+              "unlisted"
+            ]
           },
           "userId": {
             "type": "string"
@@ -2012,7 +2992,15 @@
             "nullable": true
           }
         },
-        "required": ["id", "name", "url", "visibility", "userId", "createdAt", "updatedAt"]
+        "required": [
+          "id",
+          "name",
+          "url",
+          "visibility",
+          "userId",
+          "createdAt",
+          "updatedAt"
+        ]
       },
       "Share": {
         "type": "object",
@@ -2029,14 +3017,23 @@
           },
           "permission": {
             "type": "string",
-            "enum": ["view", "full"]
+            "enum": [
+              "view",
+              "full"
+            ]
           },
           "createdAt": {
             "type": "string",
             "format": "date-time"
           }
         },
-        "required": ["id", "stickerId", "sharedWithId", "permission", "createdAt"]
+        "required": [
+          "id",
+          "stickerId",
+          "sharedWithId",
+          "permission",
+          "createdAt"
+        ]
       },
       "ShareLink": {
         "type": "object",
@@ -2068,7 +3065,13 @@
             "format": "date-time"
           }
         },
-        "required": ["id", "stickerId", "token", "uses", "createdAt"]
+        "required": [
+          "id",
+          "stickerId",
+          "token",
+          "uses",
+          "createdAt"
+        ]
       },
       "AuthResponse": {
         "type": "object",
@@ -2095,13 +3098,23 @@
                     "type": "number"
                   }
                 },
-                "required": ["accessToken", "refreshToken", "expiresIn"]
+                "required": [
+                  "accessToken",
+                  "refreshToken",
+                  "expiresIn"
+                ]
               }
             },
-            "required": ["user", "tokens"]
+            "required": [
+              "user",
+              "tokens"
+            ]
           }
         },
-        "required": ["success", "data"]
+        "required": [
+          "success",
+          "data"
+        ]
       },
       "PaginatedUsersResponse": {
         "type": "object",
@@ -2134,13 +3147,24 @@
                     "type": "number"
                   }
                 },
-                "required": ["total", "page", "limit", "totalPages"]
+                "required": [
+                  "total",
+                  "page",
+                  "limit",
+                  "totalPages"
+                ]
               }
             },
-            "required": ["users", "pagination"]
+            "required": [
+              "users",
+              "pagination"
+            ]
           }
         },
-        "required": ["success", "data"]
+        "required": [
+          "success",
+          "data"
+        ]
       },
       "RegisterRequest": {
         "type": "object",
@@ -2161,7 +3185,11 @@
             "nullable": true
           }
         },
-        "required": ["email", "username", "password"]
+        "required": [
+          "email",
+          "username",
+          "password"
+        ]
       },
       "LoginRequest": {
         "type": "object",
@@ -2174,7 +3202,10 @@
             "type": "string"
           }
         },
-        "required": ["email", "password"]
+        "required": [
+          "email",
+          "password"
+        ]
       },
       "ChangePasswordRequest": {
         "type": "object",
@@ -2187,7 +3218,10 @@
             "minLength": 6
           }
         },
-        "required": ["currentPassword", "newPassword"]
+        "required": [
+          "currentPassword",
+          "newPassword"
+        ]
       },
       "CreateStickerRequest": {
         "type": "object",
@@ -2211,11 +3245,18 @@
           },
           "visibility": {
             "type": "string",
-            "enum": ["public", "private"],
+            "enum": [
+              "public",
+              "private",
+              "unlisted"
+            ],
             "default": "private"
           }
         },
-        "required": ["name", "url"]
+        "required": [
+          "name",
+          "url"
+        ]
       },
       "UpdateStickerRequest": {
         "type": "object",
@@ -2239,7 +3280,11 @@
           },
           "visibility": {
             "type": "string",
-            "enum": ["public", "private"]
+            "enum": [
+              "public",
+              "private",
+              "unlisted"
+            ]
           }
         }
       },
@@ -2252,11 +3297,16 @@
           },
           "permission": {
             "type": "string",
-            "enum": ["view", "full"],
+            "enum": [
+              "view",
+              "full"
+            ],
             "default": "view"
           }
         },
-        "required": ["sharedWithId"]
+        "required": [
+          "sharedWithId"
+        ]
       },
       "CreateShareLinkRequest": {
         "type": "object",
@@ -2301,7 +3351,9 @@
             "description": "New role ID to assign"
           }
         },
-        "required": ["roleId"]
+        "required": [
+          "roleId"
+        ]
       },
       "ImageResult": {
         "type": "object",
@@ -2558,6 +3610,516 @@
             }
           }
         }
+      },
+      "StickerPack": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "ownerId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "PUBLIC",
+              "PRIVATE",
+              "UNLISTED"
+            ]
+          },
+          "stickers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StickerPackSticker"
+            }
+          },
+          "owner": {
+            "$ref": "#/components/schemas/User"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deletedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "ownerId",
+          "name",
+          "visibility",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "StickerPackSticker": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "stickerPackId": {
+            "type": "string"
+          },
+          "stickerId": {
+            "type": "string"
+          },
+          "sticker": {
+            "$ref": "#/components/schemas/Sticker"
+          },
+          "order": {
+            "type": "integer",
+            "default": 0
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "stickerPackId",
+          "stickerId",
+          "order"
+        ]
+      },
+      "StickerPackShare": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "stickerPackId": {
+            "type": "string"
+          },
+          "sharedWithId": {
+            "type": "string"
+          },
+          "permission": {
+            "type": "string",
+            "enum": [
+              "VIEW",
+              "EDIT"
+            ]
+          },
+          "grantedBy": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "stickerPackId",
+          "sharedWithId",
+          "permission",
+          "grantedBy",
+          "createdAt"
+        ]
+      },
+      "StickerPackShareLink": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "stickerPackId": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          },
+          "permission": {
+            "type": "string",
+            "enum": [
+              "VIEW",
+              "EDIT"
+            ]
+          },
+          "maxUses": {
+            "type": "integer",
+            "nullable": true
+          },
+          "usesCount": {
+            "type": "integer",
+            "default": 0
+          },
+          "isActive": {
+            "type": "boolean",
+            "default": true
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "stickerPackId",
+          "token",
+          "usesCount",
+          "isActive",
+          "createdAt"
+        ]
+      },
+      "CreateStickerPackRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "PUBLIC",
+              "PRIVATE",
+              "UNLISTED"
+            ],
+            "default": "PRIVATE"
+          },
+          "stickers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "filename": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                },
+                "width": {
+                  "type": "integer"
+                },
+                "height": {
+                  "type": "integer"
+                },
+                "order": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "name",
+                "filename",
+                "url"
+              ]
+            }
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "UpdateStickerPackRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "PUBLIC",
+              "PRIVATE",
+              "UNLISTED"
+            ]
+          }
+        }
+      },
+      "AddStickerToPackRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "filename": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "width": {
+            "type": "integer"
+          },
+          "height": {
+            "type": "integer"
+          },
+          "fileSize": {
+            "type": "integer"
+          },
+          "mimeType": {
+            "type": "string"
+          },
+          "order": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "filename",
+          "url"
+        ]
+      },
+      "ReorderStickersRequest": {
+        "type": "object",
+        "properties": {
+          "stickerOrders": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "stickerId": {
+                  "type": "string"
+                },
+                "order": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "stickerId",
+                "order"
+              ]
+            }
+          }
+        },
+        "required": [
+          "stickerOrders"
+        ]
+      },
+      "ShareStickerPackRequest": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "description": "User ID to share with"
+          },
+          "permission": {
+            "type": "string",
+            "enum": [
+              "view",
+              "full"
+            ],
+            "default": "view"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": [
+          "userId"
+        ]
+      },
+      "CreateStickerPackLinkRequest": {
+        "type": "object",
+        "properties": {
+          "permission": {
+            "type": "string",
+            "enum": [
+              "view",
+              "full"
+            ],
+            "default": "view"
+          },
+          "maxUses": {
+            "type": "integer",
+            "nullable": true
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "UploadResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "stickerPackId": {
+                "type": "string",
+                "nullable": true
+              },
+              "stickers": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Sticker"
+                }
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "SyncResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "stickerPacks": {
+                "type": "object",
+                "properties": {
+                  "created": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  },
+                  "updated": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  },
+                  "deleted": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  }
+                }
+              },
+              "stickers": {
+                "type": "object",
+                "properties": {
+                  "created": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  },
+                  "updated": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  },
+                  "deleted": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  }
+                }
+              },
+              "syncToken": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "ProcessingHistory": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "generate",
+              "grid-split",
+              "background-remove"
+            ]
+          },
+          "inputData": {
+            "type": "object",
+            "nullable": true
+          },
+          "outputFiles": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "url": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "filename": {
+                  "type": "string"
+                },
+                "width": {
+                  "type": "integer"
+                },
+                "height": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "type",
+          "outputFiles",
+          "expiresAt",
+          "createdAt"
+        ]
       }
     },
     "securitySchemes": {
