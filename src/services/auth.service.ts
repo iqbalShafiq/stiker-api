@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
 import { prisma } from '../prisma/client';
@@ -22,7 +23,7 @@ export interface LoginInput {
 }
 
 export interface TokenPayload {
-  userId: string;
+  sub: string;
   email: string;
   role: string;
 }
@@ -53,10 +54,12 @@ function validatePassword(password: string): void {
 function generateTokens(payload: TokenPayload): AuthTokens {
   const accessToken = jwt.sign(payload, config.jwtSecret, {
     expiresIn: config.jwtAccessExpiration as jwt.SignOptions['expiresIn'],
+    jwtid: crypto.randomUUID(),
   });
 
   const refreshToken = jwt.sign(payload, config.jwtRefreshSecret, {
     expiresIn: config.jwtRefreshExpiration as jwt.SignOptions['expiresIn'],
+    jwtid: crypto.randomUUID(),
   });
 
   return { accessToken, refreshToken };
@@ -124,7 +127,7 @@ export class AuthService {
     });
 
     const payload: TokenPayload = {
-      userId: user.id,
+      sub: user.id,
       email: user.email,
       role: user.role.name,
     };
@@ -172,7 +175,7 @@ export class AuthService {
     }
 
     const payload: TokenPayload = {
-      userId: user.id,
+      sub: user.id,
       email: user.email,
       role: user.role.name,
     };
@@ -234,7 +237,7 @@ export class AuthService {
     });
 
     const newPayload: TokenPayload = {
-      userId: storedToken.user.id,
+      sub: storedToken.user.id,
       email: storedToken.user.email,
       role: storedToken.user.role.name,
     };
