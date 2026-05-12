@@ -96,7 +96,7 @@ app.delete('/api/v1/stickers/:id/share', authenticateToken, asyncHandler((req, r
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.post('/api/v1/stickers/:id/link', authenticateToken, asyncHandler((req, res, next) => stickerController.createShareLink(req, res, next)));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
-app.delete('/api/v1/stickers/:id/link', authenticateToken, asyncHandler((req, res, next) => stickerController.revokeShareLink(req, res, next)));
+app.delete('/api/v1/stickers/:id/link/:linkId', authenticateToken, asyncHandler((req, res, next) => stickerController.revokeShareLink(req, res, next)));
 
 // Admin routes (protected + admin only)
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
