@@ -41,7 +41,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     needs: quality
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/master'
     permissions:
       contents: read
       packages: write
@@ -83,7 +83,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: build
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/master'
     steps:
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.0.0
@@ -103,11 +103,20 @@ jobs:
             # Pull latest image
             docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
             
-            # Run database migrations
-            docker-compose -f docker-compose.prod.yml run --rm api npx prisma migrate deploy
+            # Start database first (if not running)
+            docker-compose --env-file .env.production -f docker-compose.prod.yml up -d postgres redis
             
-            # Restart services
-            docker-compose -f docker-compose.prod.yml up -d --no-deps --build api
+            # Wait for database to be ready
+            sleep 5
+            
+            # Run database migrations
+            docker-compose --env-file .env.production -f docker-compose.prod.yml run --rm api npx prisma migrate deploy
+            
+            # Restart API with new image
+            docker-compose --env-file .env.production -f docker-compose.prod.yml up -d --no-deps api
+            
+            # Restart nginx
+            docker-compose --env-file .env.production -f docker-compose.prod.yml up -d --no-deps nginx
             
             # Cleanup old images
             docker image prune -f
