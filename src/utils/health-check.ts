@@ -1,18 +1,10 @@
 import os from 'os';
 import fs from 'fs/promises';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../prisma/client';
 import Redis from 'ioredis';
 import logger from './logger';
 
-let prisma: PrismaClient | null = null;
 let redis: Redis | null = null;
-
-function getPrisma(): PrismaClient {
-  if (!prisma) {
-    prisma = new PrismaClient();
-  }
-  return prisma;
-}
 
 function getRedis(): Redis {
   if (!redis) {
@@ -42,7 +34,7 @@ export async function getHealthStatus(): Promise<HealthStatus> {
   let dbResponseTime = 0;
   try {
     const dbStart = Date.now();
-    await getPrisma().$queryRaw`SELECT 1`;
+    await prisma.$queryRaw`SELECT 1`;
     dbResponseTime = Date.now() - dbStart;
     dbStatus = 'up';
   } catch (error) {
