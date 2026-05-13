@@ -1,4 +1,5 @@
 import type { ImageResult } from '../types';
+import logger from '../utils/logger';
 import {
   OpenRouterService,
   type OutsideForegroundTextDetection,
@@ -99,9 +100,9 @@ export class GridSplitService {
         splitBoundaries = normalizedGridResult.boundaries;
         gridLayout = normalizedGridResult.gridLayout;
       } catch (normalizationError) {
-        console.warn(
-          'Grid normalization failed, fallback to original image split:',
-          normalizationError
+        logger.warn(
+          { error: normalizationError },
+          'Grid normalization failed, fallback to original image split'
         );
       }
     }
@@ -124,7 +125,10 @@ export class GridSplitService {
           };
         }
       } catch (cellTextAnalysisError) {
-        console.warn(`Grid cell text analysis failed for ${cellId}:`, cellTextAnalysisError);
+        logger.warn(
+          { error: cellTextAnalysisError },
+          `Grid cell text analysis failed for ${cellId}`
+        );
       }
 
       try {
@@ -133,9 +137,9 @@ export class GridSplitService {
         methodsUsed.add(result.method);
         backgroundRemovedCellCount += 1;
       } catch (cellBackgroundRemovalError) {
-        console.warn(
-          `Grid cell background removal failed for ${cellId}:`,
-          cellBackgroundRemovalError
+        logger.warn(
+          { error: cellBackgroundRemovalError },
+          `Grid cell background removal failed for ${cellId}`
         );
       }
 
@@ -170,11 +174,17 @@ export class GridSplitService {
     };
   }
 
-  private async analyzeCellTextWithRetry(buffer: Buffer, cellId: string) {
+  private async analyzeCellTextWithRetry(
+    buffer: Buffer,
+    cellId: string
+  ): Promise<ReturnType<OpenRouterService['analyzeCellTextOutsideForeground']>> {
     try {
       return await this.openRouterService.analyzeCellTextOutsideForeground(buffer);
     } catch (firstError) {
-      console.warn(`Grid cell text analysis retry for ${cellId} after first failure:`, firstError);
+      logger.warn(
+        { error: firstError },
+        `Grid cell text analysis retry for ${cellId} after first failure`
+      );
       return this.openRouterService.analyzeCellTextOutsideForeground(buffer);
     }
   }

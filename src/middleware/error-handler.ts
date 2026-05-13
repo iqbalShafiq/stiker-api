@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import { config } from '../config';
+import logger from '../utils/logger';
 import { buildErrorResponse } from '../utils/response-builder';
 import { AppError, InvalidFileTypeError } from '../errors';
 
@@ -28,7 +29,7 @@ export function errorHandler(
   res: Response,
   _next: NextFunction
 ): void {
-  console.error(`[ERROR] ${err.name}: ${err.message}`);
+  logger.error({ err: err.message, stack: err.stack }, `[ERROR] ${err.name}: ${err.message}`);
 
   // Handle custom AppErrors
   if (err instanceof AppError) {

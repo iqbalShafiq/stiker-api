@@ -1,5 +1,6 @@
 import sharp from 'sharp';
 import { config } from '../config';
+import logger from '../utils/logger';
 import { ValidationError } from '../errors';
 import { ImageService } from './image.service';
 import { getSegmentationBackgroundRemovalService } from './segmentation-background-removal.service';
@@ -92,9 +93,9 @@ export async function removeBackgroundFromAnimatedGif(
     }
     method = 'imgly-onnx-animated-gif';
   } catch (err) {
-    console.warn(
-      'IMG.LY background removal failed for animated GIF, falling back to neutral-bright key on all frames:',
-      err
+    logger.warn(
+      { err },
+      'IMG.LY background removal failed for animated GIF, falling back to neutral-bright key on all frames'
     );
     framePngs512 = [];
     for (let page = 0; page < frameCount; page++) {

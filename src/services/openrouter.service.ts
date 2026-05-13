@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import sharp from 'sharp';
 import { config } from '../config';
+import logger from '../utils/logger';
 import {
   AIGenerationError,
   GridDetectionError,
@@ -34,6 +35,15 @@ interface GenerationResult {
 
 interface ExtractedImage {
   imageBuffer: Buffer;
+}
+
+interface ProviderErrorResponse {
+  status?: number;
+  error?: {
+    metadata?: {
+      raw?: string;
+    };
+  };
 }
 
 export interface TextStyleMetadata {
@@ -89,7 +99,7 @@ export class OpenRouterService {
       const response = await Promise.race([
         this.client.chat.completions.create({
           model: options.model ?? config.models.imageGeneration,
-          messages: options.messages as any,
+          messages: options.messages as unknown as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
           response_format: options.responseFormat,
         }),
         new Promise<never>((_, reject) =>
@@ -169,7 +179,7 @@ export class OpenRouterService {
       const response = await Promise.race([
         this.client.chat.completions.create({
           model,
-          messages: [{ role: 'user', content: content as any }],
+          messages: [{ role: 'user', content: content as unknown as OpenAI.Chat.Completions.ChatCompletionContentPart[] }],
         }),
         new Promise<never>((_, reject) =>
           setTimeout(() => reject(new TimeoutError()), this.defaultTimeout)
@@ -200,7 +210,7 @@ export class OpenRouterService {
       }
       if (allowTextOnlyFallback && this.isProviderError(error) && base64Image) {
         // Fallback: jika image input tidak didukung, coba text-only
-        console.warn('Image input not supported, falling back to text-only');
+        logger.warn('Image input not supported, falling back to text-only');
         return this.generateImage(prompt, undefined, imageMimeType, model, allowTextOnlyFallback);
       }
       if (this.isProviderError(error)) {
@@ -400,7 +410,7 @@ Return exact JSON only:
   ): Promise<GridDetectionResult> {
     // Jika user spesifikkan rows dan cols, gunakan langsung tanpa AI
     if (forceRows && forceCols && imageWidth && imageHeight) {
-      console.log(`Using user-specified grid layout: ${forceRows}x${forceCols}`);
+      logger.info(`Using user-specified grid layout: ${forceRows}x${forceCols}`);
       return this.generateGridBoundaries(imageWidth, imageHeight, forceRows, forceCols);
     }
 
@@ -443,7 +453,7 @@ Make sure boundaries cover the ENTIRE image without gaps or overlaps.`,
                 type: 'image_url',
                 image_url: { url: `data:image/png;base64,${imageBase64}` },
               },
-            ] as any,
+            ] as unknown as OpenAI.Chat.Completions.ChatCompletionContentPart[],
           },
         ],
         responseFormat: { type: 'json_object' },
@@ -463,7 +473,7 @@ Make sure boundaries cover the ENTIRE image without gaps or overlaps.`,
 
       return parsed;
     } catch (aiError) {
-      console.warn('AI grid detection failed, falling back to auto-detection:', aiError);
+      logger.warn({ error: aiError }, 'AI grid detection failed, falling back to auto-detection');
 
       // Fallback ke auto-detection jika AI gagal atau hasil tidak valid
       if (imageWidth && imageHeight) {
@@ -635,8 +645,7 @@ Make sure boundaries cover the ENTIRE image without gaps or overlaps.`,
   private async extractImageFromMessage(message: unknown): Promise<ExtractedImage> {
     const assistantMsg = message as {
       images?: Array<
-        | { image_url?: { url?: string } | string; b64_json?: string; image_base64?: string }
-        | unknown
+        { image_url?: { url?: string } | string; b64_json?: string; image_base64?: string }
       >;
       content?: unknown;
     };
@@ -756,10 +765,11 @@ Make sure boundaries cover the ENTIRE image without gaps or overlaps.`,
    */
   private isProviderError(error: unknown): boolean {
     if (error instanceof Error) {
+      const providerError = error as ProviderErrorResponse;
       return (
         error.message.includes('Provider returned error') ||
         error.message.includes('502') ||
-        (error as any).status === 502
+        providerError.status === 502
       );
     }
     return false;
@@ -770,9 +780,9 @@ Make sure boundaries cover the ENTIRE image without gaps or overlaps.`,
    */
   private extractProviderErrorMessage(error: unknown): string {
     if (error instanceof Error) {
-      const anyError = error as any;
-      if (anyError.error?.metadata?.raw) {
-        return `${anyError.message}: ${anyError.error.metadata.raw}`;
+      const providerError = error as ProviderErrorResponse;
+      if (providerError.error?.metadata?.raw) {
+        return `${error.message}: ${providerError.error.metadata.raw}`;
       }
       return error.message;
     }
@@ -782,7 +792,7 @@ Make sure boundaries cover the ENTIRE image without gaps or overlaps.`,
   /**
    * Extract cost dari response
    */
-  private extractCost(response: any): number | undefined {
+  private extractCost(response: { usage?: { cost?: number }; cost?: number }): number | undefined {
     return response.usage?.cost ?? response.cost ?? undefined;
   }
 

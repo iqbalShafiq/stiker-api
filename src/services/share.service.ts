@@ -38,7 +38,7 @@ export class ShareService {
     sharedWithId: string,
     permission: SharePermission,
     expiresAt?: Date
-  ) {
+  ): Promise<ReturnType<typeof prisma.stickerShare.upsert>> {
     const hasOwnership = await this.checkOwnership(stickerId, ownerId);
     if (!hasOwnership) {
       throw new ForbiddenError('You do not have permission to share this sticker');
@@ -78,7 +78,7 @@ export class ShareService {
     });
   }
 
-  async removeUserShare(stickerId: string, ownerId: string, sharedWithId: string) {
+  async removeUserShare(stickerId: string, ownerId: string, sharedWithId: string): Promise<ReturnType<typeof prisma.stickerShare.delete>> {
     const hasOwnership = await this.checkOwnership(stickerId, ownerId);
     if (!hasOwnership) {
       throw new ForbiddenError('You do not have permission to remove this share');
@@ -113,7 +113,7 @@ export class ShareService {
     permission: SharePermission,
     expiresAt?: Date,
     maxUses?: number
-  ) {
+  ): Promise<ReturnType<typeof prisma.stickerShareLink.create>> {
     const hasOwnership = await this.checkOwnership(stickerId, ownerId);
     if (!hasOwnership) {
       throw new ForbiddenError('You do not have permission to create share link for this sticker');
@@ -137,7 +137,7 @@ export class ShareService {
     });
   }
 
-  async revokeShareLink(stickerId: string, ownerId: string, linkId: string) {
+  async revokeShareLink(stickerId: string, ownerId: string, linkId: string): Promise<ReturnType<typeof prisma.stickerShareLink.update>> {
     const hasOwnership = await this.checkOwnership(stickerId, ownerId);
     if (!hasOwnership) {
       throw new ForbiddenError('You do not have permission to revoke this share link');
@@ -157,7 +157,7 @@ export class ShareService {
     });
   }
 
-  async validateShareLink(token: string) {
+  async validateShareLink(token: string): Promise<ReturnType<typeof prisma.stickerShareLink.findUnique>> {
     const link = await prisma.stickerShareLink.findUnique({
       where: { token },
       include: { sticker: true },

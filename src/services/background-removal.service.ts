@@ -1,3 +1,4 @@
+import logger from '../utils/logger';
 import { ImageService } from './image.service';
 import { getSegmentationBackgroundRemovalService } from './segmentation-background-removal.service';
 
@@ -21,7 +22,7 @@ export async function removeBackgroundWithFallback(
       method: 'imgly-onnx',
     };
   } catch (error) {
-    console.warn('IMG.LY background removal failed, falling back to brightness threshold:', error);
+    logger.warn({ error }, 'IMG.LY background removal failed, falling back to brightness threshold');
     const processedBuffer = await imageService.removeBackground(imageBuffer);
     return {
       processedBuffer,
