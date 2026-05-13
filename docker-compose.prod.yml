@@ -5,7 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: stiker-api
+    container_name: api
     restart: unless-stopped
     ports:
       - "127.0.0.1:3000:3000"

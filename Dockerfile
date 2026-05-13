@@ -1,16 +1,15 @@
 # Stage 1: Builder
-FROM node:20-alpine AS builder
+FROM node:20 AS builder
 
 WORKDIR /app
 
 # Install system dependencies for sharp and other native modules
-RUN apk add --no-cache \
+RUN apt-get update && apt-get install -y \
     python3 \
     make \
     g++ \
-    vips-dev \
-    linux-headers \
-    glib-dev
+    libvips-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy package files
 COPY package*.json ./
@@ -33,25 +32,25 @@ RUN npm run build
 RUN npm prune --production
 
 # Stage 2: Production
-FROM node:20-alpine AS production
+FROM node:20 AS production
 
 WORKDIR /app
 
 # Install runtime dependencies
-RUN apk add --no-cache \
-    libstdc++ \
-    vips
+RUN apt-get update && apt-get install -y \
+    libvips \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
+RUN groupadd -g 1001 nodejs && \
+    useradd -u 1001 -g nodejs nodejs
 
 # Copy package files
 COPY package*.json ./
 COPY prisma ./prisma/
 
 # Install only production dependencies
-RUN npm ci --only=production && npm cache clean --force
+RUN npm ci --omit=dev && npm cache clean --force
 
 # Generate Prisma client for production
 RUN npx prisma generate
