@@ -58,6 +58,7 @@ RUN npx prisma generate
 # Copy built application from builder stage
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/docs ./docs
 
 # Create uploads directory and set permissions
 RUN mkdir -p uploads && chown -R nodejs:nodejs uploads
