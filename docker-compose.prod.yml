@@ -2,7 +2,9 @@ version: '3.8'
 
 services:
   api:
-    image: ghcr.io/iqbalshafiq/stiker-api:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: stiker-api
     restart: unless-stopped
     ports:
