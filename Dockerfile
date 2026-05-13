@@ -52,7 +52,8 @@ COPY prisma ./prisma/
 # Install only production dependencies
 RUN npm ci --omit=dev && npm cache clean --force
 
-# Generate Prisma client for production
+# Generate Prisma client for production (needs dummy DATABASE_URL for config)
+ENV DATABASE_URL=postgresql://localhost:5432/dummy
 RUN npx prisma generate
 
 # Copy built application from builder stage
