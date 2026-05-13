@@ -12,7 +12,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:up": "docker-compose -f docker-compose.test.yml up -d && sleep 3 && npx prisma migrate deploy",
+    "test:down": "docker-compose -f docker-compose.test.yml down -v"
   },
   "keywords": [
     "express",
