@@ -56,10 +56,11 @@ RUN npm ci --omit=dev && npm cache clean --force
 ENV DATABASE_URL=postgresql://localhost:5432/dummy
 RUN npx prisma generate
 
-# Copy built application from builder stage
+# Copy built application and config from builder stage
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/docs ./docs
+COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 
 # Create uploads directory and set permissions
 RUN mkdir -p uploads && chown -R nodejs:nodejs uploads
