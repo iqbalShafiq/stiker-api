@@ -1,11 +1,14 @@
 import fs from 'fs';
 import path from 'path';
-import express from 'express';
+import { randomUUID } from 'crypto';
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { apiReference } from '@scalar/express-api-reference';
 import { config } from './config';
+import logger from './utils/logger';
+import { getHealthStatus } from './utils/health-check';
 import { upload } from './middleware/upload-handler';
 import { validateRequest } from './middleware/validate-request';
 import { errorHandler } from './middleware/error-handler';
@@ -23,7 +26,48 @@ import { SyncController } from './controllers/sync.controller';
 import { AdminController } from './controllers/admin.controller';
 import { asyncHandler } from './utils/async-handler';
 
+interface RequestWithId extends Request {
+  id?: string;
+}
+
 const app = express();
+
+// Trust proxy in production (for nginx)
+if (config.nodeEnv === 'production') {
+  app.set('trust proxy', 1);
+}
+
+// Request ID tracking middleware
+app.use((req: RequestWithId, res: Response, next: NextFunction) => {
+  const requestId = randomUUID();
+  req.id = requestId;
+  res.setHeader('X-Request-Id', requestId);
+  next();
+});
+
+// Request logging middleware
+app.use((req: RequestWithId, res: Response, next: NextFunction) => {
+  const start = Date.now();
+  const requestId = req.id;
+
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    logger.info(
+      {
+        requestId,
+        method: req.method,
+        url: req.url,
+        status: res.statusCode,
+        duration: `${duration}ms`,
+        userAgent: req.get('user-agent'),
+        ip: req.ip,
+      },
+      `${req.method} ${req.url} ${res.statusCode} ${duration}ms`
+    );
+  });
+
+  next();
+});
 
 /** Inline spec so Scalar does not fetch /openapi.json (avoids mistaken https + ERR_SSL_PROTOCOL_ERROR on LAN HTTP). */
 const openApiSpecPath = path.join(process.cwd(), 'docs', 'openapi.json');
@@ -201,9 +245,11 @@ app.get('/openapi.json', (_req, res) => {
   res.sendFile('openapi.json', { root: './docs' });
 });
 
-app.get('/health', (_req, res) => {
-  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
-});
+app.get('/health', asyncHandler(async (_req, res) => {
+  const health = await getHealthStatus();
+  const statusCode = health.status === 'healthy' ? 200 : 503;
+  res.status(statusCode).json(health);
+}));
 
 app.use(errorHandler);
 

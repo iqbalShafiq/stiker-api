@@ -3,6 +3,15 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Install system dependencies for sharp and other native modules
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    vips-dev \
+    linux-headers \
+    glib-dev
+
 # Copy package files
 COPY package*.json ./
 COPY prisma ./prisma/
@@ -13,16 +22,29 @@ RUN npm ci
 # Copy source code
 COPY . .
 
-# Generate Prisma client
+# Generate Prisma client (needs dummy DATABASE_URL for config)
+ENV DATABASE_URL=postgresql://localhost:5432/dummy
 RUN npx prisma generate
 
 # Build TypeScript
 RUN npm run build
 
+# Remove devDependencies after build
+RUN npm prune --production
+
 # Stage 2: Production
 FROM node:20-alpine AS production
 
 WORKDIR /app
+
+# Install runtime dependencies
+RUN apk add --no-cache \
+    libstdc++ \
+    vips
+
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001
 
 # Copy package files
 COPY package*.json ./
@@ -36,15 +58,20 @@ RUN npx prisma generate
 
 # Copy built application from builder stage
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
-# Create uploads directory
-RUN mkdir -p uploads && chown -R node:node uploads
+# Create uploads directory and set permissions
+RUN mkdir -p uploads && chown -R nodejs:nodejs uploads
 
-# Run as non-root user
-USER node
+# Switch to non-root user
+USER nodejs
 
 # Expose port
 EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD node -e "require('http').get('http://localhost:3000/health', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))"
 
 # Start the application
 CMD ["node", "dist/server.js"]
