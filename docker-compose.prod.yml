@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   api:
-    image: ghcr.io/${GITHUB_REPOSITORY:-iqbalShafiq/stiker-api}:latest
+    image: ghcr.io/iqbalshafiq/stiker-api:latest
     container_name: stiker-api
     restart: unless-stopped
     ports:
