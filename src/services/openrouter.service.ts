@@ -792,8 +792,9 @@ Make sure boundaries cover the ENTIRE image without gaps or overlaps.`,
   /**
    * Extract cost dari response
    */
-  private extractCost(response: { usage?: { cost?: number }; cost?: number }): number | undefined {
-    return response.usage?.cost ?? response.cost ?? undefined;
+  private extractCost(response: unknown): number | undefined {
+    const r = response as { usage?: { cost?: number }; cost?: number };
+    return r.usage?.cost ?? r.cost ?? undefined;
   }
 
   /**
