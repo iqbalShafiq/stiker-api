@@ -15,6 +15,27 @@ jobs:
   # Stage 1: Quality Checks
   quality:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sticker_api_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sticker_api_test
+      REDIS_URL: redis://localhost:6379
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -31,7 +52,12 @@ jobs:
       - name: Generate Prisma Client
         run: npx prisma generate
         env:
-          DATABASE_URL: postgresql://localhost:5432/dummy
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sticker_api_test
+
+      - name: Run database migrations
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sticker_api_test
 
       - name: Run linter
         run: npm run lint
@@ -41,6 +67,8 @@ jobs:
 
       - name: Run tests
         run: npm run test
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sticker_api_test
 
   # Stage 2: Build Docker Image
   build:

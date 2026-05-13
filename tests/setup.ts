@@ -3,3 +3,7 @@ process.env.OPENROUTER_API_KEY = 'test-api-key';
 process.env.NODE_ENV = 'test';
 process.env.PORT = '0';
 process.env.APP_URL = 'http://localhost:3000';
+process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/sticker_api_test';
+process.env.JWT_SECRET = 'test-jwt-secret';
+process.env.JWT_REFRESH_SECRET = 'test-jwt-refresh-secret';
+process.env.REDIS_URL = 'redis://localhost:6379';
