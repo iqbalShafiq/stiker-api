@@ -2,7 +2,6 @@ import fs from 'fs/promises';
 import path from 'path';
 import { pathToFileURL } from 'node:url';
 import sharp from 'sharp';
-import { removeBackground } from '@imgly/background-removal-node';
 import type { Config as ImglyBackgroundRemovalConfig } from '@imgly/background-removal-node';
 import { config } from '../config';
 
@@ -14,6 +13,14 @@ function filesystemDirToImglyPublicPath(dirPath: string): string {
   const resolved = path.resolve(dirPath);
   const withSlash = resolved.endsWith(path.sep) ? resolved : `${resolved}${path.sep}`;
   return pathToFileURL(withSlash).href;
+}
+
+async function removeBackgroundWithImgly(
+  imageBlob: Blob,
+  imglyConfig: ImglyBackgroundRemovalConfig
+): Promise<Blob> {
+  const { removeBackground } = await import('@imgly/background-removal-node');
+  return removeBackground(imageBlob, imglyConfig);
 }
 
 export class SegmentationBackgroundRemovalService {
@@ -58,7 +65,7 @@ export class SegmentationBackgroundRemovalService {
         },
       };
 
-      const blob = await removeBackground(imageBlob, imglyConfig);
+      const blob = await removeBackgroundWithImgly(imageBlob, imglyConfig);
       const arrayBuffer = await blob.arrayBuffer();
       return Buffer.from(arrayBuffer);
     } finally {

@@ -47,9 +47,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: |
-          rm -f package-lock.json
-          npm install
+        run: npm ci
 
       - name: Generate Prisma Client
         run: npx prisma generate
