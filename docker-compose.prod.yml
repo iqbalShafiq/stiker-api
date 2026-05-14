@@ -1,8 +1,6 @@
-version: '3.8'
-
 services:
   api:
-    image: ghcr.io/iqbalshafiq/stiker-api:latest
+    image: ghcr.io/iqbalshafiq/stiker-api:${IMAGE_TAG:-latest}
     container_name: api
     restart: unless-stopped
     ports:
@@ -23,14 +21,24 @@ services:
         condition: service_healthy
     networks:
       - stiker-network
-    deploy:
-      resources:
-        limits:
-          cpus: '2'
-          memory: 2G
-        reservations:
-          cpus: '0.5'
-          memory: 512M
+    cpus: '2.0'
+    mem_limit: 2g
+
+  migrate:
+    image: ghcr.io/iqbalshafiq/stiker-api:${IMAGE_TAG:-latest}
+    env_file:
+      - .env.production
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=redis://redis:6379
+    command: ["npx", "prisma", "migrate", "deploy"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - stiker-network
 
   postgres:
     image: postgres:16-alpine
@@ -48,16 +56,13 @@ services:
     networks:
       - stiker-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-sticker_api}"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 1G
+    cpus: '1.0'
+    mem_limit: 1g
 
   redis:
     image: redis:7-alpine
@@ -74,11 +79,8 @@ services:
       timeout: 5s
       retries: 5
       start_period: 5s
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
+    cpus: '0.5'
+    mem_limit: 256m
 
   nginx:
     image: nginx:alpine
