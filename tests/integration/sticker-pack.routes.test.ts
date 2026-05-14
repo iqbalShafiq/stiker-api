@@ -6,6 +6,10 @@ import { StickerVisibility } from '@prisma/client';
 import path from 'path';
 
 const TEST_PASSWORD = 'StrongPass1!';
+const TEST_IMAGE_BUFFER = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=',
+  'base64'
+);
 
 // ─── Helper Functions ───────────────────────────────────────────────────────
 
@@ -495,15 +499,13 @@ describe('Upload Route Integration', () => {
   });
 
   test('should upload stickers to new pack', async () => {
-    const testImagePath = path.join(process.cwd(), 'contoh_naruto.webp');
-    
     const response = await request(app)
       .post('/api/v1/upload')
       .set('Authorization', `Bearer ${user1Token}`)
       .field('stickerPackName', 'Uploaded Pack')
       .field('stickerPackDescription', 'Pack from upload')
       .field('visibility', 'private')
-      .attach('images', testImagePath);
+      .attach('images', TEST_IMAGE_BUFFER, 'test-sticker.png');
 
     expect(response.status).toBe(201);
     expect(response.body.success).toBe(true);
@@ -523,14 +525,13 @@ describe('Upload Route Integration', () => {
       });
 
     const existingPackId = packResponse.body.data.id;
-    const testImagePath = path.join(process.cwd(), 'contoh_naruto.webp');
 
     const response = await request(app)
       .post('/api/v1/upload')
       .set('Authorization', `Bearer ${user1Token}`)
       .field('stickerPackId', existingPackId)
       .field('visibility', 'private')
-      .attach('images', testImagePath);
+      .attach('images', TEST_IMAGE_BUFFER, 'test-sticker.png');
 
     expect(response.status).toBe(201);
     expect(response.body.success).toBe(true);
