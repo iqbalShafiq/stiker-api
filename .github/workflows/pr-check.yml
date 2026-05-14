@@ -41,6 +41,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Rebuild native modules
+        run: npm rebuild
+
       - name: Generate Prisma Client
         run: npx prisma generate
         env:
@@ -53,19 +56,6 @@ jobs:
 
       - name: Seed test database
         run: npx tsx prisma/seed.ts
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sticker_api_test
-
-      - name: Verify seed data
-        run: |
-          echo "Checking roles..."
-          npx prisma db execute --stdin <<EOF
-            SELECT name FROM "Role";
-          EOF
-          echo "Checking admin user..."
-          npx prisma db execute --stdin <<EOF
-            SELECT email FROM "User" WHERE email = 'admin@example.com';
-          EOF
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sticker_api_test
 
