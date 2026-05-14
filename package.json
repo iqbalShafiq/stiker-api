@@ -71,7 +71,7 @@
     "vitest": "^1.6.0"
   },
   "prisma": {
-    "seed": "tsx prisma/seed.ts"
+    "seed": "node prisma/seed.js"
   },
   "engines": {
     "node": ">=20.0.0"

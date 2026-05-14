@@ -52,7 +52,7 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sticker_api_test
 
       - name: Seed test database
-        run: npx tsx prisma/seed.ts
+        run: npx prisma db seed
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sticker_api_test
 

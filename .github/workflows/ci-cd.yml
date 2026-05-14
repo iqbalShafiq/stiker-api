@@ -62,7 +62,7 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sticker_api_test
 
       - name: Seed test database
-        run: npx tsx prisma/seed.ts
+        run: npx prisma db seed
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sticker_api_test
 
@@ -161,6 +161,9 @@ jobs:
             
             # Run database migrations via dedicated service
             IMAGE_TAG="$SHORT_SHA" docker compose --env-file .env.production -f docker-compose.prod.yml run --rm migrate
+
+            # Run idempotent seed data (roles, permissions, default admin bootstrap)
+            IMAGE_TAG="$SHORT_SHA" docker compose --env-file .env.production -f docker-compose.prod.yml run --rm seed
             
             # Restart API with new image
             IMAGE_TAG="$SHORT_SHA" docker compose --env-file .env.production -f docker-compose.prod.yml up -d --no-deps api
