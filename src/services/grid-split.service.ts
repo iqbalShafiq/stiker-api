@@ -1,4 +1,4 @@
-import type { ImageResult } from '../types';
+import type { ImageResult, TextAssetResult } from '../types';
 import logger from '../utils/logger';
 import {
   OpenRouterService,
@@ -170,6 +170,49 @@ export class GridSplitService {
         backgroundRemoved: backgroundRemovedCellCount > 0,
         backgroundRemovalMethod:
           methodsUsed.size > 0 ? `post-split:${Array.from(methodsUsed).join('|')}` : undefined,
+      },
+    };
+  }
+
+  async extractTextAssets(cellBuffers: Buffer[]): Promise<{
+    assets: TextAssetResult[];
+    metadata: GridSplitMetadata;
+  }> {
+    const assets: TextAssetResult[] = [];
+    for (const [index, buffer] of cellBuffers.entries()) {
+      const cellId = `cell-${String(index + 1).padStart(2, '0')}`;
+      let textOutsideForeground: TextAssetResult['textOutsideForeground'];
+      try {
+        const textAnalysis = await this.analyzeCellTextWithRetry(buffer, cellId);
+        const mergedOutsideText = this.mergeOutsideForegroundText(textAnalysis.textOutsideForeground);
+        if (mergedOutsideText) {
+          textOutsideForeground = {
+            text: mergedOutsideText.text,
+            style: mergedOutsideText.style,
+          };
+        }
+      } catch (cellTextAnalysisError) {
+        logger.warn(
+          { error: cellTextAnalysisError },
+          `Grid cell text analysis failed for ${cellId}`
+        );
+      }
+
+      assets.push({
+        id: cellId,
+        ...(textOutsideForeground ? { textOutsideForeground } : {}),
+      });
+    }
+
+    return {
+      assets,
+      metadata: {
+        gridLayout: 'custom-cells',
+        cellCount: assets.length,
+        outputSize: 'source',
+        normalized: false,
+        backgroundRemoved: false,
+        backgroundRemovalMethod: 'none',
       },
     };
   }

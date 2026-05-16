@@ -1893,6 +1893,98 @@
         }
       }
     },
+    "/api/v1/grid/split/text-assets": {
+      "post": {
+        "summary": "Extract text assets from grid cells",
+        "description": "Accepts multiple grid cell images and extracts caption-like text outside the foreground subject for each image using LLM analysis. Returns text assets and metadata in the same metadata shape used by grid split endpoints.",
+        "tags": [
+          "Grid"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "images": {
+                    "type": "array",
+                    "description": "One or more cell images (PNG, JPEG, JPG, WebP, or GIF)",
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    }
+                  }
+                },
+                "required": [
+                  "images"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully extracted text assets for each provided cell image.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GridSplitTextAssetsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error (e.g. missing images)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "413": {
+            "description": "File too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported or disallowed image type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/background/remove": {
       "post": {
         "summary": "Remove background",
@@ -3542,6 +3634,55 @@
                 "type": "array",
                 "items": {
                   "$ref": "#/components/schemas/ImageResult"
+                }
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/GridSplitMetadata"
+              }
+            }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "timestamp": {
+                "type": "string"
+              },
+              "requestId": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "TextAssetResult": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "textOutsideForeground": {
+            "description": "Present when caption-like text outside the sticker foreground was detected",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TextOutsideForeground"
+              }
+            ]
+          }
+        }
+      },
+      "GridSplitTextAssetsResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "assets": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/TextAssetResult"
                 }
               },
               "metadata": {

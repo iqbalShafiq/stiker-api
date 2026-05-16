@@ -71,4 +71,34 @@ export class GridController {
       next(error);
     }
   }
+
+  async extractTextAssets(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const files = req.files;
+      const imageFiles = Array.isArray(files) ? files : [];
+      if (imageFiles.length === 0) {
+        throw new ValidationError('At least one image file is required');
+      }
+
+      const { assets, metadata } = await this.gridSplitService.extractTextAssets(
+        imageFiles.map(file => file.buffer)
+      );
+
+      await this.processingHistoryService.create({
+        userId: req.user?.id ?? 'anonymous',
+        type: 'grid-split',
+        inputData: { mode: 'text-assets', inputCount: imageFiles.length },
+        outputFiles: [],
+      });
+
+      res.status(200).json(
+        buildSuccessResponse({
+          assets,
+          metadata,
+        })
+      );
+    } catch (error) {
+      next(error);
+    }
+  }
 }

@@ -225,6 +225,14 @@ app.post(
 );
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.post(
+  '/api/v1/grid/split/text-assets',
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises
+  authenticateToken,
+  upload.array('images', 64),
+  asyncHandler((req, res, next) => gridController.extractTextAssets(req, res, next))
+);
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post(
   '/api/v1/background/remove',
   // eslint-disable-next-line @typescript-eslint/no-misused-promises
   authenticateToken,

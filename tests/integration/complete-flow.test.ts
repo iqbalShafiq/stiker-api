@@ -1350,6 +1350,41 @@ describe('Existing Endpoints', () => {
     expect(response.body.success).toBe(false);
   });
 
+  test.sequential('should require auth for grid split text assets', async () => {
+    const response = await request(app)
+      .post('/api/v1/grid/split/text-assets')
+      .send();
+
+    expect(response.status).toBe(401);
+    expect(response.body.success).toBe(false);
+  });
+
+  test.sequential('should return 400 for grid split text assets without images', async () => {
+    const email = `cf-test-grid3-${Date.now()}@example.com`;
+    const reg = await registerUser(email, TEST_PASSWORD);
+
+    const response = await request(app)
+      .post('/api/v1/grid/split/text-assets')
+      .set('Authorization', `Bearer ${reg.accessToken}`)
+      .send();
+
+    expect(response.status).toBe(400);
+    expect(response.body.success).toBe(false);
+  });
+
+  test.sequential('should return 415 for grid split text assets with invalid file type', async () => {
+    const email = `cf-test-grid4-${Date.now()}@example.com`;
+    const reg = await registerUser(email, TEST_PASSWORD);
+
+    const response = await request(app)
+      .post('/api/v1/grid/split/text-assets')
+      .set('Authorization', `Bearer ${reg.accessToken}`)
+      .attach('images', Buffer.from('not an image'), 'test.txt');
+
+    expect(response.status).toBe(415);
+    expect(response.body.success).toBe(false);
+  });
+
   test.sequential('should require auth for background remove', async () => {
     const response = await request(app)
       .post('/api/v1/background/remove')

@@ -17,6 +17,12 @@ export interface ImageResult {
   textOutsideForeground?: TextOutsideForeground;
 }
 
+export interface TextAssetResult {
+  id: string;
+  /** Present when analysis found caption-style text outside the sticker foreground for this cell. */
+  textOutsideForeground?: TextOutsideForeground;
+}
+
 export interface GenerationMetadata {
   model: string;
   tokensPrompt?: number;
