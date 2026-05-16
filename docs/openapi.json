@@ -2735,8 +2735,8 @@
     },
     "/api/v1/upload": {
       "post": {
-        "summary": "Upload stickers to pack",
-        "description": "Upload multiple sticker images. Optionally assign to a sticker pack (new or existing).",
+        "summary": "Upload stickers or delete pack/sticker",
+        "description": "Upload multiple sticker images, or perform delete operations for a sticker pack or sticker-in-pack using action=delete.",
         "tags": [
           "Upload"
         ],
@@ -2752,18 +2752,27 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "upload",
+                      "delete"
+                    ],
+                    "default": "upload",
+                    "description": "Use delete to remove sticker pack or sticker; omit or set upload for normal file upload"
+                  },
                   "images": {
                     "type": "array",
                     "items": {
                       "type": "string",
                       "format": "binary"
                     },
-                    "description": "Sticker images to upload (up to 30)"
+                    "description": "Sticker images to upload (up to 30). Required only when action=upload"
                   },
                   "stickerPackId": {
                     "type": "string",
                     "nullable": true,
-                    "description": "Existing sticker pack ID to add stickers to"
+                    "description": "Existing sticker pack ID to add stickers to, or required for action=delete"
                   },
                   "stickerPackName": {
                     "type": "string",
@@ -2787,16 +2796,21 @@
                   "existingStickerIds": {
                     "type": "string",
                     "description": "JSON array of existing sticker IDs to add to pack"
+                  },
+                  "stickerId": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "When action=delete: if provided with stickerPackId, delete this sticker from pack and soft-delete sticker"
                   }
-                },
-                "required": [
-                  "images"
-                ]
+                }
               }
             }
           }
         },
         "responses": {
+          "200": {
+            "description": "Delete operation completed successfully"
+          },
           "201": {
             "description": "Stickers uploaded successfully",
             "content": {
@@ -2819,7 +2833,7 @@
     "/api/v1/sync": {
       "get": {
         "summary": "Sync data for offline-first",
-        "description": "Get incremental changes since last sync for offline-first support",
+        "description": "Get incremental changes since last sync for offline-first support. Soft-deleted sticker packs and stickers are returned in deleted arrays.",
         "tags": [
           "Sync"
         ],

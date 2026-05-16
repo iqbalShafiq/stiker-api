@@ -28,6 +28,44 @@ export class UploadController {
       }
 
       const userId = req.user.id;
+      const body = req.body as Record<string, unknown>;
+      const action = body.action ? String(body.action).toLowerCase() : 'upload';
+
+      if (action === 'delete') {
+        const stickerPackId = body.stickerPackId ? String(body.stickerPackId) : undefined;
+        const stickerId = body.stickerId ? String(body.stickerId) : undefined;
+
+        if (!stickerPackId) {
+          throw new ValidationError('stickerPackId is required for delete action');
+        }
+
+        if (stickerId) {
+          await this.stickerPackService.removeSticker(stickerPackId, stickerId, userId);
+          await this.stickerService.delete(stickerId, userId);
+
+          res.status(200).json(
+            buildSuccessResponse({
+              action: 'deleteSticker',
+              stickerPackId,
+              stickerId,
+              message: 'Sticker deleted successfully',
+            })
+          );
+          return;
+        }
+
+        await this.stickerPackService.delete(stickerPackId, userId);
+
+        res.status(200).json(
+          buildSuccessResponse({
+            action: 'deleteStickerPack',
+            stickerPackId,
+            message: 'Sticker pack deleted successfully',
+          })
+        );
+        return;
+      }
+
       // eslint-disable-next-line no-undef
       const files = req.files as Express.Multer.File[];
       
@@ -35,7 +73,6 @@ export class UploadController {
         throw new ValidationError('At least one image file is required');
       }
 
-      const body = req.body as Record<string, unknown>;
       const stickerPackId = body.stickerPackId ? String(body.stickerPackId) : undefined;
       const stickerPackName = body.stickerPackName ? String(body.stickerPackName) : undefined;
       const stickerPackDescription = body.stickerPackDescription ? String(body.stickerPackDescription) : undefined;

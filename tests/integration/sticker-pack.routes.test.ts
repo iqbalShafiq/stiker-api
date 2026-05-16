@@ -546,6 +546,88 @@ describe('Upload Route Integration', () => {
 
     expect(response.status).toBe(400);
   });
+
+  test('should delete sticker via upload action delete', async () => {
+    const createPackResponse = await request(app)
+      .post('/api/v1/sticker-packs')
+      .set('Authorization', `Bearer ${user1Token}`)
+      .send({
+        name: 'Delete Sticker Pack',
+        visibility: 'private',
+        stickers: [
+          {
+            name: 'Delete Me',
+            filename: 'delete-me.webp',
+            url: '/uploads/delete-me.webp',
+          },
+        ],
+      });
+
+    expect(createPackResponse.status).toBe(201);
+    const createdPackId = createPackResponse.body.data.id as string;
+    const createdStickerId = createPackResponse.body.data.stickers[0].sticker.id as string;
+
+    const response = await request(app)
+      .post('/api/v1/upload')
+      .set('Authorization', `Bearer ${user1Token}`)
+      .field('action', 'delete')
+      .field('stickerPackId', createdPackId)
+      .field('stickerId', createdStickerId);
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+    expect(response.body.data.action).toBe('deleteSticker');
+    expect(response.body.data.stickerPackId).toBe(createdPackId);
+    expect(response.body.data.stickerId).toBe(createdStickerId);
+
+    const deletedSticker = await prisma.sticker.findUnique({ where: { id: createdStickerId } });
+    expect(deletedSticker?.deletedAt).not.toBeNull();
+
+    const packRelation = await prisma.stickerPackSticker.findFirst({
+      where: {
+        stickerPackId: createdPackId,
+        stickerId: createdStickerId,
+      },
+    });
+    expect(packRelation).toBeNull();
+  });
+
+  test('should delete sticker pack via upload action delete', async () => {
+    const createPackResponse = await request(app)
+      .post('/api/v1/sticker-packs')
+      .set('Authorization', `Bearer ${user1Token}`)
+      .send({
+        name: 'Delete Pack',
+        visibility: 'private',
+      });
+
+    expect(createPackResponse.status).toBe(201);
+    const createdPackId = createPackResponse.body.data.id as string;
+
+    const response = await request(app)
+      .post('/api/v1/upload')
+      .set('Authorization', `Bearer ${user1Token}`)
+      .field('action', 'delete')
+      .field('stickerPackId', createdPackId);
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+    expect(response.body.data.action).toBe('deleteStickerPack');
+    expect(response.body.data.stickerPackId).toBe(createdPackId);
+
+    const deletedPack = await prisma.stickerPack.findUnique({ where: { id: createdPackId } });
+    expect(deletedPack?.deletedAt).not.toBeNull();
+  });
+
+  test('should return 400 for delete action without stickerPackId', async () => {
+    const response = await request(app)
+      .post('/api/v1/upload')
+      .set('Authorization', `Bearer ${user1Token}`)
+      .field('action', 'delete')
+      .field('stickerId', 'sticker-only');
+
+    expect(response.status).toBe(400);
+  });
 });
 
 // ─── Sync Route Tests ───────────────────────────────────────────────────────
@@ -634,6 +716,83 @@ describe('Sync Route Integration', () => {
       .get('/api/v1/sync');
 
     expect(response.status).toBe(401);
+  });
+
+  test('should expose sticker pack deletion from upload API in sync deleted list', async () => {
+    const packResponse = await request(app)
+      .post('/api/v1/sticker-packs')
+      .set('Authorization', `Bearer ${user1Token}`)
+      .send({
+        name: 'Sync Delete Pack',
+        visibility: 'private',
+      });
+
+    expect(packResponse.status).toBe(201);
+    const packId = packResponse.body.data.id as string;
+    const lastSyncAt = new Date(Date.now() - 1000).toISOString();
+
+    const deleteResponse = await request(app)
+      .post('/api/v1/upload')
+      .set('Authorization', `Bearer ${user1Token}`)
+      .field('action', 'delete')
+      .field('stickerPackId', packId);
+
+    expect(deleteResponse.status).toBe(200);
+
+    const syncResponse = await request(app)
+      .get('/api/v1/sync')
+      .set('Authorization', `Bearer ${user1Token}`)
+      .query({ lastSyncAt });
+
+    expect(syncResponse.status).toBe(200);
+    expect(syncResponse.body.data.stickerPacks.deleted).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: packId }),
+      ])
+    );
+  });
+
+  test('should expose sticker deletion from upload API in sync deleted list', async () => {
+    const packResponse = await request(app)
+      .post('/api/v1/sticker-packs')
+      .set('Authorization', `Bearer ${user1Token}`)
+      .send({
+        name: 'Sync Delete Sticker',
+        visibility: 'private',
+        stickers: [
+          {
+            name: 'Will Be Deleted',
+            filename: 'will-be-deleted.webp',
+            url: '/uploads/will-be-deleted.webp',
+          },
+        ],
+      });
+
+    expect(packResponse.status).toBe(201);
+    const packId = packResponse.body.data.id as string;
+    const stickerId = packResponse.body.data.stickers[0].sticker.id as string;
+    const lastSyncAt = new Date(Date.now() - 1000).toISOString();
+
+    const deleteResponse = await request(app)
+      .post('/api/v1/upload')
+      .set('Authorization', `Bearer ${user1Token}`)
+      .field('action', 'delete')
+      .field('stickerPackId', packId)
+      .field('stickerId', stickerId);
+
+    expect(deleteResponse.status).toBe(200);
+
+    const syncResponse = await request(app)
+      .get('/api/v1/sync')
+      .set('Authorization', `Bearer ${user1Token}`)
+      .query({ lastSyncAt });
+
+    expect(syncResponse.status).toBe(200);
+    expect(syncResponse.body.data.stickers.deleted).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: stickerId }),
+      ])
+    );
   });
 });
 
