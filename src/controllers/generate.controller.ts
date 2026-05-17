@@ -13,6 +13,9 @@ import {
   IMPROVEMENT_GRID_MAX_CELLS,
   type ImageGenerationInput,
 } from '../utils/improvement';
+import {
+  buildEmptyTextAssetDecoration,
+} from '../utils/text-asset-decoration';
 import { config } from '../config';
 import type { ImageResult, GenerationMetadata } from '../types';
 import type { AuthRequest } from '../middleware/auth.middleware';
@@ -36,6 +39,11 @@ Visual requirements (critical):
 
 function buildPromptSingle(text: string): string {
   return `Create a WhatsApp sticker: ${text}
+
+Text requirement (critical):
+- Include one short, readable caption text in the sticker.
+- Keep caption high-contrast against the background and subject.
+- Keep text fully visible and not clipped.
 ${PROMPT_TRANSPARENT_STICKER_BG}`;
 }
 
@@ -73,7 +81,8 @@ Hard output requirements:
 - If fewer than 16 stickers are provided, leave unused cells clean/empty or neutral.
 - Preserve one improved sticker concept per provided input image.
 - Keep clear gutters/separators and safe margins.
-- Keep all existing text readable and fully inside cells.
+- Ensure each used cell has one short readable caption text.
+- Keep all caption text readable and fully inside cells.
 - Improve contrast between subject, text, and background.`;
 }
 
@@ -146,6 +155,7 @@ export class GenerateController {
         subDir: `generate/${requestTimestamp}`,
         baseName: 'generated-sticker',
       });
+      imageResult.textAssetDecoration = buildEmptyTextAssetDecoration('input', text);
 
       await this.recordGenerateHistory(userId, {
         inputData: { text, mode: 'single', inputImage: Boolean(file) },
@@ -198,6 +208,10 @@ export class GenerateController {
         subDir: `generate-sticker-pack/${requestTimestamp}`,
         baseName: 'generated-sticker-pack',
       });
+      imageResult.textAssetDecoration = buildEmptyTextAssetDecoration(
+        'detected',
+        'Captions embedded per cell in grid image'
+      );
 
       await this.recordGenerateHistory(userId, {
         inputData: {
@@ -256,9 +270,9 @@ export class GenerateController {
           baseName: 'improved-sticker',
         });
 
-        if (agent.plan.textAssetDecoration) {
-          imageResult.textAssetDecoration = agent.plan.textAssetDecoration;
-        }
+        imageResult.textAssetDecoration =
+          agent.plan.textAssetDecoration ??
+          buildEmptyTextAssetDecoration('detected', 'Improved caption');
 
         await this.recordGenerateHistory(userId, {
           inputData: { mode: 'improvement-single', inputCount: 1 },
@@ -298,12 +312,17 @@ export class GenerateController {
           );
         metadataParts.push(aiMetadata);
 
-        images.push(await this.saveGeneratedImage({
+        const imageResult = await this.saveGeneratedImage({
           imageBuffer,
           userId,
           subDir: `generate-improvement/${requestTimestamp}`,
           baseName: `improved-grid-${String(chunkIndex + 1).padStart(2, '0')}`,
-        }));
+        });
+        imageResult.textAssetDecoration = buildEmptyTextAssetDecoration(
+          'detected',
+          'Captions embedded per used cell in grid image'
+        );
+        images.push(imageResult);
       }
 
       await this.recordGenerateHistory(userId, {

@@ -324,10 +324,11 @@ Return exact JSON:
 Rules:
 - The user gave no prompt. Infer what should be improved: clarity, crop, composition, lighting, subject separation, sticker readiness, and overall polish.
 - Preserve the same subject/character/object identity and visual intent.
+- ALWAYS return textAssetDecoration.
 - If readable decorative caption text exists, extract it into textAssetDecoration and instruct the image generator to produce a clean sticker WITHOUT embedded text.
-- If no decorative caption text exists, omit textAssetDecoration.
+- If no decorative caption text exists, synthesize one short caption that matches the subject and set it in textAssetDecoration.
 - The improvementPrompt must ask for one WhatsApp-ready sticker with transparent background, clean silhouette, safe padding, and no rectangular backdrop.
-- Do not add new caption text unless it was present in the input image.`;
+- Caption text in textAssetDecoration must be short and readable.`;
   }
 
   private buildGridImprovementAgentPrompt(inputCount: number): string {
@@ -344,6 +345,7 @@ Rules:
 - Arrange ONLY the ${inputCount} provided stickers. Do not invent extra stickers for unused grid cells.
 - Output one square 4x4 grid image with clear gutters/separators and safe margins in every used cell.
 - Keep each used cell readable at small size.
+- Ensure each used cell includes one short readable caption text.
 - Improve contrast between each sticker subject, any existing caption text, and the cell background.
 - Use backgrounds that contrast with both the image subject and text; avoid text blending into backgrounds.
 - Keep all text fully inside its cell with no clipping.

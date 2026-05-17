@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  buildEmptyTextAssetDecoration,
   buildTextAssetDecoration,
   textOutsideForegroundToAsset,
 } from '../../../src/utils/text-asset-decoration';
@@ -19,6 +20,30 @@ describe('text asset decoration utils', () => {
 
   it('returns undefined when text is missing', () => {
     expect(buildTextAssetDecoration({ text: '   ' })).toBeUndefined();
+  });
+
+  it('builds empty text asset decoration fallback', () => {
+    expect(buildEmptyTextAssetDecoration('detected', 'Hello')).toEqual({
+      text: 'Hello',
+      style: {
+        fontFamily: 'sans-serif',
+        color: '#FFFFFF',
+        weight: 'regular',
+      },
+      source: 'detected',
+    });
+  });
+
+  it('keeps default empty fallback text when not passed', () => {
+    expect(buildEmptyTextAssetDecoration()).toEqual({
+      text: '',
+      style: {
+        fontFamily: 'sans-serif',
+        color: '#FFFFFF',
+        weight: 'regular',
+      },
+      source: 'detected',
+    });
   });
 
   it('converts textOutsideForeground to shared asset shape', () => {

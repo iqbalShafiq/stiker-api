@@ -10,6 +10,17 @@ const DEFAULT_STYLE: TextDecorationStyle = {
   weight: 'regular',
 };
 
+export function buildEmptyTextAssetDecoration(
+  source: TextAssetDecoration['source'] = 'detected',
+  text: string = ''
+): TextAssetDecoration {
+  return {
+    text: text.trim(),
+    style: { ...DEFAULT_STYLE },
+    source,
+  };
+}
+
 export function normalizeTextDecorationStyle(style: unknown): TextDecorationStyle {
   const maybeStyle = style as Partial<TextDecorationStyle> | undefined;
   const fontFamily =
