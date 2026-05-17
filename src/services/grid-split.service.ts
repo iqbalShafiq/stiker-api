@@ -7,6 +7,7 @@ import {
 import { ImageService } from './image.service';
 import { IStorageProvider } from '../storage/interface';
 import { removeBackgroundWithFallback } from './background-removal.service';
+import { textOutsideForegroundToAsset } from '../utils/text-asset-decoration';
 
 export interface GridSplitPipelineOptions {
   normalize?: boolean;
@@ -155,6 +156,9 @@ export class GridSplitService {
         url: this.storageService.getPublicUrl(filename),
         width: cellDimensions.width,
         height: cellDimensions.height,
+        ...(textOutsideForeground
+          ? { textAssetDecoration: textOutsideForegroundToAsset(textOutsideForeground) }
+          : {}),
         ...(textOutsideForeground ? { textOutsideForeground } : {}),
       });
     }
@@ -200,6 +204,9 @@ export class GridSplitService {
 
       assets.push({
         id: cellId,
+        ...(textOutsideForeground
+          ? { textAssetDecoration: textOutsideForegroundToAsset(textOutsideForeground) }
+          : {}),
         ...(textOutsideForeground ? { textOutsideForeground } : {}),
       });
     }

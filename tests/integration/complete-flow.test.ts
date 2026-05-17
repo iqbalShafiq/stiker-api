@@ -1315,6 +1315,63 @@ describe('Existing Endpoints', () => {
     expect(response.body.success).toBe(false);
   });
 
+  test.sequential('should require auth for generate sticker pack', async () => {
+    const response = await request(app)
+      .post('/api/v1/generate/sticker-pack')
+      .send({ text: 'test', layout: '4x4' });
+
+    expect(response.status).toBe(401);
+    expect(response.body.success).toBe(false);
+  });
+
+  test.sequential('should return 400 for generate sticker pack without layout', async () => {
+    const email = `cf-test-pack1-${Date.now()}@example.com`;
+    const reg = await registerUser(email, TEST_PASSWORD);
+
+    const response = await request(app)
+      .post('/api/v1/generate/sticker-pack')
+      .set('Authorization', `Bearer ${reg.accessToken}`)
+      .field('text', 'test sticker pack');
+
+    expect(response.status).toBe(400);
+    expect(response.body.success).toBe(false);
+  });
+
+  test.sequential('should require auth for generate improvement', async () => {
+    const response = await request(app)
+      .post('/api/v1/generate/improvement')
+      .send();
+
+    expect(response.status).toBe(401);
+    expect(response.body.success).toBe(false);
+  });
+
+  test.sequential('should return 400 for generate improvement without images', async () => {
+    const email = `cf-test-improve1-${Date.now()}@example.com`;
+    const reg = await registerUser(email, TEST_PASSWORD);
+
+    const response = await request(app)
+      .post('/api/v1/generate/improvement')
+      .set('Authorization', `Bearer ${reg.accessToken}`)
+      .send();
+
+    expect(response.status).toBe(400);
+    expect(response.body.success).toBe(false);
+  });
+
+  test.sequential('should return 415 for generate improvement with invalid file type', async () => {
+    const email = `cf-test-improve2-${Date.now()}@example.com`;
+    const reg = await registerUser(email, TEST_PASSWORD);
+
+    const response = await request(app)
+      .post('/api/v1/generate/improvement')
+      .set('Authorization', `Bearer ${reg.accessToken}`)
+      .attach('images', Buffer.from('not an image'), 'test.txt');
+
+    expect(response.status).toBe(415);
+    expect(response.body.success).toBe(false);
+  });
+
   test.sequential('should require auth for grid split', async () => {
     const response = await request(app)
       .post('/api/v1/grid/split')

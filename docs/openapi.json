@@ -1671,8 +1671,8 @@
     },
     "/api/v1/generate": {
       "post": {
-        "summary": "Generate WhatsApp sticker image",
-        "description": "Generate a sticker image from text prompt with optional image context",
+        "summary": "Generate single WhatsApp sticker image",
+        "description": "Generate or edit one sticker image from a text prompt with optional image context. Sticker-pack/grid generation is handled by /api/v1/generate/sticker-pack.",
         "tags": [
           "Generation"
         ],
@@ -1697,31 +1697,6 @@
                     "type": "string",
                     "format": "binary",
                     "description": "Optional reference image"
-                  },
-                  "grid": {
-                    "type": "boolean",
-                    "description": "Request grid sheet output; when true you must send layout (e.g. 4x4) or both rows and cols",
-                    "default": false
-                  },
-                  "layout": {
-                    "type": "string",
-                    "description": "Grid dimensions like 4x4 (alternative to rows + cols when grid is true)",
-                    "example": "4x4"
-                  },
-                  "rows": {
-                    "type": "integer",
-                    "description": "Grid row count when grid is true (use with cols)",
-                    "minimum": 1
-                  },
-                  "cols": {
-                    "type": "integer",
-                    "description": "Grid column count when grid is true (use with rows)",
-                    "minimum": 1
-                  },
-                  "normalize": {
-                    "type": "boolean",
-                    "description": "When grid is true, optionally normalize the sheet before splitting (same as /grid/split)",
-                    "default": false
                   }
                 },
                 "required": [
@@ -1744,6 +1719,207 @@
           },
           "400": {
             "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "413": {
+            "description": "File too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported media type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/generate/sticker-pack": {
+      "post": {
+        "summary": "Generate sticker pack grid image",
+        "description": "Generate or edit one square sticker-pack grid image from a text prompt. The response is one 512x512 grid image; cell splitting is intentionally not performed here.",
+        "tags": [
+          "Generation"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "description": "Prompt for sticker pack generation",
+                    "maxLength": 2000
+                  },
+                  "image": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Optional reference image"
+                  },
+                  "layout": {
+                    "type": "string",
+                    "description": "Grid dimensions like 4x4 (alternative to rows + cols)",
+                    "example": "4x4"
+                  },
+                  "rows": {
+                    "type": "integer",
+                    "description": "Grid row count (use with cols)",
+                    "minimum": 1
+                  },
+                  "cols": {
+                    "type": "integer",
+                    "description": "Grid column count (use with rows)",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "text"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully generated one sticker pack grid image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "413": {
+            "description": "File too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported media type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/generate/improvement": {
+      "post": {
+        "summary": "Improve existing sticker image(s)",
+        "description": "One-click improvement flow. Gemini 2.5 Pro analyzes the uploaded image(s), writes an improvement prompt, then the configured image generation model creates improved output. One input returns one sticker image and may include textAssetDecoration; multiple inputs are chunked into 4x4 grid images with up to 16 inputs per output image.",
+        "tags": [
+          "Generation"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "images": {
+                    "type": "array",
+                    "description": "One or more source sticker images",
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    }
+                  }
+                },
+                "required": [
+                  "images"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully improved image(s)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error (e.g. missing images)",
             "content": {
               "application/json": {
                 "schema": {
@@ -4540,6 +4716,14 @@
           "height": {
             "type": "integer"
           },
+          "textAssetDecoration": {
+            "description": "Shared text decoration asset emitted when text should be handled by the client layer",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TextAssetDecoration"
+              }
+            ]
+          },
           "textOutsideForeground": {
             "description": "Only on grid-derived cells when analysis detected caption-style text outside the sticker foreground",
             "allOf": [
@@ -4556,6 +4740,9 @@
           "model": {
             "type": "string"
           },
+          "improvementAgentModel": {
+            "type": "string"
+          },
           "tokensPrompt": {
             "type": "integer"
           },
@@ -4566,6 +4753,22 @@
             "type": "number"
           },
           "latencyMs": {
+            "type": "integer"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "single",
+              "grid"
+            ]
+          },
+          "inputCount": {
+            "type": "integer"
+          },
+          "outputCount": {
+            "type": "integer"
+          },
+          "maxCellsPerImage": {
             "type": "integer"
           },
           "gridLayout": {
@@ -4651,6 +4854,25 @@
           }
         }
       },
+      "TextAssetDecoration": {
+        "type": "object",
+        "description": "Client-renderable decorative text asset extracted from an input image or detected by analysis",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "style": {
+            "$ref": "#/components/schemas/TextStyleMetadata"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "input",
+              "detected"
+            ]
+          }
+        }
+      },
       "GridSplitMetadata": {
         "type": "object",
         "properties": {
@@ -4723,6 +4945,14 @@
         "properties": {
           "id": {
             "type": "string"
+          },
+          "textAssetDecoration": {
+            "description": "Shared text decoration asset emitted when text should be handled by the client layer",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TextAssetDecoration"
+              }
+            ]
           },
           "textOutsideForeground": {
             "description": "Present when caption-like text outside the sticker foreground was detected",

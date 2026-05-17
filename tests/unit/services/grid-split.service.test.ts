@@ -37,6 +37,11 @@ describe('GridSplitService extractTextAssets', () => {
     expect(result.assets).toHaveLength(2);
     expect(result.assets[0]).toEqual({
       id: 'cell-01',
+      textAssetDecoration: {
+        text: 'Hello World',
+        style: { fontFamily: 'sans-serif', color: '#ffffff', weight: 'bold' },
+        source: 'detected',
+      },
       textOutsideForeground: {
         text: 'Hello World',
         style: { fontFamily: 'sans-serif', color: '#ffffff', weight: 'bold' },

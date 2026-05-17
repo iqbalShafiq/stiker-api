@@ -14,7 +14,7 @@ import { validateRequest } from './middleware/validate-request';
 import { errorHandler } from './middleware/error-handler';
 import { authenticateToken } from './middleware/auth.middleware';
 import { requireRole } from './middleware/role.middleware';
-import { generateImageSchema } from './utils/validators';
+import { generateImageSchema, generateStickerPackSchema } from './utils/validators';
 import { GenerateController } from './controllers/generate.controller';
 import { GridController } from './controllers/grid.controller';
 import { BackgroundController } from './controllers/background.controller';
@@ -260,6 +260,23 @@ app.post(
   upload.single('image'),
   validateRequest(generateImageSchema),
   asyncHandler((req, res, next) => generateController.generate(req, res, next))
+);
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post(
+  '/api/v1/generate/sticker-pack',
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises
+  authenticateToken,
+  upload.single('image'),
+  validateRequest(generateStickerPackSchema),
+  asyncHandler((req, res, next) => generateController.generateStickerPack(req, res, next))
+);
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post(
+  '/api/v1/generate/improvement',
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises
+  authenticateToken,
+  upload.array('images', 64),
+  asyncHandler((req, res, next) => generateController.improve(req, res, next))
 );
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.post(

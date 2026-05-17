@@ -9,6 +9,11 @@ import {
   TimeoutError,
 } from '../errors';
 import type { GridBoundary, GridDetectionResult } from '../types';
+import {
+  normalizeImprovementPromptPlan,
+  type ImageGenerationInput,
+  type ImprovementPromptPlan,
+} from '../utils/improvement';
 
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -159,17 +164,35 @@ export class OpenRouterService {
     model: string = config.models.imageGeneration,
     allowTextOnlyFallback: boolean = true
   ): Promise<GenerationResult> {
+    const images = base64Image
+      ? [{ base64: base64Image, mimeType: imageMimeType }]
+      : [];
+
+    return this.generateImageWithInputs(
+      prompt,
+      images,
+      model,
+      allowTextOnlyFallback
+    );
+  }
+
+  async generateImageWithInputs(
+    prompt: string,
+    images: Array<{ base64: string; mimeType: string }> = [],
+    model: string = config.models.imageGeneration,
+    allowTextOnlyFallback: boolean = true
+  ): Promise<GenerationResult> {
     const content: Array<{ type: string; text?: string; image_url?: { url: string } }> =
       [{ type: 'text', text: prompt }];
 
-    if (base64Image) {
+    for (const image of images) {
       const mime =
-        imageMimeType && /^image\/[a-z0-9.+-]+$/i.test(imageMimeType)
-          ? imageMimeType
+        image.mimeType && /^image\/[a-z0-9.+-]+$/i.test(image.mimeType)
+          ? image.mimeType
           : 'image/png';
       content.push({
         type: 'image_url',
-        image_url: { url: `data:${mime};base64,${base64Image}` },
+        image_url: { url: `data:${mime};base64,${image.base64}` },
       });
     }
 
@@ -208,10 +231,10 @@ export class OpenRouterService {
       if (error instanceof TimeoutError || error instanceof AIGenerationError) {
         throw error;
       }
-      if (allowTextOnlyFallback && this.isProviderError(error) && base64Image) {
+      if (allowTextOnlyFallback && this.isProviderError(error) && images.length > 0) {
         // Fallback: jika image input tidak didukung, coba text-only
         logger.warn('Image input not supported, falling back to text-only');
-        return this.generateImage(prompt, undefined, imageMimeType, model, allowTextOnlyFallback);
+        return this.generateImageWithInputs(prompt, [], model, allowTextOnlyFallback);
       }
       if (this.isProviderError(error)) {
         throw new ProviderError(this.extractProviderErrorMessage(error));
@@ -220,6 +243,111 @@ export class OpenRouterService {
         error instanceof Error ? error.message : 'Unknown error'
       );
     }
+  }
+
+  async buildImprovementPrompt(
+    images: ImageGenerationInput[],
+    mode: 'single' | 'grid'
+  ): Promise<{
+    plan: ImprovementPromptPlan;
+    generationId: string;
+    metadata: {
+      tokensPrompt?: number;
+      tokensCompletion?: number;
+      cost?: number;
+      latencyMs?: number;
+    };
+  }> {
+    const content: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
+      {
+        type: 'text',
+        text:
+          mode === 'single'
+            ? this.buildSingleImprovementAgentPrompt()
+            : this.buildGridImprovementAgentPrompt(images.length),
+      },
+    ];
+
+    for (const image of images) {
+      const mime =
+        image.mimeType && /^image\/[a-z0-9.+-]+$/i.test(image.mimeType)
+          ? image.mimeType
+          : 'image/png';
+      content.push({
+        type: 'image_url',
+        image_url: { url: `data:${mime};base64,${image.buffer.toString('base64')}` },
+      });
+    }
+
+    const { content: rawContent, generationId, metadata } = await this.chatCompletion({
+      model: config.models.improvementAgent,
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You are a senior sticker art director and prompt engineer. Return ONLY JSON. Do not include markdown.',
+        },
+        {
+          role: 'user',
+          content,
+        },
+      ],
+      responseFormat: { type: 'json_object' },
+      timeoutMs: 45000,
+    });
+
+    return {
+      plan: normalizeImprovementPromptPlan(rawContent, {
+        allowTextAssetDecoration: mode === 'single',
+      }),
+      generationId,
+      metadata,
+    };
+  }
+
+  private buildSingleImprovementAgentPrompt(): string {
+    return `Analyze this one sticker image and write a precise prompt for an image-generation model to improve it.
+
+Return exact JSON:
+{
+  "improvementPrompt": "string",
+  "textAssetDecoration": {
+    "text": "string",
+    "style": {
+      "fontFamily": "string",
+      "color": "string",
+      "weight": "string"
+    }
+  }
+}
+
+Rules:
+- The user gave no prompt. Infer what should be improved: clarity, crop, composition, lighting, subject separation, sticker readiness, and overall polish.
+- Preserve the same subject/character/object identity and visual intent.
+- If readable decorative caption text exists, extract it into textAssetDecoration and instruct the image generator to produce a clean sticker WITHOUT embedded text.
+- If no decorative caption text exists, omit textAssetDecoration.
+- The improvementPrompt must ask for one WhatsApp-ready sticker with transparent background, clean silhouette, safe padding, and no rectangular backdrop.
+- Do not add new caption text unless it was present in the input image.`;
+  }
+
+  private buildGridImprovementAgentPrompt(inputCount: number): string {
+    return `Analyze these ${inputCount} sticker images and write one prompt for an image-generation model to improve them as a single 4x4 grid sheet.
+
+Return exact JSON:
+{
+  "improvementPrompt": "string"
+}
+
+Rules:
+- The user gave no prompt. Infer what should be improved across the set: clarity, crop, composition, subject separation, consistency, sticker readiness, and overall polish.
+- Preserve each input image as one distinct sticker concept.
+- Arrange ONLY the ${inputCount} provided stickers. Do not invent extra stickers for unused grid cells.
+- Output one square 4x4 grid image with clear gutters/separators and safe margins in every used cell.
+- Keep each used cell readable at small size.
+- Improve contrast between each sticker subject, any existing caption text, and the cell background.
+- Use backgrounds that contrast with both the image subject and text; avoid text blending into backgrounds.
+- Keep all text fully inside its cell with no clipping.
+- Do not output textAssetDecoration for grid mode.`;
   }
 
   async normalizeGridImage(

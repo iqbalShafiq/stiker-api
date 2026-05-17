@@ -1,21 +1,37 @@
 import { describe, it, expect } from 'vitest';
-import { generateImageSchema } from '../../../src/utils/validators';
+import {
+  generateImageSchema,
+  generateStickerPackSchema,
+} from '../../../src/utils/validators';
 
-describe('generateImageSchema grid requirements', () => {
-  it('accepts grid with layout only', () => {
+describe('generate schemas', () => {
+  it('accepts single sticker generate text', () => {
     const out = generateImageSchema.parse({
       text: 'hello',
-      grid: 'true',
+    });
+    expect(out.text).toBe('hello');
+  });
+
+  it('rejects legacy grid fields on single sticker generate', () => {
+    expect(() =>
+      generateImageSchema.parse({
+        text: 'hello',
+        grid: 'true',
+      })
+    ).toThrow();
+  });
+
+  it('accepts sticker pack with layout only', () => {
+    const out = generateStickerPackSchema.parse({
+      text: 'hello',
       layout: '2x2',
     });
-    expect(out.grid).toBe(true);
     expect(out.layout).toBe('2x2');
   });
 
-  it('accepts grid with rows and cols', () => {
-    const out = generateImageSchema.parse({
+  it('accepts sticker pack with rows and cols', () => {
+    const out = generateStickerPackSchema.parse({
       text: 'hello',
-      grid: true,
       rows: '3',
       cols: '2',
     });
@@ -23,20 +39,11 @@ describe('generateImageSchema grid requirements', () => {
     expect(out.cols).toBe(2);
   });
 
-  it('rejects grid without layout or rows/cols', () => {
+  it('rejects sticker pack without layout or rows/cols', () => {
     expect(() =>
-      generateImageSchema.parse({
+      generateStickerPackSchema.parse({
         text: 'hello',
-        grid: true,
       })
     ).toThrow();
-  });
-
-  it('does not require layout when grid is false', () => {
-    const out = generateImageSchema.parse({
-      text: 'hello',
-      grid: false,
-    });
-    expect(out.grid).toBe(false);
   });
 });

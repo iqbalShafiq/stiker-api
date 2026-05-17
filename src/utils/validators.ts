@@ -1,30 +1,6 @@
 import { z } from 'zod';
 import { tryParseGridLayout } from './grid-layout';
 
-const boolishGrid = z
-  .union([z.boolean(), z.string()])
-  .optional()
-  .default(false)
-  .transform((val) => {
-    if (typeof val === 'boolean') return val;
-    if (typeof val === 'string') {
-      return val === 'true' || val === '1' || val === 'yes';
-    }
-    return false;
-  });
-
-const boolishNormalize = z
-  .union([z.boolean(), z.string()])
-  .optional()
-  .default(false)
-  .transform((val) => {
-    if (typeof val === 'boolean') return val;
-    if (typeof val === 'string') {
-      return val === 'true' || val === '1' || val === 'yes';
-    }
-    return false;
-  });
-
 const optionalPositiveInt = z.preprocess((val: unknown) => {
   if (val === '' || val === null || val === undefined) {
     return undefined;
@@ -32,19 +8,34 @@ const optionalPositiveInt = z.preprocess((val: unknown) => {
   return val;
 }, z.coerce.number().int().positive().optional());
 
+const oldGenerateGridFields = ['grid', 'rows', 'cols', 'layout', 'split', 'normalize'] as const;
+
 export const generateImageSchema = z
   .object({
     text: z.string().min(1).max(2000),
-    grid: boolishGrid,
+  })
+  .passthrough()
+  .superRefine((data, ctx) => {
+    const rawData = data as Record<string, unknown>;
+    for (const field of oldGenerateGridFields) {
+      if (rawData[field] != null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Use /generate/sticker-pack instead of ${field} on /generate`,
+          path: [field],
+        });
+      }
+    }
+  });
+
+export const generateStickerPackSchema = z
+  .object({
+    text: z.string().min(1).max(2000),
     rows: optionalPositiveInt,
     cols: optionalPositiveInt,
     layout: z.string().max(32).optional(),
-    normalize: boolishNormalize,
   })
   .superRefine((data, ctx) => {
-    if (!data.grid) {
-      return;
-    }
     const hasRowsCols =
       data.rows != null &&
       data.cols != null &&
@@ -56,8 +47,7 @@ export const generateImageSchema = z
     if (!hasRowsCols && !layoutOk) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message:
-          'When grid is true, provide layout (e.g. 4x4) or both rows and cols',
+        message: 'Sticker pack requires layout (e.g. 4x4) or both rows and cols',
         path: ['layout'],
       });
     }
@@ -90,5 +80,6 @@ export const removeBackgroundSchema = z.object({
 });
 
 export type GenerateImageInput = z.infer<typeof generateImageSchema>;
+export type GenerateStickerPackInput = z.infer<typeof generateStickerPackSchema>;
 export type GridSplitInput = z.infer<typeof gridSplitSchema>;
 export type RemoveBackgroundInput = z.infer<typeof removeBackgroundSchema>;

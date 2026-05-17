@@ -1,11 +1,19 @@
+export interface TextDecorationStyle {
+  fontFamily: string;
+  color: string;
+  weight: string;
+}
+
+export interface TextAssetDecoration {
+  text: string;
+  style: TextDecorationStyle;
+  source: 'input' | 'detected';
+}
+
 /** Caption-like text detected outside the sticker subject for one cell image (grid split / generate grid). */
 export interface TextOutsideForeground {
   text: string;
-  style: {
-    fontFamily: string;
-    color: string;
-    weight: string;
-  };
+  style: TextDecorationStyle;
 }
 
 export interface ImageResult {
@@ -13,22 +21,31 @@ export interface ImageResult {
   url: string;
   width: number;
   height: number;
+  /** Shared text decoration asset emitted when text should be handled by the client layer. */
+  textAssetDecoration?: TextAssetDecoration;
   /** Present when analysis found caption-style text outside the sticker foreground for this cell. */
   textOutsideForeground?: TextOutsideForeground;
 }
 
 export interface TextAssetResult {
   id: string;
+  /** Shared text decoration asset emitted when text should be handled by the client layer. */
+  textAssetDecoration?: TextAssetDecoration;
   /** Present when analysis found caption-style text outside the sticker foreground for this cell. */
   textOutsideForeground?: TextOutsideForeground;
 }
 
 export interface GenerationMetadata {
   model: string;
+  improvementAgentModel?: string;
   tokensPrompt?: number;
   tokensCompletion?: number;
   cost?: number;
   latencyMs?: number;
+  mode?: 'single' | 'grid';
+  inputCount?: number;
+  outputCount?: number;
+  maxCellsPerImage?: number;
   gridLayout?: string;
   cellCount?: number;
   normalizedImageUrl?: string;
