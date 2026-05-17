@@ -69,7 +69,14 @@ model User {
   sharedStickerPacks StickerPackShare[]  @relation("PackSharedWith")
   grantedPackShares  StickerPackShare[]  @relation("PackGrantedBy")
   packShareLinks     StickerPackShareLink[] @relation("PackLinkCreator")
+  likedStickerPacks  StickerPackLike[]
+  savedStickerPacks  StickerPackSave[]
+  downloadedStickerPacks StickerPackDownload[]
+  followers          UserFollow[] @relation("UserFollowers")
+  following          UserFollow[] @relation("UserFollowing")
   processingHistory  ProcessingHistory[]
+  followerCount      Int @default(0)
+  followingCount     Int @default(0)
 
   @@index([email])
   @@index([username])
@@ -179,6 +186,9 @@ model StickerPack {
   name        String
   description String?
   visibility  StickerVisibility   @default(PRIVATE)
+  likeCount   Int                  @default(0)
+  saveCount   Int                  @default(0)
+  downloadCount Int                @default(0)
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
   deletedAt   DateTime?
@@ -187,6 +197,9 @@ model StickerPack {
   stickers    StickerPackSticker[]
   shares      StickerPackShare[]
   shareLinks  StickerPackShareLink[]
+  likes       StickerPackLike[]
+  saves       StickerPackSave[]
+  downloads   StickerPackDownload[]
 
   @@index([ownerId])
   @@index([visibility])
@@ -249,6 +262,65 @@ model StickerPackShareLink {
   @@index([createdBy])
   @@index([expiresAt])
   @@index([isActive])
+}
+
+model StickerPackLike {
+  id            String   @id @default(uuid())
+  stickerPackId String
+  userId        String
+  createdAt     DateTime @default(now())
+
+  stickerPack StickerPack @relation(fields: [stickerPackId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([stickerPackId, userId])
+  @@index([stickerPackId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model StickerPackSave {
+  id            String   @id @default(uuid())
+  stickerPackId String
+  userId        String
+  createdAt     DateTime @default(now())
+
+  stickerPack StickerPack @relation(fields: [stickerPackId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([stickerPackId, userId])
+  @@index([stickerPackId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model StickerPackDownload {
+  id            String   @id @default(uuid())
+  stickerPackId String
+  userId        String
+  createdAt     DateTime @default(now())
+
+  stickerPack StickerPack @relation(fields: [stickerPackId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([stickerPackId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model UserFollow {
+  id          String   @id @default(uuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+  @@index([createdAt])
 }
 
 // Processing History for generate/grid-split/background-remove

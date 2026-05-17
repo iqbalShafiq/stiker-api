@@ -15,6 +15,27 @@ export function buildSuccessResponse<T>(
   };
 }
 
+export function buildPaginatedSuccessResponse<T>(
+  data: T,
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  },
+  requestId?: string
+): ApiResponse<T> & { meta: ApiResponse<T>['meta'] & { pagination: typeof pagination } } {
+  return {
+    success: true,
+    data,
+    meta: {
+      timestamp: new Date().toISOString(),
+      requestId: requestId ?? uuidv4(),
+      pagination,
+    },
+  };
+}
+
 export function buildErrorResponse(
   code: string,
   message: string,

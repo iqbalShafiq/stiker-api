@@ -39,6 +39,11 @@ async function cleanupTestData() {
   try {
     // Delete in order to respect foreign keys
     await prisma.processingHistory.deleteMany({});
+    await prisma.stickerPackDownload.deleteMany({});
+    await prisma.stickerPackSave.deleteMany({});
+    await prisma.stickerPackLike.deleteMany({});
+    await prisma.userFollow.deleteMany({});
+    await prisma.userFollow.deleteMany({});
     await prisma.stickerPackSticker.deleteMany({});
     await prisma.stickerPackShareLink.deleteMany({});
     await prisma.stickerPackShare.deleteMany({});
@@ -113,6 +118,9 @@ describe('Sticker Pack Routes Integration', () => {
   beforeEach(async () => {
     // Clean sticker packs before each test
     await prisma.stickerPackSticker.deleteMany({});
+    await prisma.stickerPackDownload.deleteMany({});
+    await prisma.stickerPackSave.deleteMany({});
+    await prisma.stickerPackLike.deleteMany({});
     await prisma.stickerPackShare.deleteMany({});
     await prisma.stickerPackShareLink.deleteMany({});
     await prisma.stickerPack.deleteMany({});
@@ -222,6 +230,68 @@ describe('Sticker Pack Routes Integration', () => {
       expect(Array.isArray(response.body.data)).toBe(true);
       expect(response.body.data.length).toBeGreaterThan(0);
       expect(response.body.data[0].visibility).toBe('PUBLIC');
+    });
+
+    test('should return paginated public sticker packs', async () => {
+      await request(app)
+        .post('/api/v1/sticker-packs')
+        .set('Authorization', `Bearer ${user1Token}`)
+        .send({ name: 'Public Pack Page 1', visibility: 'public' });
+
+      await request(app)
+        .post('/api/v1/sticker-packs')
+        .set('Authorization', `Bearer ${user1Token}`)
+        .send({ name: 'Public Pack Page 2', visibility: 'public' });
+
+      const response = await request(app)
+        .get('/api/v1/sticker-packs/public')
+        .query({ page: 1, limit: 1 });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data).toHaveLength(1);
+      expect(response.body.meta.pagination).toEqual(
+        expect.objectContaining({
+          page: 1,
+          limit: 1,
+          total: expect.any(Number),
+          totalPages: expect.any(Number),
+        })
+      );
+      expect(response.body.meta.pagination.total).toBeGreaterThanOrEqual(2);
+    });
+
+    test('should return public sticker pack detail without auth', async () => {
+      const createResponse = await request(app)
+        .post('/api/v1/sticker-packs')
+        .set('Authorization', `Bearer ${user1Token}`)
+        .send({
+          name: 'Public Detail Pack',
+          visibility: 'public',
+          stickers: [
+            { name: 'S1', filename: 's1.png', url: 'http://localhost:3000/uploads/s1.png' },
+          ],
+        });
+
+      const response = await request(app)
+        .get(`/api/v1/sticker-packs/public/${createResponse.body.data.id}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.id).toBe(createResponse.body.data.id);
+      expect(response.body.data.stickers).toHaveLength(1);
+    });
+
+    test('should return 404 for private pack public detail', async () => {
+      const createResponse = await request(app)
+        .post('/api/v1/sticker-packs')
+        .set('Authorization', `Bearer ${user1Token}`)
+        .send({ name: 'Private Detail Pack', visibility: 'private' });
+
+      const response = await request(app)
+        .get(`/api/v1/sticker-packs/public/${createResponse.body.data.id}`);
+
+      expect(response.status).toBe(404);
     });
   });
 
@@ -404,6 +474,139 @@ describe('Sticker Pack Routes Integration', () => {
       expect(response.body.success).toBe(true);
       expect(response.body.data.token).toBeDefined();
       expect(response.body.data.maxUses).toBe(10);
+      expect(response.body.data.shareUrl).toContain('/api/v1/share/pack/');
+    });
+
+    test('should preview, accept, and list share links for a pack', async () => {
+      const createResponse = await request(app)
+        .post('/api/v1/sticker-packs')
+        .set('Authorization', `Bearer ${user1Token}`)
+        .send({
+          name: 'Share Preview Pack',
+          visibility: 'private',
+          stickers: [
+            { name: 'Shared S1', filename: 'shared-s1.png', url: 'http://localhost:3000/uploads/shared-s1.png' },
+          ],
+        });
+
+      packId = createResponse.body.data.id;
+
+      const linkResponse = await request(app)
+        .post(`/api/v1/sticker-packs/${packId}/link`)
+        .set('Authorization', `Bearer ${user1Token}`)
+        .send({ permission: 'view', maxUses: 1 });
+
+      expect(linkResponse.status).toBe(201);
+      const token = linkResponse.body.data.token as string;
+
+      const previewResponse = await request(app).get(`/api/v1/share/pack/${token}`);
+      expect(previewResponse.status).toBe(200);
+      expect(previewResponse.body.data.resourceType).toBe('pack');
+      expect(previewResponse.body.data.usesCount).toBe(0);
+
+      const linksResponse = await request(app)
+        .get(`/api/v1/sticker-packs/${packId}/links`)
+        .set('Authorization', `Bearer ${user1Token}`);
+      expect(linksResponse.status).toBe(200);
+      expect(linksResponse.body.data).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ token }),
+        ])
+      );
+
+      const acceptResponse = await request(app)
+        .post(`/api/v1/share/pack/${token}/accept`)
+        .set('Authorization', `Bearer ${user2Token}`);
+      expect(acceptResponse.status).toBe(201);
+      expect(acceptResponse.body.data.stickerPack.ownerId).toBe(user2Id);
+      expect(acceptResponse.body.data.stickerPack.id).not.toBe(packId);
+      expect(acceptResponse.body.data.stickerPack.visibility).toBe('PRIVATE');
+
+      const exhaustedResponse = await request(app)
+        .post(`/api/v1/share/pack/${token}/accept`)
+        .set('Authorization', `Bearer ${user2Token}`);
+      expect(exhaustedResponse.status).toBe(403);
+    });
+  });
+
+  describe('Public pack import and social actions', () => {
+    test('should import a public pack as a private clone', async () => {
+      const createResponse = await request(app)
+        .post('/api/v1/sticker-packs')
+        .set('Authorization', `Bearer ${user1Token}`)
+        .send({
+          name: 'Importable Pack',
+          visibility: 'public',
+          stickers: [
+            { name: 'Clone S1', filename: 'clone-s1.png', url: 'http://localhost:3000/uploads/clone-s1.png' },
+          ],
+        });
+
+      const response = await request(app)
+        .post(`/api/v1/sticker-packs/${createResponse.body.data.id}/import`)
+        .set('Authorization', `Bearer ${user2Token}`);
+
+      expect(response.status).toBe(201);
+      expect(response.body.data.ownerId).toBe(user2Id);
+      expect(response.body.data.id).not.toBe(createResponse.body.data.id);
+      expect(response.body.data.visibility).toBe('PRIVATE');
+      expect(response.body.data.stickers).toHaveLength(1);
+    });
+
+    test('should like, save, download, follow, and undo idempotent actions', async () => {
+      const createResponse = await request(app)
+        .post('/api/v1/sticker-packs')
+        .set('Authorization', `Bearer ${user1Token}`)
+        .send({ name: 'Social Pack', visibility: 'public' });
+
+      const publicPackId = createResponse.body.data.id as string;
+
+      const like1 = await request(app)
+        .post(`/api/v1/sticker-packs/${publicPackId}/like`)
+        .set('Authorization', `Bearer ${user2Token}`);
+      const like2 = await request(app)
+        .post(`/api/v1/sticker-packs/${publicPackId}/like`)
+        .set('Authorization', `Bearer ${user2Token}`);
+
+      expect(like1.status).toBe(200);
+      expect(like2.status).toBe(200);
+      expect(like1.body.data.likeCount).toBe(1);
+      expect(like2.body.data.likeCount).toBe(1);
+
+      const save = await request(app)
+        .post(`/api/v1/sticker-packs/${publicPackId}/save`)
+        .set('Authorization', `Bearer ${user2Token}`);
+      expect(save.status).toBe(200);
+      expect(save.body.data.saveCount).toBe(1);
+
+      const download1 = await request(app)
+        .post(`/api/v1/sticker-packs/${publicPackId}/download`)
+        .set('Authorization', `Bearer ${user2Token}`);
+      const download2 = await request(app)
+        .post(`/api/v1/sticker-packs/${publicPackId}/download`)
+        .set('Authorization', `Bearer ${user2Token}`);
+      expect(download1.body.data.downloadCount).toBe(1);
+      expect(download2.body.data.downloadCount).toBe(2);
+
+      const follow = await request(app)
+        .post(`/api/v1/users/${user1Id}/follow`)
+        .set('Authorization', `Bearer ${user2Token}`);
+      expect(follow.status).toBe(200);
+      expect(follow.body.data.followerCount).toBe(1);
+
+      const unlike = await request(app)
+        .delete(`/api/v1/sticker-packs/${publicPackId}/like`)
+        .set('Authorization', `Bearer ${user2Token}`);
+      const unsave = await request(app)
+        .delete(`/api/v1/sticker-packs/${publicPackId}/save`)
+        .set('Authorization', `Bearer ${user2Token}`);
+      const unfollow = await request(app)
+        .delete(`/api/v1/users/${user1Id}/follow`)
+        .set('Authorization', `Bearer ${user2Token}`);
+
+      expect(unlike.body.data.likeCount).toBe(0);
+      expect(unsave.body.data.saveCount).toBe(0);
+      expect(unfollow.body.data.followerCount).toBe(0);
     });
   });
 
@@ -467,6 +670,97 @@ describe('Sticker Pack Routes Integration', () => {
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
     });
+  });
+});
+
+describe('Processing History Routes Integration', () => {
+  let token: string;
+  let userId: string;
+
+  beforeAll(async () => {
+    await cleanupTestData();
+
+    const user = await registerUser(
+      `processing-history-${Date.now()}@example.com`,
+      TEST_PASSWORD,
+      { username: `historyuser${Date.now()}`, displayName: 'History User' }
+    );
+    token = user.token;
+    userId = user.user.id;
+  });
+
+  afterAll(async () => {
+    await cleanupTestData();
+  });
+
+  beforeEach(async () => {
+    await prisma.processingHistory.deleteMany({});
+  });
+
+  test('should list processing history and filter by type', async () => {
+    await prisma.processingHistory.createMany({
+      data: [
+        {
+          userId,
+          type: 'generate',
+          inputData: { prompt: 'hello' },
+          outputFiles: [{ url: '/uploads/a.png', path: 'a.png', filename: 'a.png' }],
+          expiresAt: new Date(Date.now() + 86400000),
+        },
+        {
+          userId,
+          type: 'grid-split',
+          inputData: { rows: 2, cols: 2 },
+          outputFiles: [{ url: '/uploads/b.png', path: 'b.png', filename: 'b.png' }],
+          expiresAt: new Date(Date.now() + 86400000),
+        },
+      ],
+    });
+
+    const allResponse = await request(app)
+      .get('/api/v1/processing-history')
+      .set('Authorization', `Bearer ${token}`);
+    expect(allResponse.status).toBe(200);
+    expect(allResponse.body.data).toHaveLength(2);
+
+    const filteredResponse = await request(app)
+      .get('/api/v1/processing-history')
+      .query({ type: 'generate' })
+      .set('Authorization', `Bearer ${token}`);
+    expect(filteredResponse.status).toBe(200);
+    expect(filteredResponse.body.data).toHaveLength(1);
+    expect(filteredResponse.body.data[0].type).toBe('generate');
+  });
+
+  test('should delete and clear only current user history', async () => {
+    const history = await prisma.processingHistory.create({
+      data: {
+        userId,
+        type: 'generate',
+        outputFiles: [{ url: '/uploads/a.png', path: 'a.png', filename: 'a.png' }],
+        expiresAt: new Date(Date.now() + 86400000),
+      },
+    });
+
+    const deleteResponse = await request(app)
+      .delete(`/api/v1/processing-history/${history.id}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(deleteResponse.status).toBe(200);
+
+    await prisma.processingHistory.create({
+      data: {
+        userId,
+        type: 'background-remove',
+        outputFiles: [{ url: '/uploads/c.png', path: 'c.png', filename: 'c.png' }],
+        expiresAt: new Date(Date.now() + 86400000),
+      },
+    });
+
+    const clearResponse = await request(app)
+      .delete('/api/v1/processing-history')
+      .set('Authorization', `Bearer ${token}`);
+    expect(clearResponse.status).toBe(200);
+    expect(clearResponse.body.data.deletedCount).toBe(1);
   });
 });
 

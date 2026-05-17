@@ -214,6 +214,25 @@ describe('StickerPackShareService', () => {
   });
 
   describe('validateShareLink', () => {
+    it('should preview active link without incrementing uses count', async () => {
+      const mockLink = {
+        id: 'link-1',
+        token: 'abc123',
+        isActive: true,
+        expiresAt: null,
+        maxUses: null,
+        usesCount: 0,
+        stickerPack: { id: 'pack-1', name: 'Test Pack', deletedAt: null },
+      };
+
+      (mockedPrisma.stickerPackShareLink.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(mockLink);
+
+      const result = await service.getShareLinkPreview('abc123');
+
+      expect(result).toEqual(mockLink);
+      expect(mockedPrisma.stickerPackShareLink.update).not.toHaveBeenCalled();
+    });
+
     it('should validate and return active link', async () => {
       const mockLink = {
         id: 'link-1',

@@ -2,7 +2,7 @@ import type { Response, NextFunction } from 'express';
 import { StickerPackService } from '../services/sticker-pack.service';
 import { StickerPackShareService } from '../services/sticker-pack-share.service';
 import type { AuthRequest } from '../middleware/auth.middleware';
-import { buildSuccessResponse } from '../utils/response-builder';
+import { buildPaginatedSuccessResponse, buildSuccessResponse } from '../utils/response-builder';
 import { ValidationError, NotFoundError, ForbiddenError } from '../errors';
 import { SharePermission } from '@prisma/client';
 
@@ -13,6 +13,14 @@ export class StickerPackController {
   constructor() {
     this.stickerPackService = new StickerPackService();
     this.shareService = new StickerPackShareService();
+  }
+
+  private withPackShareUrl(req: AuthRequest, link: Record<string, unknown>): Record<string, unknown> {
+    const token = String(link.token ?? '');
+    return {
+      ...link,
+      shareUrl: `${req.protocol}://${req.get('host') ?? 'localhost'}/api/v1/share/pack/${token}`,
+    };
   }
 
   async create(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
@@ -63,10 +71,51 @@ export class StickerPackController {
     }
   }
 
-  async getPublicStickerPacks(_req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  async getPublicStickerPacks(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const packs = await this.stickerPackService.findPublic();
-      res.status(200).json(buildSuccessResponse(packs));
+      const page = typeof req.query.page === 'string' ? Number(req.query.page) : undefined;
+      const limit = typeof req.query.limit === 'string' ? Number(req.query.limit) : undefined;
+      const sort = typeof req.query.sort === 'string' ? req.query.sort as 'recent' | 'popular' | 'downloads' | 'likes' : undefined;
+      const result = await this.stickerPackService.findPublicPaginated({ page, limit, sort });
+      res.status(200).json(buildPaginatedSuccessResponse(result.data, result.pagination));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getPublicStickerPack(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+
+      if (!id) {
+        throw new ValidationError('Sticker pack ID is required');
+      }
+
+      const pack = await this.stickerPackService.findPublicById(id);
+      if (!pack) {
+        throw new NotFoundError('Public sticker pack not found');
+      }
+
+      res.status(200).json(buildSuccessResponse(pack));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async importPublicPack(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user?.id) {
+        throw new ValidationError('User not authenticated');
+      }
+
+      const { id } = req.params;
+
+      if (!id) {
+        throw new ValidationError('Sticker pack ID is required');
+      }
+
+      const pack = await this.stickerPackService.importPublicPack(id, req.user.id);
+      res.status(201).json(buildSuccessResponse(pack));
     } catch (error) {
       next(error);
     }
@@ -325,7 +374,26 @@ export class StickerPackController {
         usesLimit
       );
 
-      res.status(201).json(buildSuccessResponse(link));
+      res.status(201).json(buildSuccessResponse(this.withPackShareUrl(req, link as Record<string, unknown>)));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async listShareLinks(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user?.id) {
+        throw new ValidationError('User not authenticated');
+      }
+
+      const { id } = req.params;
+
+      if (!id) {
+        throw new ValidationError('Sticker pack ID is required');
+      }
+
+      const links = await this.shareService.listActiveLinks(id, req.user.id);
+      res.status(200).json(buildSuccessResponse(links.map((link) => this.withPackShareUrl(req, link as Record<string, unknown>))));
     } catch (error) {
       next(error);
     }

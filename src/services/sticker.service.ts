@@ -118,6 +118,38 @@ export class StickerService {
     });
   }
 
+  async cloneSticker(id: string, userId: string): Promise<Prisma.StickerGetPayload<{ include: { owner: { select: { id: true; username: true; displayName: true } } } }>> {
+    const sticker = await this.findById(id);
+
+    if (!sticker || sticker.deletedAt) {
+      throw new NotFoundError('Sticker not found');
+    }
+
+    return prisma.sticker.create({
+      data: {
+        owner: { connect: { id: userId } },
+        name: sticker.name,
+        filename: sticker.filename,
+        url: sticker.url,
+        visibility: StickerVisibility.PRIVATE,
+        width: sticker.width,
+        height: sticker.height,
+        fileSize: sticker.fileSize,
+        mimeType: sticker.mimeType,
+        metadata: sticker.metadata === null ? Prisma.JsonNull : sticker.metadata as Prisma.InputJsonValue,
+      },
+      include: {
+        owner: {
+          select: {
+            id: true,
+            username: true,
+            displayName: true,
+          },
+        },
+      },
+    });
+  }
+
   async update(id: string, userId: string, input: UpdateStickerInput): Promise<Prisma.StickerGetPayload<{ include: { owner: { select: { id: true; username: true; displayName: true } } } }>> {
     const sticker = await this.findById(id);
 

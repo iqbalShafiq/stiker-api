@@ -59,6 +59,15 @@
     {
       "name": "Sync",
       "description": "Offline-first sync API"
+    },
+    {
+      "name": "Share Links"
+    },
+    {
+      "name": "Social"
+    },
+    {
+      "name": "Processing History"
     }
   ],
   "paths": {
@@ -2182,7 +2191,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Public sticker packs retrieved successfully",
+            "description": "Paginated public sticker packs retrieved successfully",
             "content": {
               "application/json": {
                 "schema": {
@@ -2196,13 +2205,69 @@
                       "items": {
                         "$ref": "#/components/schemas/StickerPack"
                       }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "timestamp": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "pagination": {
+                          "$ref": "#/components/schemas/PaginationMeta"
+                        }
+                      }
                     }
                   }
                 }
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "description": "Page number"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            },
+            "description": "Page size, clamped to max 50"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "recent",
+                "popular",
+                "downloads",
+                "likes"
+              ],
+              "default": "recent"
+            },
+            "description": "Sort order"
+          }
+        ]
       }
     },
     "/api/v1/sticker-packs/{id}": {
@@ -2762,67 +2827,6 @@
             "description": "Pack not found"
           }
         }
-      },
-      "delete": {
-        "summary": "Revoke shareable link for pack",
-        "description": "Revoke a shareable link for a sticker pack. Owner only.",
-        "tags": [
-          "Sticker Packs"
-        ],
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Sticker Pack ID"
-          },
-          {
-            "name": "linkId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Link ID"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Link revoked successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "message": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/UnauthorizedError"
-          },
-          "403": {
-            "description": "Access denied - not owner"
-          },
-          "404": {
-            "description": "Pack or link not found"
-          }
-        }
       }
     },
     "/api/v1/upload": {
@@ -2961,6 +2965,1058 @@
           }
         }
       }
+    },
+    "/api/v1/sticker-packs/public/{id}": {
+      "get": {
+        "summary": "Get public sticker pack detail",
+        "description": "Get sticker pack detail anonymously for PUBLIC packs only.",
+        "tags": [
+          "Sticker Packs"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Sticker Pack ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Public sticker pack retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/StickerPack"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Public pack not found"
+          }
+        }
+      }
+    },
+    "/api/v1/sticker-packs/{id}/import": {
+      "post": {
+        "summary": "Import public sticker pack",
+        "description": "Clone a public sticker pack and its stickers into the authenticated user account as a private pack.",
+        "tags": [
+          "Sticker Packs"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Sticker Pack ID"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Sticker pack imported successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/StickerPack"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "description": "Public pack not found"
+          }
+        }
+      }
+    },
+    "/api/v1/sticker-packs/{id}/like": {
+      "post": {
+        "summary": "Like public sticker pack",
+        "tags": [
+          "Social"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Sticker Pack ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Like state updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "liked": {
+                          "type": "boolean"
+                        },
+                        "likeCount": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "description": "Public pack not found"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Unlike public sticker pack",
+        "tags": [
+          "Social"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Sticker Pack ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unlike state updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "liked": {
+                          "type": "boolean"
+                        },
+                        "likeCount": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "description": "Public pack not found"
+          }
+        }
+      }
+    },
+    "/api/v1/sticker-packs/{id}/save": {
+      "post": {
+        "summary": "Save public sticker pack",
+        "tags": [
+          "Social"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Sticker Pack ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Save state updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "saved": {
+                          "type": "boolean"
+                        },
+                        "saveCount": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "description": "Public pack not found"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Unsave public sticker pack",
+        "tags": [
+          "Social"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Sticker Pack ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unsave state updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "saved": {
+                          "type": "boolean"
+                        },
+                        "saveCount": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "description": "Public pack not found"
+          }
+        }
+      }
+    },
+    "/api/v1/sticker-packs/{id}/download": {
+      "post": {
+        "summary": "Record public sticker pack download",
+        "tags": [
+          "Social"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Sticker Pack ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Download recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "downloaded": {
+                          "type": "boolean"
+                        },
+                        "downloadCount": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "description": "Public pack not found"
+          }
+        }
+      }
+    },
+    "/api/v1/users/{id}/follow": {
+      "post": {
+        "summary": "Follow user",
+        "tags": [
+          "Social"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "User ID to follow"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User followed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/UserFollowState"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Cannot follow yourself"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "description": "User not found"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Unfollow user",
+        "tags": [
+          "Social"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "User ID to unfollow"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User unfollowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/UserFollowState"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Cannot unfollow yourself"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "description": "User not found"
+          }
+        }
+      }
+    },
+    "/api/v1/sticker-packs/{id}/links": {
+      "get": {
+        "summary": "List active sticker pack share links",
+        "tags": [
+          "Sticker Packs"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Sticker Pack ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Active links retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/StickerPackShareLink"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "description": "Access denied - not owner"
+          },
+          "404": {
+            "description": "Pack not found"
+          }
+        }
+      }
+    },
+    "/api/v1/stickers/{id}/links": {
+      "get": {
+        "summary": "List active sticker share links",
+        "tags": [
+          "Stickers"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Sticker ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Active links retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ShareLink"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "description": "Access denied - not owner"
+          },
+          "404": {
+            "description": "Sticker not found"
+          }
+        }
+      }
+    },
+    "/api/v1/sticker-packs/{id}/link/{linkId}": {
+      "delete": {
+        "summary": "Revoke shareable link for pack",
+        "description": "Revoke a shareable link for a sticker pack. Owner only.",
+        "tags": [
+          "Sticker Packs"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Sticker Pack ID"
+          },
+          {
+            "name": "linkId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Link ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Link revoked successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "description": "Access denied - not owner"
+          },
+          "404": {
+            "description": "Pack or link not found"
+          }
+        }
+      }
+    },
+    "/api/v1/share/pack/{token}": {
+      "get": {
+        "summary": "Preview pack share token",
+        "description": "Preview a pack share link without consuming maxUses.",
+        "tags": [
+          "Share Links"
+        ],
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Share token"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Share link preview retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/SharePackPreview"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Share link revoked, expired, or exhausted"
+          },
+          "404": {
+            "description": "Share link not found"
+          }
+        }
+      }
+    },
+    "/api/v1/share/pack/{token}/accept": {
+      "post": {
+        "summary": "Accept pack share token",
+        "description": "Clone the shared pack into the authenticated user account and consume one use.",
+        "tags": [
+          "Share Links"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Share token"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Share link accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "resourceType": {
+                          "type": "string",
+                          "enum": [
+                            "pack"
+                          ]
+                        },
+                        "stickerPack": {
+                          "$ref": "#/components/schemas/StickerPack"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "description": "Share link revoked, expired, or exhausted"
+          },
+          "404": {
+            "description": "Share link not found"
+          }
+        }
+      }
+    },
+    "/api/v1/share/sticker/{token}": {
+      "get": {
+        "summary": "Preview sticker share token",
+        "description": "Preview a sticker share link without consuming maxUses.",
+        "tags": [
+          "Share Links"
+        ],
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Share token"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Share link preview retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ShareStickerPreview"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Share link revoked, expired, or exhausted"
+          },
+          "404": {
+            "description": "Share link not found"
+          }
+        }
+      }
+    },
+    "/api/v1/share/sticker/{token}/accept": {
+      "post": {
+        "summary": "Accept sticker share token",
+        "description": "Clone the shared sticker into the authenticated user account and consume one use.",
+        "tags": [
+          "Share Links"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Share token"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Share link accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "resourceType": {
+                          "type": "string",
+                          "enum": [
+                            "sticker"
+                          ]
+                        },
+                        "sticker": {
+                          "$ref": "#/components/schemas/Sticker"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "description": "Share link revoked, expired, or exhausted"
+          },
+          "404": {
+            "description": "Share link not found"
+          }
+        }
+      }
+    },
+    "/api/v1/processing-history": {
+      "get": {
+        "summary": "List processing history",
+        "tags": [
+          "Processing History"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "generate",
+                "grid-split",
+                "background-remove"
+              ]
+            },
+            "description": "Optional history type filter"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Processing history retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ProcessingHistory"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid type"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Clear processing history",
+        "tags": [
+          "Processing History"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "generate",
+                "grid-split",
+                "background-remove"
+              ]
+            },
+            "description": "Optional history type filter"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Processing history cleared",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "deletedCount": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid type"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          }
+        }
+      }
+    },
+    "/api/v1/processing-history/{id}": {
+      "delete": {
+        "summary": "Delete processing history item",
+        "tags": [
+          "Processing History"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Processing history ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Processing history deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "description": "Processing history not found"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3002,6 +4058,14 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "followerCount": {
+            "type": "integer",
+            "default": 0
+          },
+          "followingCount": {
+            "type": "integer",
+            "default": 0
           }
         },
         "required": [
@@ -3811,6 +4875,18 @@
             "type": "string",
             "format": "date-time",
             "nullable": true
+          },
+          "likeCount": {
+            "type": "integer",
+            "default": 0
+          },
+          "saveCount": {
+            "type": "integer",
+            "default": 0
+          },
+          "downloadCount": {
+            "type": "integer",
+            "default": 0
           }
         },
         "required": [
@@ -4274,6 +5350,149 @@
           "outputFiles",
           "expiresAt",
           "createdAt"
+        ]
+      },
+      "PaginationMeta": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "totalPages": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "page",
+          "limit",
+          "total",
+          "totalPages"
+        ]
+      },
+      "PackSocialState": {
+        "type": "object",
+        "properties": {
+          "liked": {
+            "type": "boolean"
+          },
+          "saved": {
+            "type": "boolean"
+          },
+          "downloaded": {
+            "type": "boolean"
+          },
+          "likeCount": {
+            "type": "integer"
+          },
+          "saveCount": {
+            "type": "integer"
+          },
+          "downloadCount": {
+            "type": "integer"
+          }
+        }
+      },
+      "UserFollowState": {
+        "type": "object",
+        "properties": {
+          "following": {
+            "type": "boolean"
+          },
+          "followerCount": {
+            "type": "integer"
+          },
+          "followingCount": {
+            "type": "integer"
+          }
+        }
+      },
+      "SharePackPreview": {
+        "type": "object",
+        "properties": {
+          "resourceType": {
+            "type": "string",
+            "enum": [
+              "pack"
+            ]
+          },
+          "permission": {
+            "type": "string",
+            "enum": [
+              "view",
+              "full"
+            ]
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "maxUses": {
+            "type": "integer",
+            "nullable": true
+          },
+          "usesCount": {
+            "type": "integer"
+          },
+          "stickerPack": {
+            "$ref": "#/components/schemas/StickerPack"
+          }
+        },
+        "required": [
+          "resourceType",
+          "permission",
+          "usesCount",
+          "stickerPack"
+        ]
+      },
+      "ShareStickerPreview": {
+        "type": "object",
+        "properties": {
+          "resourceType": {
+            "type": "string",
+            "enum": [
+              "sticker"
+            ]
+          },
+          "permission": {
+            "type": "string",
+            "enum": [
+              "view",
+              "full"
+            ]
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "maxUses": {
+            "type": "integer",
+            "nullable": true
+          },
+          "usesCount": {
+            "type": "integer"
+          },
+          "sticker": {
+            "$ref": "#/components/schemas/Sticker"
+          }
+        },
+        "required": [
+          "resourceType",
+          "permission",
+          "usesCount",
+          "sticker"
         ]
       }
     },

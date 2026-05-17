@@ -1,7 +1,7 @@
 import { prisma } from '../prisma/client';
 import { RoleService } from './role.service';
 import { ForbiddenError, NotFoundError, ValidationError } from '../errors';
-import { SharePermission } from '@prisma/client';
+import { Prisma, SharePermission, StickerVisibility } from '@prisma/client';
 import crypto from 'crypto';
 
 export class ShareService {
@@ -157,16 +157,12 @@ export class ShareService {
     });
   }
 
-  async validateShareLink(token: string): Promise<ReturnType<typeof prisma.stickerShareLink.findUnique>> {
-    const link = await prisma.stickerShareLink.findUnique({
-      where: { token },
-      include: { sticker: true },
-    });
-
-    if (!link) {
-      throw new NotFoundError('Share link not found');
-    }
-
+  private assertUsableLink(link: {
+    isActive: boolean;
+    expiresAt: Date | null;
+    maxUses: number | null;
+    usesCount: number;
+  }): void {
     if (!link.isActive) {
       throw new ForbiddenError('Share link has been revoked');
     }
@@ -178,6 +174,112 @@ export class ShareService {
     if (link.maxUses !== null && link.usesCount >= link.maxUses) {
       throw new ForbiddenError('Share link has exceeded maximum uses');
     }
+  }
+
+  async getShareLinkPreview(token: string): Promise<Prisma.StickerShareLinkGetPayload<{
+    include: { sticker: { include: { owner: { select: { id: true; username: true; displayName: true } } } } }
+  }>> {
+    const link = await prisma.stickerShareLink.findUnique({
+      where: { token },
+      include: {
+        sticker: {
+          include: {
+            owner: {
+              select: {
+                id: true,
+                username: true,
+                displayName: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!link || link.sticker.deletedAt) {
+      throw new NotFoundError('Share link not found');
+    }
+
+    this.assertUsableLink(link);
+    return link;
+  }
+
+  async listActiveLinks(stickerId: string, ownerId: string): Promise<Prisma.StickerShareLinkGetPayload<object>[]> {
+    const hasOwnership = await this.checkOwnership(stickerId, ownerId);
+    if (!hasOwnership) {
+      throw new ForbiddenError('You do not have permission to list share links for this sticker');
+    }
+
+    return prisma.stickerShareLink.findMany({
+      where: {
+        stickerId,
+        isActive: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+  }
+
+  async acceptShareLink(token: string, userId: string): Promise<Prisma.StickerGetPayload<{
+    include: { owner: { select: { id: true; username: true; displayName: true } } }
+  }>> {
+    return prisma.$transaction(async (tx) => {
+      const link = await tx.stickerShareLink.findUnique({
+        where: { token },
+        include: { sticker: true },
+      });
+
+      if (!link || link.sticker.deletedAt) {
+        throw new NotFoundError('Share link not found');
+      }
+
+      this.assertUsableLink(link);
+
+      const cloned = await tx.sticker.create({
+        data: {
+          owner: { connect: { id: userId } },
+          name: link.sticker.name,
+          filename: link.sticker.filename,
+          url: link.sticker.url,
+          visibility: StickerVisibility.PRIVATE,
+          width: link.sticker.width,
+          height: link.sticker.height,
+          fileSize: link.sticker.fileSize,
+          mimeType: link.sticker.mimeType,
+          metadata: link.sticker.metadata === null ? Prisma.JsonNull : link.sticker.metadata as Prisma.InputJsonValue,
+        },
+        include: {
+          owner: {
+            select: {
+              id: true,
+              username: true,
+              displayName: true,
+            },
+          },
+        },
+      });
+
+      await tx.stickerShareLink.update({
+        where: { id: link.id },
+        data: { usesCount: { increment: 1 } },
+      });
+
+      return cloned;
+    });
+  }
+
+  async validateShareLink(token: string): Promise<ReturnType<typeof prisma.stickerShareLink.findUnique>> {
+    const link = await prisma.stickerShareLink.findUnique({
+      where: { token },
+      include: { sticker: true },
+    });
+
+    if (!link) {
+      throw new NotFoundError('Share link not found');
+    }
+
+    this.assertUsableLink(link);
 
     await prisma.stickerShareLink.update({
       where: { id: link.id },

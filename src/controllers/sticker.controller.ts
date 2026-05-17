@@ -29,6 +29,14 @@ export class StickerController {
     return share;
   }
 
+  private withStickerShareUrl(req: AuthRequest, link: Record<string, unknown>): Record<string, unknown> {
+    const token = String(link.token ?? '');
+    return {
+      ...link,
+      shareUrl: `${req.protocol}://${req.get('host') ?? 'localhost'}/api/v1/share/sticker/${token}`,
+    };
+  }
+
   async getMyStickers(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       if (!req.user?.id) {
@@ -218,7 +226,26 @@ export class StickerController {
         usesLimit
       );
 
-      res.status(201).json(buildSuccessResponse(this.mapShareResponse(link as Record<string, unknown>)));
+      res.status(201).json(buildSuccessResponse(this.withStickerShareUrl(req, this.mapShareResponse(link as Record<string, unknown>))));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async listShareLinks(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user?.id) {
+        throw new ValidationError('User not authenticated');
+      }
+
+      const { id } = req.params;
+
+      if (!id) {
+        throw new ValidationError('Sticker ID is required');
+      }
+
+      const links = await this.shareService.listActiveLinks(id, req.user.id);
+      res.status(200).json(buildSuccessResponse(links.map((link) => this.withStickerShareUrl(req, this.mapShareResponse(link as Record<string, unknown>)))));
     } catch (error) {
       next(error);
     }

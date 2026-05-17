@@ -1,7 +1,7 @@
 import { prisma } from '../prisma/client';
 import { Prisma, StickerVisibility, SharePermission } from '@prisma/client';
 import { RoleService } from './role.service';
-import { ForbiddenError, NotFoundError } from '../errors';
+import { ForbiddenError, NotFoundError, ValidationError } from '../errors';
 
 export interface CreateStickerPackInput {
   ownerId: string;
@@ -39,6 +39,13 @@ export interface AddStickerToPackInput {
 }
 
 export type StickerPackAction = 'read' | 'update' | 'delete';
+export type PublicStickerPackSort = 'recent' | 'popular' | 'downloads' | 'likes';
+
+export interface PublicStickerPackQuery {
+  page?: number;
+  limit?: number;
+  sort?: PublicStickerPackSort;
+}
 
 export class StickerPackService {
   private roleService: RoleService;
@@ -146,6 +153,88 @@ export class StickerPackService {
     });
   }
 
+  private normalizePublicQuery(query: PublicStickerPackQuery): Required<PublicStickerPackQuery> {
+    const page = Math.max(1, Math.floor(query.page ?? 1));
+    const limit = Math.min(50, Math.max(1, Math.floor(query.limit ?? 20)));
+    const sort = query.sort ?? 'recent';
+
+    if (!['recent', 'popular', 'downloads', 'likes'].includes(sort)) {
+      throw new ValidationError('Invalid sort value');
+    }
+
+    return { page, limit, sort };
+  }
+
+  private getPublicOrderBy(sort: PublicStickerPackSort): Prisma.StickerPackOrderByWithRelationInput[] {
+    if (sort === 'popular') {
+      return [{ likeCount: 'desc' }, { downloadCount: 'desc' }, { createdAt: 'desc' }];
+    }
+
+    if (sort === 'downloads') {
+      return [{ downloadCount: 'desc' }, { createdAt: 'desc' }];
+    }
+
+    if (sort === 'likes') {
+      return [{ likeCount: 'desc' }, { createdAt: 'desc' }];
+    }
+
+    return [{ createdAt: 'desc' }];
+  }
+
+  async findPublicPaginated(query: PublicStickerPackQuery = {}): Promise<{
+    data: Prisma.StickerPackGetPayload<{
+      include: {
+        owner: { select: { id: true; username: true; displayName: true; followerCount: true } };
+        stickers: { include: { sticker: true }; orderBy: { order: 'asc' } };
+      }
+    }>[];
+    pagination: { page: number; limit: number; total: number; totalPages: number };
+  }> {
+    const { page, limit, sort } = this.normalizePublicQuery(query);
+    const where = {
+      visibility: StickerVisibility.PUBLIC,
+      deletedAt: null,
+    };
+
+    const [total, data] = await prisma.$transaction([
+      prisma.stickerPack.count({ where }),
+      prisma.stickerPack.findMany({
+        where,
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: this.getPublicOrderBy(sort),
+        include: {
+          owner: {
+            select: {
+              id: true,
+              username: true,
+              displayName: true,
+              followerCount: true,
+            },
+          },
+          stickers: {
+            include: {
+              sticker: true,
+            },
+            orderBy: {
+              order: 'asc',
+            },
+          },
+        },
+      }),
+    ]);
+
+    return {
+      data,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
   async findPublic(): Promise<Prisma.StickerPackGetPayload<{
     include: {
       owner: { select: { id: true; username: true; displayName: true } };
@@ -174,6 +263,99 @@ export class StickerPackService {
           },
         },
       },
+    });
+  }
+
+  async findPublicById(id: string): Promise<Prisma.StickerPackGetPayload<{
+    include: {
+      owner: { select: { id: true; username: true; displayName: true; followerCount: true } };
+      stickers: { include: { sticker: true } };
+    }
+  }> | null> {
+    return prisma.stickerPack.findFirst({
+      where: {
+        id,
+        visibility: StickerVisibility.PUBLIC,
+        deletedAt: null,
+      },
+      include: {
+        owner: {
+          select: {
+            id: true,
+            username: true,
+            displayName: true,
+            followerCount: true,
+          },
+        },
+        stickers: {
+          include: {
+            sticker: true,
+          },
+          orderBy: {
+            order: 'asc',
+          },
+        },
+      },
+    });
+  }
+
+  async importPublicPack(id: string, userId: string): Promise<Prisma.StickerPackGetPayload<{
+    include: {
+      owner: { select: { id: true; username: true; displayName: true } };
+      stickers: { include: { sticker: true } };
+    }
+  }>> {
+    const pack = await this.findPublicById(id);
+
+    if (!pack) {
+      throw new NotFoundError('Public sticker pack not found');
+    }
+
+    return prisma.$transaction(async (tx) => {
+      return tx.stickerPack.create({
+        data: {
+          owner: { connect: { id: userId } },
+          name: pack.name,
+          description: pack.description,
+          visibility: StickerVisibility.PRIVATE,
+          stickers: {
+            create: pack.stickers.map((item) => ({
+              order: item.order,
+              sticker: {
+                create: {
+                  owner: { connect: { id: userId } },
+                  name: item.sticker.name,
+                  filename: item.sticker.filename,
+                  url: item.sticker.url,
+                  width: item.sticker.width,
+                  height: item.sticker.height,
+                  fileSize: item.sticker.fileSize,
+                  mimeType: item.sticker.mimeType,
+                  metadata: item.sticker.metadata === null ? Prisma.JsonNull : item.sticker.metadata as Prisma.InputJsonValue,
+                  visibility: StickerVisibility.PRIVATE,
+                },
+              },
+            })),
+          },
+        },
+        include: {
+          owner: {
+            select: {
+              id: true,
+              username: true,
+              displayName: true,
+            },
+          },
+          stickers: {
+            include: {
+              sticker: true,
+            },
+            orderBy: {
+              order: 'asc',
+            },
+          },
+        },
+      });
     });
   }
 

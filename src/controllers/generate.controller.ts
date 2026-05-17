@@ -68,6 +68,7 @@ export class GenerateController {
       const text = String(body.text ?? '');
       const grid = Boolean(body.grid);
       const normalize = Boolean(body.normalize);
+      const splitGrid = body.split !== 'false' && body.split !== false;
       const file = req.file;
 
       if (!text || text.trim().length === 0) {
@@ -107,6 +108,63 @@ export class GenerateController {
       const requestTimestamp = Date.now();
 
       if (grid && gridDims) {
+        if (!splitGrid) {
+          const squareBuffer = await this.imageService.resizeToSquareContain(imageBuffer, 512);
+          const filename = await this.storageProvider.saveFile(squareBuffer, {
+            extension: 'png',
+            subDir: `generate-grid-raw/${requestTimestamp}`,
+            baseName: 'generated-grid',
+            ownerId: userId,
+          });
+          const dimensions = await this.imageService.getImageDimensions(squareBuffer);
+          const imageResult: ImageResult = {
+            id: filename.split('/').pop()?.replace('.png', '') ?? `generated-grid-${requestTimestamp}`,
+            url: this.storageProvider.getPublicUrl(filename),
+            width: dimensions.width,
+            height: dimensions.height,
+          };
+          images = [imageResult];
+
+          await this.processingHistoryService.create({
+            userId,
+            type: 'generate',
+            inputData: {
+              text,
+              grid: true,
+              rows: gridDims.rows,
+              cols: gridDims.cols,
+              normalize: false,
+              split: false,
+            },
+            outputFiles: [{
+              url: imageResult.url,
+              path: imageResult.url.replace(`${config.appUrl}/uploads/`, ''),
+              filename: imageResult.id,
+              width: imageResult.width,
+              height: imageResult.height,
+            }],
+          });
+
+          const metadata: GenerationMetadata = {
+            model: config.models.imageGeneration,
+            ...aiMetadata,
+            gridLayout: `${gridDims.rows}x${gridDims.cols}`,
+            cellCount: gridDims.rows * gridDims.cols,
+            outputSize: '512x512',
+            normalized: false,
+            backgroundRemoved: false,
+            backgroundRemovalMethod: 'on-device-split-requested',
+          };
+
+          res.status(200).json(
+            buildSuccessResponse({
+              images,
+              metadata,
+            })
+          );
+          return;
+        }
+
         const { images: gridImages, metadata: gridMeta } = await this.gridSplitService.split(
           imageBuffer,
           {

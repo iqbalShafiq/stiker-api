@@ -24,6 +24,9 @@ import { StickerPackController } from './controllers/sticker-pack.controller';
 import { UploadController } from './controllers/upload.controller';
 import { SyncController } from './controllers/sync.controller';
 import { AdminController } from './controllers/admin.controller';
+import { ProcessingHistoryController } from './controllers/processing-history.controller';
+import { ShareController } from './controllers/share.controller';
+import { SocialController } from './controllers/social.controller';
 import { asyncHandler } from './utils/async-handler';
 
 interface RequestWithId extends Request {
@@ -106,6 +109,9 @@ const stickerPackController = new StickerPackController();
 const uploadController = new UploadController();
 const syncController = new SyncController();
 const adminController = new AdminController();
+const processingHistoryController = new ProcessingHistoryController();
+const shareController = new ShareController();
+const socialController = new SocialController();
 
 // Auth routes (public)
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
@@ -147,11 +153,15 @@ app.delete('/api/v1/stickers/:id/share', authenticateToken, asyncHandler((req, r
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.post('/api/v1/stickers/:id/link', authenticateToken, asyncHandler((req, res, next) => stickerController.createShareLink(req, res, next)));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/stickers/:id/links', authenticateToken, asyncHandler((req, res, next) => stickerController.listShareLinks(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.delete('/api/v1/stickers/:id/link/:linkId', authenticateToken, asyncHandler((req, res, next) => stickerController.revokeShareLink(req, res, next)));
 
 // Sticker Pack routes (public)
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.get('/api/v1/sticker-packs/public', asyncHandler((req, res, next) => stickerPackController.getPublicStickerPacks(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/sticker-packs/public/:id', asyncHandler((req, res, next) => stickerPackController.getPublicStickerPack(req, res, next)));
 
 // Sticker Pack routes (protected)
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
@@ -165,6 +175,18 @@ app.put('/api/v1/sticker-packs/:id', authenticateToken, asyncHandler((req, res, 
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.delete('/api/v1/sticker-packs/:id', authenticateToken, asyncHandler((req, res, next) => stickerPackController.deleteStickerPack(req, res, next)));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/sticker-packs/:id/import', authenticateToken, asyncHandler((req, res, next) => stickerPackController.importPublicPack(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/sticker-packs/:id/like', authenticateToken, asyncHandler((req, res, next) => socialController.likePack(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.delete('/api/v1/sticker-packs/:id/like', authenticateToken, asyncHandler((req, res, next) => socialController.unlikePack(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/sticker-packs/:id/save', authenticateToken, asyncHandler((req, res, next) => socialController.savePack(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.delete('/api/v1/sticker-packs/:id/save', authenticateToken, asyncHandler((req, res, next) => socialController.unsavePack(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/sticker-packs/:id/download', authenticateToken, asyncHandler((req, res, next) => socialController.downloadPack(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.post('/api/v1/sticker-packs/:id/stickers', authenticateToken, asyncHandler((req, res, next) => stickerPackController.addSticker(req, res, next)));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.delete('/api/v1/sticker-packs/:id/stickers/:stickerId', authenticateToken, asyncHandler((req, res, next) => stickerPackController.removeSticker(req, res, next)));
@@ -177,7 +199,27 @@ app.delete('/api/v1/sticker-packs/:id/share', authenticateToken, asyncHandler((r
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.post('/api/v1/sticker-packs/:id/link', authenticateToken, asyncHandler((req, res, next) => stickerPackController.createShareLink(req, res, next)));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/sticker-packs/:id/links', authenticateToken, asyncHandler((req, res, next) => stickerPackController.listShareLinks(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.delete('/api/v1/sticker-packs/:id/link/:linkId', authenticateToken, asyncHandler((req, res, next) => stickerPackController.revokeShareLink(req, res, next)));
+
+// Share routes (public preview + protected accept)
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/share/pack/:token', asyncHandler((req, res, next) => shareController.previewPack(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/share/pack/:token/accept', authenticateToken, asyncHandler((req, res, next) => shareController.acceptPack(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/share/sticker/:token', asyncHandler((req, res, next) => shareController.previewSticker(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/share/sticker/:token/accept', authenticateToken, asyncHandler((req, res, next) => shareController.acceptSticker(req, res, next)));
+
+// Processing history routes (protected)
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/processing-history', authenticateToken, asyncHandler((req, res, next) => processingHistoryController.list(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.delete('/api/v1/processing-history', authenticateToken, asyncHandler((req, res, next) => processingHistoryController.clear(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.delete('/api/v1/processing-history/:id', authenticateToken, asyncHandler((req, res, next) => processingHistoryController.deleteOne(req, res, next)));
 
 // Upload routes (protected)
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
@@ -194,6 +236,10 @@ app.post(
 app.get('/api/v1/sync', authenticateToken, asyncHandler((req, res, next) => syncController.sync(req, res, next)));
 
 // Admin routes (protected + admin only)
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/users/:id/follow', authenticateToken, asyncHandler((req, res, next) => socialController.followUser(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.delete('/api/v1/users/:id/follow', authenticateToken, asyncHandler((req, res, next) => socialController.unfollowUser(req, res, next)));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.get('/api/v1/users', authenticateToken, requireRole('admin'), asyncHandler((req, res, next) => adminController.getUsers(req, res, next)));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
