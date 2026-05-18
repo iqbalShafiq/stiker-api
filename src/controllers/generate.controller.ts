@@ -19,6 +19,13 @@ import {
 import { config } from '../config';
 import type { ImageResult, GenerationMetadata } from '../types';
 import type { AuthRequest } from '../middleware/auth.middleware';
+import {
+  VIDEO_STICKER_PACK_INPUT_LAYOUT,
+  VIDEO_STICKER_PACK_MAX_CANDIDATES,
+  VIDEO_STICKER_PACK_MAX_GRIDS,
+  VIDEO_STICKER_PACK_OUTPUT_LAYOUT,
+  validateVideoStickerPackRequestShape,
+} from '../utils/video-sticker-pack';
 
 type AiMetadata = Pick<
   GenerationMetadata,
@@ -99,6 +106,20 @@ function buildSingleImprovementGenerationPrompt(
 Hard output requirement:
 - Do NOT render the detected decorative text in the image.
 - Keep the sticker art clean; the client will render the text separately from textAssetDecoration.`;
+}
+
+function buildVideoStickerPackGenerationPrompt(agentPrompt: string): string {
+  return `${agentPrompt}
+
+Hard output requirements:
+- Output exactly one square 4x4 grid image.
+- Use only the selected video frame concepts from the candidate grids.
+- Generate at most 16 stickers.
+- Keep each sticker fully inside its cell with safe margins.
+- Keep clear gutters or visual separation between cells.
+- Make every used cell expressive, readable, and sticker-ready.
+- Avoid blurry subjects, cropped faces, and rectangular backdrops.
+- Use a cohesive visual style across the grid.`;
 }
 
 function mergeAiMetadata(items: AiMetadata[]): AiMetadata {
@@ -350,6 +371,100 @@ export class GenerateController {
       };
 
       res.status(200).json(buildSuccessResponse({ images, metadata }));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async generateVideoStickerPack(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = this.requireUserId(req);
+      const body = req.body as Record<string, unknown>;
+      const files = Array.isArray(req.files) ? req.files : [];
+      const candidateCount = Number(body.candidateCount);
+      const selectedStartMs = Number(body.selectedStartMs);
+      const selectedEndMs = Number(body.selectedEndMs);
+      const sourceDurationMs = body.sourceDurationMs == null ? undefined : Number(body.sourceDurationMs);
+      const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : undefined;
+
+      try {
+        validateVideoStickerPackRequestShape({
+          candidateGridCount: files.length,
+          candidateCount,
+          selectedStartMs,
+          selectedEndMs,
+        });
+      } catch (error) {
+        if (error instanceof ValidationError) {
+          throw error;
+        }
+        const message = error instanceof Error ? error.message : 'Invalid video sticker pack request';
+        throw new ValidationError(message);
+      }
+
+      const candidateGrids = files.map(file => this.fileToImageInput(file));
+      const requestTimestamp = Date.now();
+      const agent = await this.openRouterService.buildVideoStickerPackPrompt({
+        candidateGrids,
+        candidateCount,
+        selectedStartMs,
+        selectedEndMs,
+        userPrompt: prompt,
+      });
+
+      const { imageBuffer, metadata: aiMetadata } =
+        await this.openRouterService.generateImageWithInputs(
+          buildVideoStickerPackGenerationPrompt(agent.plan.generationPrompt),
+          this.toBase64Inputs(candidateGrids),
+          config.models.imageGeneration,
+          false
+        );
+
+      const imageResult = await this.saveGeneratedImage({
+        imageBuffer,
+        userId,
+        subDir: `generate-video-sticker-pack/${requestTimestamp}`,
+        baseName: 'generated-video-sticker-pack',
+      });
+      imageResult.textAssetDecoration = buildEmptyTextAssetDecoration(
+        'detected',
+        'Captions embedded per selected video sticker cell'
+      );
+
+      await this.recordGenerateHistory(userId, {
+        inputData: {
+          mode: 'video-sticker-pack',
+          candidateGridCount: files.length,
+          candidateCount,
+          selectedStartMs,
+          selectedEndMs,
+          sourceDurationMs,
+          inputLayout: VIDEO_STICKER_PACK_INPUT_LAYOUT,
+          outputLayout: VIDEO_STICKER_PACK_OUTPUT_LAYOUT,
+          maxCandidates: VIDEO_STICKER_PACK_MAX_CANDIDATES,
+          maxCandidateGrids: VIDEO_STICKER_PACK_MAX_GRIDS,
+          selectedCells: agent.plan.selectedCells,
+        },
+        images: [imageResult],
+      });
+
+      const metadata: GenerationMetadata = {
+        model: config.models.imageGeneration,
+        improvementAgentModel: config.models.improvementAgent,
+        ...mergeAiMetadata([agent.metadata, aiMetadata]),
+        mode: 'video-sticker-pack',
+        inputCount: files.length,
+        outputCount: 1,
+        gridLayout: VIDEO_STICKER_PACK_OUTPUT_LAYOUT,
+        cellCount: 16,
+        selectedCells: agent.plan.selectedCells,
+        selectionReasoning: agent.plan.selectionReasoning,
+        outputSize: '512x512',
+        backgroundRemoved: false,
+        backgroundRemovalMethod: 'none',
+      };
+
+      res.status(200).json(buildSuccessResponse({ images: [imageResult], metadata }));
     } catch (error) {
       next(error);
     }

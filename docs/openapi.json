@@ -1964,6 +1964,138 @@
         }
       }
     },
+    "/api/v1/generate/video-sticker-pack": {
+      "post": {
+        "summary": "Generate video-based sticker pack grid image",
+        "description": "Analyze up to two uploaded 4x4 candidate frame grids from a selected video segment, plan the best cells with an AI agent, then generate one cohesive 4x4 sticker-pack grid image.",
+        "tags": [
+          "Generation"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "candidate_grids": {
+                    "type": "array",
+                    "description": "One or two 4x4 candidate frame grid images",
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    },
+                    "maxItems": 2
+                  },
+                  "layout": {
+                    "type": "string",
+                    "description": "Output grid layout; MVP supports only 4x4",
+                    "example": "4x4"
+                  },
+                  "candidateLayout": {
+                    "type": "string",
+                    "description": "Input candidate grid layout; MVP supports only 4x4",
+                    "example": "4x4"
+                  },
+                  "candidateCount": {
+                    "type": "integer",
+                    "description": "Total candidate frames represented by uploaded grids (1-32)",
+                    "minimum": 1,
+                    "maximum": 32
+                  },
+                  "selectedStartMs": {
+                    "type": "integer",
+                    "description": "Selected segment start in milliseconds",
+                    "minimum": 0
+                  },
+                  "selectedEndMs": {
+                    "type": "integer",
+                    "description": "Selected segment end in milliseconds (must be greater than selectedStartMs)",
+                    "minimum": 1
+                  },
+                  "sourceDurationMs": {
+                    "type": "integer",
+                    "description": "Optional original source video duration in milliseconds",
+                    "minimum": 0
+                  },
+                  "prompt": {
+                    "type": "string",
+                    "description": "Optional user intent prompt for style/tone guidance",
+                    "maxLength": 2000
+                  }
+                },
+                "required": [
+                  "candidate_grids",
+                  "candidateCount",
+                  "selectedStartMs",
+                  "selectedEndMs"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully generated one video sticker pack grid image; response metadata includes mode=video-sticker-pack and may include selectedCells and selectionReasoning.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "413": {
+            "description": "File too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported media type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/grid/split": {
       "post": {
         "summary": "Split grid image",
@@ -4759,7 +4891,8 @@
             "type": "string",
             "enum": [
               "single",
-              "grid"
+              "grid",
+              "video-sticker-pack"
             ]
           },
           "inputCount": {
@@ -4776,6 +4909,17 @@
           },
           "cellCount": {
             "type": "integer"
+          },
+          "selectedCells": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Selected candidate cell IDs used to compose the final video sticker pack grid"
+          },
+          "selectionReasoning": {
+            "type": "string",
+            "description": "Optional planner reasoning for why specific candidate cells were selected"
           },
           "normalizedImageUrl": {
             "type": "string"
