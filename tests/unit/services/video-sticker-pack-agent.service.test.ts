@@ -144,4 +144,32 @@ describe('VideoStickerPackAgentService', () => {
     expect(result.plan.packTitle).toBe('Fallback');
     expect(result.plan.staticStickers[0].candidateId).toBe('f_002');
   });
+
+  it('wraps invalid agent responses as AI generation errors', async () => {
+    invokeMock.mockResolvedValueOnce({
+      structuredResponse: {
+        packTitle: 'Bad',
+        staticStickers: [
+          {
+            candidateId: 'missing',
+            frameIndex: 1,
+            timestampMs: 1,
+            cellId: 'A1',
+          },
+        ],
+      },
+    });
+
+    const service = new VideoStickerPackAgentService();
+
+    await expect(service.generatePlan({
+      candidateGrids: [{ buffer: Buffer.from('grid'), mimeType: 'image/png' }],
+      candidates,
+      selectedStartMs: 0,
+      selectedEndMs: 10_000,
+    })).rejects.toMatchObject({
+      code: 'AI_GENERATION_FAILED',
+      statusCode: 502,
+    });
+  });
 });

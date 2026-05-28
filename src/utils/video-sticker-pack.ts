@@ -146,8 +146,14 @@ export interface VideoStickerPackRequestShape {
 }
 
 export function parseCandidateManifest(raw: unknown): VideoStickerCandidate[] {
-  const parsed: unknown = typeof raw === 'string' ? JSON.parse(raw) : raw;
-  return videoStickerCandidateManifestSchema.parse(parsed);
+  try {
+    const parsed: unknown = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    const manifest = isCandidateManifestEnvelope(parsed) ? parsed.candidates : parsed;
+    return videoStickerCandidateManifestSchema.parse(manifest);
+  } catch (error) {
+    const detail = getParseErrorMessage(error);
+    throw new ValidationError(`Invalid candidateManifest: ${detail}`);
+  }
 }
 
 export function validateVideoStickerPackRequestShape(input: VideoStickerPackRequestShape): void {
@@ -274,6 +280,26 @@ export function proposeAnimatedLoops(
 function scoreCandidate(candidate: VideoStickerCandidate): number {
   const brightnessPenalty = Math.abs(candidate.brightnessScore - 0.52);
   return candidate.sharpnessScore * 2 + candidate.differenceScore - brightnessPenalty;
+}
+
+function isCandidateManifestEnvelope(value: unknown): value is { candidates: unknown } {
+  return typeof value === 'object' && value !== null && 'candidates' in value;
+}
+
+function getParseErrorMessage(error: unknown): string {
+  if (error instanceof z.ZodError) {
+    return error.issues.map(issue => {
+      const path = issue.path.length > 0 ? `${issue.path.join('.')}: ` : '';
+      return `${path}${issue.message}`;
+    }).join('; ');
+  }
+  if (error instanceof SyntaxError) {
+    return 'must be valid JSON';
+  }
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message;
+  }
+  return 'must be a non-empty candidate array';
 }
 
 function normalizeDecoration(

@@ -74,51 +74,63 @@ export class VideoStickerPackAgentService {
     }
 
     const startedAt = Date.now();
-    const model = new ChatOpenRouter({
-      model: config.models.agent,
-      apiKey: config.openRouterApiKey,
-      siteUrl: config.appUrl,
-      siteName: 'Setiker API',
-      temperature: 0.2,
-      maxTokens: 3500,
-    });
 
-    const agent = createAgent({
-      model,
-      tools: this.buildTools(input),
-      systemPrompt: this.buildSystemPrompt(input),
-      responseFormat: toolStrategy(videoStickerPackPlanSchema),
-    });
-
-    const result = await agent.invoke({
-      messages: [
-        {
-          role: 'user',
-          content: this.buildUserContent(input),
-        },
-      ],
-    }) as AgentInvokeResult;
-
-    const rawPlan = this.extractStructuredResponse(result);
-    const plan = normalizeVideoStickerPackPlan(rawPlan, input.candidates);
-    const usage = this.extractUsage(result);
-
-    return {
-      plan,
-      metadata: {
+    try {
+      const model = new ChatOpenRouter({
         model: config.models.agent,
-        mode: 'video-sticker-pack',
-        candidateGridCount: input.candidateGrids.length,
-        candidateCount: input.candidates.length,
-        inputLayout: VIDEO_STICKER_PACK_INPUT_LAYOUT,
-        outputLayout: VIDEO_STICKER_PACK_OUTPUT_LAYOUT,
-        selectedStartMs: input.selectedStartMs,
-        selectedEndMs: input.selectedEndMs,
-        ...(input.sourceDurationMs != null ? { sourceDurationMs: input.sourceDurationMs } : {}),
-        ...usage,
-        latencyMs: Date.now() - startedAt,
-      },
-    };
+        apiKey: config.openRouterApiKey,
+        siteUrl: config.appUrl,
+        siteName: 'Setiker API',
+        temperature: 0.2,
+        maxTokens: 3500,
+      });
+
+      const agent = createAgent({
+        model,
+        tools: this.buildTools(input),
+        systemPrompt: this.buildSystemPrompt(input),
+        responseFormat: toolStrategy(videoStickerPackPlanSchema),
+      });
+
+      const result = await agent.invoke({
+        messages: [
+          {
+            role: 'user',
+            content: this.buildUserContent(input),
+          },
+        ],
+      }) as AgentInvokeResult;
+
+      const rawPlan = this.extractStructuredResponse(result);
+      const plan = normalizeVideoStickerPackPlan(rawPlan, input.candidates);
+      const usage = this.extractUsage(result);
+
+      return {
+        plan,
+        metadata: {
+          model: config.models.agent,
+          mode: 'video-sticker-pack',
+          candidateGridCount: input.candidateGrids.length,
+          candidateCount: input.candidates.length,
+          inputLayout: VIDEO_STICKER_PACK_INPUT_LAYOUT,
+          outputLayout: VIDEO_STICKER_PACK_OUTPUT_LAYOUT,
+          selectedStartMs: input.selectedStartMs,
+          selectedEndMs: input.selectedEndMs,
+          ...(input.sourceDurationMs != null ? { sourceDurationMs: input.sourceDurationMs } : {}),
+          ...usage,
+          latencyMs: Date.now() - startedAt,
+        },
+      };
+    } catch (error) {
+      if (error instanceof AIGenerationError) {
+        throw error;
+      }
+
+      const message = error instanceof Error && error.message.trim().length > 0
+        ? error.message
+        : 'Video sticker pack agent failed';
+      throw new AIGenerationError(message);
+    }
   }
 
   private buildTools(input: VideoStickerPackAgentInput): Array<ClientTool | ServerTool> {

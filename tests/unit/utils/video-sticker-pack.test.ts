@@ -58,6 +58,17 @@ describe('video sticker pack utils', () => {
     expect(parseCandidateManifest(JSON.stringify(candidates))).toEqual(candidates);
   });
 
+  it('parses candidate manifest envelope JSON', () => {
+    expect(parseCandidateManifest(JSON.stringify({ candidates }))).toEqual(candidates);
+  });
+
+  it('wraps invalid candidate manifest errors as validation errors', () => {
+    expect(() => parseCandidateManifest('{not-json')).toThrow('Invalid candidateManifest: must be valid JSON');
+    expect(() => parseCandidateManifest(JSON.stringify([{ candidateId: 'missing-fields' }]))).toThrow(
+      'Invalid candidateManifest:'
+    );
+  });
+
   it('accepts one or two candidate grids with a 60 second segment', () => {
     expect(() =>
       validateVideoStickerPackRequestShape({
