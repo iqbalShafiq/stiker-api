@@ -1,11 +1,5 @@
 import { z } from 'zod';
 import { tryParseGridLayout } from './grid-layout';
-import {
-  VIDEO_STICKER_PACK_INPUT_LAYOUT,
-  VIDEO_STICKER_PACK_MAX_CANDIDATES,
-  VIDEO_STICKER_PACK_MAX_SEGMENT_MS,
-  VIDEO_STICKER_PACK_OUTPUT_LAYOUT,
-} from './video-sticker-pack';
 
 const optionalPositiveInt = z.preprocess((val: unknown) => {
   if (val === '' || val === null || val === undefined) {
@@ -22,12 +16,6 @@ const optionalNonNegativeInt = z.preprocess((val: unknown) => {
 }, z.coerce.number().int().nonnegative().optional());
 
 const oldGenerateGridFields = ['grid', 'rows', 'cols', 'layout', 'split', 'normalize'] as const;
-const optionalNonNegativeInt = z.preprocess((val: unknown) => {
-  if (val === '' || val === null || val === undefined) {
-    return undefined;
-  }
-  return val;
-}, z.coerce.number().int().nonnegative().optional());
 
 const optionalBoundedPositiveInt = (max: number, fallback: number): z.ZodType<number> =>
   z.preprocess((val: unknown): unknown => {
