@@ -42,7 +42,7 @@ export interface GenerationMetadata {
   tokensCompletion?: number;
   cost?: number;
   latencyMs?: number;
-  mode?: 'single' | 'grid';
+  mode?: 'single' | 'grid' | 'video-sticker-pack';
   inputCount?: number;
   outputCount?: number;
   maxCellsPerImage?: number;
@@ -51,6 +51,8 @@ export interface GenerationMetadata {
   normalizedImageUrl?: string;
   outputSize?: string;
   normalized?: boolean;
+  selectedCells?: string[];
+  selectionReasoning?: string;
   /** Server-side removal; /generate uses prompt-only transparency (typically false). */
   backgroundRemoved?: boolean;
   backgroundRemovalMethod?: string;

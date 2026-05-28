@@ -106,6 +106,20 @@ Hard output requirement:
 - Keep the sticker art clean; the client will render the text separately from textAssetDecoration.`;
 }
 
+function buildVideoStickerPackGenerationPrompt(agentPrompt: string): string {
+  return `${agentPrompt}
+
+Hard output requirements:
+- Output exactly one square 4x4 grid image.
+- Use only the selected video frame concepts from the candidate grids.
+- Generate at most 16 stickers.
+- Keep each sticker fully inside its cell with safe margins.
+- Keep clear gutters or visual separation between cells.
+- Make every used cell expressive, readable, and sticker-ready.
+- Avoid blurry subjects, cropped faces, and rectangular backdrops.
+- Use a cohesive visual style across the grid.`;
+}
+
 function mergeAiMetadata(items: AiMetadata[]): AiMetadata {
   return items.reduce<AiMetadata>((merged, item) => ({
     tokensPrompt: sumOptional(merged.tokensPrompt, item.tokensPrompt),
