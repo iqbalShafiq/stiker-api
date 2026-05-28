@@ -19,6 +19,11 @@ import {
 import { config } from '../config';
 import type { ImageResult, GenerationMetadata } from '../types';
 import type { AuthRequest } from '../middleware/auth.middleware';
+import { VideoStickerPackAgentService } from '../services/video-sticker-pack-agent.service';
+import {
+  parseCandidateManifest,
+  validateVideoStickerPackRequestShape,
+} from '../utils/video-sticker-pack';
 
 type AiMetadata = Pick<
   GenerationMetadata,
@@ -122,12 +127,14 @@ export class GenerateController {
   private imageService: ImageService;
   private storageProvider: LocalStorageProvider;
   private processingHistoryService: ProcessingHistoryService;
+  private videoStickerPackAgentService: VideoStickerPackAgentService;
 
   constructor() {
     this.openRouterService = new OpenRouterService();
     this.imageService = new ImageService();
     this.storageProvider = new LocalStorageProvider();
     this.processingHistoryService = new ProcessingHistoryService();
+    this.videoStickerPackAgentService = new VideoStickerPackAgentService();
   }
 
   async generate(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
@@ -350,6 +357,56 @@ export class GenerateController {
       };
 
       res.status(200).json(buildSuccessResponse({ images, metadata }));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async generateVideoStickerPack(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = this.requireUserId(req);
+      const body = req.body as Record<string, unknown>;
+      const files = Array.isArray(req.files) ? req.files : [];
+      const candidates = parseCandidateManifest(body.candidateManifest);
+      const selectedStartMs = Number(body.selectedStartMs);
+      const selectedEndMs = Number(body.selectedEndMs);
+      const sourceDurationMs = body.sourceDurationMs == null ? undefined : Number(body.sourceDurationMs);
+
+      validateVideoStickerPackRequestShape({
+        candidateGridCount: files.length,
+        candidateCount: candidates.length,
+        selectedStartMs,
+        selectedEndMs,
+      });
+
+      const result = await this.videoStickerPackAgentService.generatePlan({
+        candidateGrids: files.map(file => this.fileToImageInput(file)),
+        candidates,
+        selectedStartMs,
+        selectedEndMs,
+        ...(sourceDurationMs != null ? { sourceDurationMs } : {}),
+        prompt: typeof body.prompt === 'string' ? body.prompt : undefined,
+        maxStaticStickers: Number(body.maxStaticStickers),
+        maxAnimatedStickers: Number(body.maxAnimatedStickers),
+      });
+
+      await this.processingHistoryService.create({
+        userId,
+        type: 'generate',
+        inputData: {
+          mode: 'video-sticker-pack',
+          candidateGridCount: files.length,
+          candidateCount: candidates.length,
+          selectedStartMs,
+          selectedEndMs,
+          sourceDurationMs,
+          staticCount: result.plan.staticStickers.length,
+          animatedCount: result.plan.animatedStickers.length,
+        },
+        outputFiles: [],
+      });
+
+      res.status(200).json(buildSuccessResponse(result));
     } catch (error) {
       next(error);
     }

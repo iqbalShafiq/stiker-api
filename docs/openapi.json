@@ -1967,7 +1967,7 @@
     "/api/v1/grid/split": {
       "post": {
         "summary": "Split grid image",
-        "description": "Splits a sticker grid sheet into per-cell PNGs. Grid lines are detected with image heuristics, optionally combined with AI. When both `rows` and `cols` are sent, boundary detection is aligned to that row\u00d7column lattice. When `normalize` is true, the sheet is LLM-normalized and re-detected when possible; on failure the API falls back to splitting the original image. Each cell is optionally analyzed for caption-style text outside the sticker foreground, passed through background removal, then resized to a square 512\u00d7512 contain fit.",
+        "description": "Splits a sticker grid sheet into per-cell PNGs. Grid lines are detected with image heuristics, optionally combined with AI. When both `rows` and `cols` are sent, boundary detection is aligned to that row×column lattice. When `normalize` is true, the sheet is LLM-normalized and re-detected when possible; on failure the API falls back to splitting the original image. Each cell is optionally analyzed for caption-style text outside the sticker foreground, passed through background removal, then resized to a square 512×512 contain fit.",
         "tags": [
           "Grid"
         ],
@@ -1991,7 +1991,7 @@
                   "rows": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "Optional row count. Use together with `cols` so split boundaries follow a fixed rows\u00d7cols lattice (same lattice behavior as `generate` with `grid=true`)."
+                    "description": "Optional row count. Use together with `cols` so split boundaries follow a fixed rows×cols lattice (same lattice behavior as `generate` with `grid=true`)."
                   },
                   "cols": {
                     "type": "integer",
@@ -2173,7 +2173,7 @@
     "/api/v1/background/remove": {
       "post": {
         "summary": "Remove background",
-        "description": "Remove background from a raster image. Static inputs (PNG, JPEG, WebP, single-frame GIF) return a 512\u00d7512 PNG with transparent letterboxing. Animated GIFs (multiple frames) return an animated GIF re-encoded after per-frame segmentation; GIF transparency uses a palette so edges may differ from PNG. Tuning env vars include `ANIMATED_GIF_DITHER`, `ANIMATED_GIF_ALPHA_BOOST_DIVISOR`, `ANIMATED_GIF_ALPHA_CLOSE_KERNEL`, `ANIMATED_GIF_CORNER_BG_STRIP_DIST`, `ANIMATED_GIF_TEMPORAL_ALPHA_MAX_HALF` (rolling max \u00b1neighbours in time), `ANIMATED_GIF_TEMPORAL_ALPHA_PASSES`, `ANIMATED_GIF_TEMPORAL_DILATE_ALPHA` (post-merge alpha dilate), `ANIMATED_GIF_REUSE_PALETTE=true` (smaller files), plus frame limits (`ANIMATED_GIF_MAX_FRAMES`, default 120; `ANIMATED_GIF_MAX_MEGAPIXELS_PER_FRAME`, default 12 MP). If those temporal and alpha vars are unset, defaults lean toward fuller, time-stable sticker edges (temporal half 3, 3 passes, dilate kernel 5, alpha boost divisor ~0.76\u2014raise dilate/halos sparingly if fringes appear). Response `metadata.outputFormat` is `gif` or `png`; animated responses include `metadata.frameCount`.",
+        "description": "Remove background from a raster image. Static inputs (PNG, JPEG, WebP, single-frame GIF) return a 512×512 PNG with transparent letterboxing. Animated GIFs (multiple frames) return an animated GIF re-encoded after per-frame segmentation; GIF transparency uses a palette so edges may differ from PNG. Tuning env vars include `ANIMATED_GIF_DITHER`, `ANIMATED_GIF_ALPHA_BOOST_DIVISOR`, `ANIMATED_GIF_ALPHA_CLOSE_KERNEL`, `ANIMATED_GIF_CORNER_BG_STRIP_DIST`, `ANIMATED_GIF_TEMPORAL_ALPHA_MAX_HALF` (rolling max ±neighbours in time), `ANIMATED_GIF_TEMPORAL_ALPHA_PASSES`, `ANIMATED_GIF_TEMPORAL_DILATE_ALPHA` (post-merge alpha dilate), `ANIMATED_GIF_REUSE_PALETTE=true` (smaller files), plus frame limits (`ANIMATED_GIF_MAX_FRAMES`, default 120; `ANIMATED_GIF_MAX_MEGAPIXELS_PER_FRAME`, default 12 MP). If those temporal and alpha vars are unset, defaults lean toward fuller, time-stable sticker edges (temporal half 3, 3 passes, dilate kernel 5, alpha boost divisor ~0.76—raise dilate/halos sparingly if fringes appear). Response `metadata.outputFormat` is `gif` or `png`; animated responses include `metadata.frameCount`.",
         "tags": [
           "Background"
         ],
@@ -4193,6 +4193,121 @@
           }
         }
       }
+    },
+    "/api/v1/generate/video-sticker-pack": {
+      "post": {
+        "summary": "Generate video sticker pack manifest",
+        "description": "Analyze app-generated video frame candidate grids with an AI agent and return a JSON sticker pack plan. The API does not receive raw video and does not generate image files for this endpoint.",
+        "tags": [
+          "Generation"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "candidate_grids": {
+                    "type": "array",
+                    "maxItems": 2,
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    },
+                    "description": "One or two 4x4 PNG/JPEG/WebP candidate grid images generated by the app."
+                  },
+                  "candidateManifest": {
+                    "type": "string",
+                    "description": "JSON array of candidate metadata including candidateId, frameIndex, gridIndex, cellId, timestampMs, and quality scores."
+                  },
+                  "layout": {
+                    "type": "string",
+                    "enum": [
+                      "4x4"
+                    ],
+                    "default": "4x4"
+                  },
+                  "candidateLayout": {
+                    "type": "string",
+                    "enum": [
+                      "4x4"
+                    ],
+                    "default": "4x4"
+                  },
+                  "selectedStartMs": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "selectedEndMs": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "sourceDurationMs": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "prompt": {
+                    "type": "string",
+                    "maxLength": 1000
+                  },
+                  "maxStaticStickers": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 16,
+                    "default": 8
+                  },
+                  "maxAnimatedStickers": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 4,
+                    "default": 2
+                  }
+                },
+                "required": [
+                  "candidate_grids",
+                  "candidateManifest",
+                  "selectedStartMs",
+                  "selectedEndMs"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully generated a video sticker pack manifest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoStickerPackResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "502": {
+            "description": "AI provider error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5724,6 +5839,249 @@
           "usesCount",
           "sticker"
         ]
+      },
+      "VideoStickerDecoration": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "text"
+                ]
+              },
+              "text": {
+                "type": "string"
+              },
+              "style": {
+                "type": "object",
+                "properties": {
+                  "fontFamily": {
+                    "type": "string"
+                  },
+                  "color": {
+                    "type": "string"
+                  },
+                  "weight": {
+                    "type": "string"
+                  }
+                }
+              },
+              "centerX": {
+                "type": "number"
+              },
+              "centerY": {
+                "type": "number"
+              },
+              "scale": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "type",
+              "text"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "emoji"
+                ]
+              },
+              "emoji": {
+                "type": "string"
+              },
+              "centerX": {
+                "type": "number"
+              },
+              "centerY": {
+                "type": "number"
+              },
+              "scale": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "type",
+              "emoji"
+            ]
+          }
+        ]
+      },
+      "VideoStaticStickerPlan": {
+        "type": "object",
+        "properties": {
+          "candidateId": {
+            "type": "string"
+          },
+          "frameIndex": {
+            "type": "integer"
+          },
+          "timestampMs": {
+            "type": "integer"
+          },
+          "cellId": {
+            "type": "string"
+          },
+          "emojis": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "accessibilityText": {
+            "type": "string"
+          },
+          "decorations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VideoStickerDecoration"
+            }
+          },
+          "rationale": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "candidateId",
+          "frameIndex",
+          "timestampMs",
+          "cellId"
+        ]
+      },
+      "VideoAnimatedStickerPlan": {
+        "type": "object",
+        "properties": {
+          "timeline": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "candidateId": {
+                  "type": "string"
+                },
+                "frameIndex": {
+                  "type": "integer"
+                },
+                "timestampMs": {
+                  "type": "integer"
+                },
+                "durationMs": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "frameIndex",
+                "timestampMs",
+                "durationMs"
+              ]
+            }
+          },
+          "fps": {
+            "type": "integer"
+          },
+          "loopCount": {
+            "type": "integer"
+          },
+          "emojis": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "accessibilityText": {
+            "type": "string"
+          },
+          "baseDecorations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VideoStickerDecoration"
+            }
+          },
+          "frameDecorations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "frameIndex": {
+                  "type": "integer"
+                },
+                "decorations": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/VideoStickerDecoration"
+                  }
+                }
+              }
+            }
+          },
+          "rationale": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "timeline"
+        ]
+      },
+      "VideoStickerPackResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "plan": {
+                "type": "object",
+                "properties": {
+                  "packTitle": {
+                    "type": "string"
+                  },
+                  "summary": {
+                    "type": "string"
+                  },
+                  "staticStickers": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/VideoStaticStickerPlan"
+                    }
+                  },
+                  "animatedStickers": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/VideoAnimatedStickerPlan"
+                    }
+                  },
+                  "rejectedCandidates": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  }
+                }
+              },
+              "metadata": {
+                "type": "object"
+              }
+            }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "timestamp": {
+                "type": "string"
+              },
+              "requestId": {
+                "type": "string"
+              }
+            }
+          }
+        }
       }
     },
     "securitySchemes": {

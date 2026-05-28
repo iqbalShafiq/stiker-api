@@ -14,7 +14,7 @@ import { validateRequest } from './middleware/validate-request';
 import { errorHandler } from './middleware/error-handler';
 import { authenticateToken } from './middleware/auth.middleware';
 import { requireRole } from './middleware/role.middleware';
-import { generateImageSchema, generateStickerPackSchema } from './utils/validators';
+import { generateImageSchema, generateStickerPackSchema, generateVideoStickerPackSchema } from './utils/validators';
 import { GenerateController } from './controllers/generate.controller';
 import { GridController } from './controllers/grid.controller';
 import { BackgroundController } from './controllers/background.controller';
@@ -269,6 +269,15 @@ app.post(
   upload.single('image'),
   validateRequest(generateStickerPackSchema),
   asyncHandler((req, res, next) => generateController.generateStickerPack(req, res, next))
+);
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post(
+  '/api/v1/generate/video-sticker-pack',
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises
+  authenticateToken,
+  upload.array('candidate_grids', 2),
+  validateRequest(generateVideoStickerPackSchema),
+  asyncHandler((req, res, next) => generateController.generateVideoStickerPack(req, res, next))
 );
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.post(

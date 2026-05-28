@@ -9,6 +9,20 @@ const optionalPositiveInt = z.preprocess((val: unknown) => {
 }, z.coerce.number().int().positive().optional());
 
 const oldGenerateGridFields = ['grid', 'rows', 'cols', 'layout', 'split', 'normalize'] as const;
+const optionalNonNegativeInt = z.preprocess((val: unknown) => {
+  if (val === '' || val === null || val === undefined) {
+    return undefined;
+  }
+  return val;
+}, z.coerce.number().int().nonnegative().optional());
+
+const optionalBoundedPositiveInt = (max: number, fallback: number): z.ZodType<number> =>
+  z.preprocess((val: unknown): unknown => {
+    if (val === '' || val === null || val === undefined) {
+      return fallback;
+    }
+    return val;
+  }, z.coerce.number().int().positive().max(max)) as z.ZodType<number>;
 
 export const generateImageSchema = z
   .object({
@@ -53,6 +67,35 @@ export const generateStickerPackSchema = z
     }
   });
 
+export const generateVideoStickerPackSchema = z
+  .object({
+    candidateManifest: z.string().min(2),
+    layout: z.literal('4x4').default('4x4'),
+    candidateLayout: z.literal('4x4').default('4x4'),
+    selectedStartMs: z.coerce.number().int().nonnegative(),
+    selectedEndMs: z.coerce.number().int().positive(),
+    sourceDurationMs: optionalNonNegativeInt,
+    prompt: z.string().trim().max(1000).optional(),
+    maxStaticStickers: optionalBoundedPositiveInt(16, 8),
+    maxAnimatedStickers: optionalBoundedPositiveInt(4, 2),
+  })
+  .superRefine((data, ctx) => {
+    if (data.selectedEndMs <= data.selectedStartMs) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'selectedEndMs must be greater than selectedStartMs',
+        path: ['selectedEndMs'],
+      });
+    }
+    if (data.sourceDurationMs != null && data.sourceDurationMs > 0 && data.selectedEndMs > data.sourceDurationMs) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'selectedEndMs cannot exceed sourceDurationMs',
+        path: ['selectedEndMs'],
+      });
+    }
+  });
+
 export const gridSplitSchema = z.object({
   image: z.instanceof(Buffer).or(z.any()).refine(
     (file: unknown) => {
@@ -81,5 +124,6 @@ export const removeBackgroundSchema = z.object({
 
 export type GenerateImageInput = z.infer<typeof generateImageSchema>;
 export type GenerateStickerPackInput = z.infer<typeof generateStickerPackSchema>;
+export type GenerateVideoStickerPackInput = z.infer<typeof generateVideoStickerPackSchema>;
 export type GridSplitInput = z.infer<typeof gridSplitSchema>;
 export type RemoveBackgroundInput = z.infer<typeof removeBackgroundSchema>;
