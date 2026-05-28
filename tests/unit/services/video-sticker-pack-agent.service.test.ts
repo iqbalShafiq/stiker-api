@@ -103,7 +103,7 @@ describe('VideoStickerPackAgentService', () => {
     });
     expect(result.plan.animatedStickers[0].timeline.map(frame => frame.candidateId)).toEqual(['f_001', 'f_002']);
     expect(result.metadata).toMatchObject({
-      model: 'google/gemini-2.5-flash-lite',
+      model: 'openai/gpt-4.1-mini',
       mode: 'video-sticker-pack',
       candidateGridCount: 1,
       candidateCount: 2,

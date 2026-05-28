@@ -104,6 +104,7 @@ export const config = {
   models: {
     imageGeneration: process.env.IMAGE_GENERATION_MODEL ?? 'google/gemini-2.5-flash-image',
     agent: process.env.AGENT_MODEL ?? 'google/gemini-2.5-flash-lite',
+    videoStickerPackAgent: process.env.VIDEO_STICKER_PACK_AGENT_MODEL ?? 'openai/gpt-4.1-mini',
     improvementAgent: process.env.IMPROVEMENT_AGENT_MODEL ?? 'google/gemini-2.5-pro',
   },
   databaseUrl: process.env.DATABASE_URL ?? 'postgresql://localhost:5432/sticker_api',

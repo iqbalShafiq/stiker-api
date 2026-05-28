@@ -77,7 +77,7 @@ export class VideoStickerPackAgentService {
 
     try {
       const model = new ChatOpenRouter({
-        model: config.models.agent,
+        model: config.models.videoStickerPackAgent,
         apiKey: config.openRouterApiKey,
         siteUrl: config.appUrl,
         siteName: 'Setiker API',
@@ -108,7 +108,7 @@ export class VideoStickerPackAgentService {
       return {
         plan,
         metadata: {
-          model: config.models.agent,
+          model: config.models.videoStickerPackAgent,
           mode: 'video-sticker-pack',
           candidateGridCount: input.candidateGrids.length,
           candidateCount: input.candidates.length,
