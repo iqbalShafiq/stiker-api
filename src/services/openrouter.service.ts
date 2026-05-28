@@ -14,10 +14,6 @@ import {
   type ImageGenerationInput,
   type ImprovementPromptPlan,
 } from '../utils/improvement';
-import {
-  normalizeVideoStickerPackAgentPlan,
-  type VideoStickerPackAgentPlan,
-} from '../utils/video-sticker-pack';
 
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -309,70 +305,6 @@ export class OpenRouterService {
     };
   }
 
-  async buildVideoStickerPackPrompt(input: {
-    candidateGrids: ImageGenerationInput[];
-    candidateCount: number;
-    selectedStartMs: number;
-    selectedEndMs: number;
-    userPrompt?: string;
-  }): Promise<{
-    plan: VideoStickerPackAgentPlan;
-    generationId: string;
-    metadata: {
-      tokensPrompt?: number;
-      tokensCompletion?: number;
-      cost?: number;
-      latencyMs?: number;
-    };
-  }> {
-    const content: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
-      {
-        type: 'text',
-        text: this.buildVideoStickerPackAgentPrompt({
-          gridCount: input.candidateGrids.length,
-          candidateCount: input.candidateCount,
-          selectedStartMs: input.selectedStartMs,
-          selectedEndMs: input.selectedEndMs,
-          userPrompt: input.userPrompt,
-        }),
-      },
-    ];
-
-    for (const image of input.candidateGrids) {
-      const mime =
-        image.mimeType && /^image\/[a-z0-9.+-]+$/i.test(image.mimeType)
-          ? image.mimeType
-          : 'image/png';
-      content.push({
-        type: 'image_url',
-        image_url: { url: `data:${mime};base64,${image.buffer.toString('base64')}` },
-      });
-    }
-
-    const { content: rawContent, generationId, metadata } = await this.chatCompletion({
-      model: config.models.improvementAgent,
-      messages: [
-        {
-          role: 'system',
-          content:
-            'You are a video-frame curation agent for sticker-pack generation. Return ONLY strict JSON with keys: generationPrompt, selectedCells, selectionReasoning. Do not include markdown.',
-        },
-        {
-          role: 'user',
-          content,
-        },
-      ],
-      responseFormat: { type: 'json_object' },
-      timeoutMs: 45000,
-    });
-
-    return {
-      plan: normalizeVideoStickerPackAgentPlan(rawContent),
-      generationId,
-      metadata,
-    };
-  }
-
   private buildSingleImprovementAgentPrompt(): string {
     return `Analyze this one sticker image and write a precise prompt for an image-generation model to improve it.
 
@@ -418,46 +350,6 @@ Rules:
 - Use backgrounds that contrast with both the image subject and text; avoid text blending into backgrounds.
 - Keep all text fully inside its cell with no clipping.
 - Do not output textAssetDecoration for grid mode.`;
-  }
-
-  private buildVideoStickerPackAgentPrompt(input: {
-    gridCount: number;
-    candidateCount: number;
-    selectedStartMs: number;
-    selectedEndMs: number;
-    userPrompt?: string;
-  }): string {
-    const userPromptLine = input.userPrompt
-      ? `- User intent: ${input.userPrompt}`
-      : '- User intent: Not provided; infer from expressions and context.';
-
-    return `You are curating candidate video frames into one cohesive sticker-pack generation plan.
-
-Context:
-- Candidate grid count: ${input.gridCount}
-- Candidate frame count: ${input.candidateCount}
-- Selected video segment: ${input.selectedStartMs}ms to ${input.selectedEndMs}ms
-${userPromptLine}
-
-Grid coordinates:
-- Each candidate grid is 4x4 with cells labeled A1-D4.
-- Prefer expressive, sharp, distinct frames and avoid near-duplicates.
-
-Return exact JSON:
-{
-  "generationPrompt": "string",
-  "selectedCells": ["A1", "B2"],
-  "selectionReasoning": "string"
-}
-
-Rules:
-- Return JSON only with exactly these fields: generationPrompt, selectedCells, selectionReasoning.
-- generationPrompt must request exactly one square 4x4 output grid image with at most 16 stickers.
-- Keep each sticker fully inside its own cell with safe margins and clear gutters.
-- Use only concepts visible in the candidate grids; do not invent unrelated subjects.
-- selectedCells must contain only valid IDs A1-D4 and represent the best candidate frame concepts used.
-- selectionReasoning should briefly explain why those cells were selected.
-- Return JSON only.`;
   }
 
   async normalizeGridImage(

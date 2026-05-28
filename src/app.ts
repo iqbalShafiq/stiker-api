@@ -272,6 +272,15 @@ app.post(
 );
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.post(
+  '/api/v1/generate/video-sticker-pack',
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises
+  authenticateToken,
+  upload.array('candidate_grids', 2),
+  validateRequest(generateVideoStickerPackSchema),
+  asyncHandler((req, res, next) => generateController.generateVideoStickerPack(req, res, next))
+);
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post(
   '/api/v1/generate/improvement',
   // eslint-disable-next-line @typescript-eslint/no-misused-promises
   authenticateToken,

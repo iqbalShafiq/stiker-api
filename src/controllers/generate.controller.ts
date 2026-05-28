@@ -19,11 +19,9 @@ import {
 import { config } from '../config';
 import type { ImageResult, GenerationMetadata } from '../types';
 import type { AuthRequest } from '../middleware/auth.middleware';
+import { VideoStickerPackAgentService } from '../services/video-sticker-pack-agent.service';
 import {
-  VIDEO_STICKER_PACK_INPUT_LAYOUT,
-  VIDEO_STICKER_PACK_MAX_CANDIDATES,
-  VIDEO_STICKER_PACK_MAX_GRIDS,
-  VIDEO_STICKER_PACK_OUTPUT_LAYOUT,
+  parseCandidateManifest,
   validateVideoStickerPackRequestShape,
 } from '../utils/video-sticker-pack';
 
@@ -108,20 +106,6 @@ Hard output requirement:
 - Keep the sticker art clean; the client will render the text separately from textAssetDecoration.`;
 }
 
-function buildVideoStickerPackGenerationPrompt(agentPrompt: string): string {
-  return `${agentPrompt}
-
-Hard output requirements:
-- Output exactly one square 4x4 grid image.
-- Use only the selected video frame concepts from the candidate grids.
-- Generate at most 16 stickers.
-- Keep each sticker fully inside its cell with safe margins.
-- Keep clear gutters or visual separation between cells.
-- Make every used cell expressive, readable, and sticker-ready.
-- Avoid blurry subjects, cropped faces, and rectangular backdrops.
-- Use a cohesive visual style across the grid.`;
-}
-
 function mergeAiMetadata(items: AiMetadata[]): AiMetadata {
   return items.reduce<AiMetadata>((merged, item) => ({
     tokensPrompt: sumOptional(merged.tokensPrompt, item.tokensPrompt),
@@ -143,12 +127,14 @@ export class GenerateController {
   private imageService: ImageService;
   private storageProvider: LocalStorageProvider;
   private processingHistoryService: ProcessingHistoryService;
+  private videoStickerPackAgentService: VideoStickerPackAgentService;
 
   constructor() {
     this.openRouterService = new OpenRouterService();
     this.imageService = new ImageService();
     this.storageProvider = new LocalStorageProvider();
     this.processingHistoryService = new ProcessingHistoryService();
+    this.videoStickerPackAgentService = new VideoStickerPackAgentService();
   }
 
   async generate(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
@@ -381,90 +367,46 @@ export class GenerateController {
       const userId = this.requireUserId(req);
       const body = req.body as Record<string, unknown>;
       const files = Array.isArray(req.files) ? req.files : [];
-      const candidateCount = Number(body.candidateCount);
+      const candidates = parseCandidateManifest(body.candidateManifest);
       const selectedStartMs = Number(body.selectedStartMs);
       const selectedEndMs = Number(body.selectedEndMs);
       const sourceDurationMs = body.sourceDurationMs == null ? undefined : Number(body.sourceDurationMs);
-      const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : undefined;
 
-      try {
-        validateVideoStickerPackRequestShape({
-          candidateGridCount: files.length,
-          candidateCount,
-          selectedStartMs,
-          selectedEndMs,
-        });
-      } catch (error) {
-        if (error instanceof ValidationError) {
-          throw error;
-        }
-        const message = error instanceof Error ? error.message : 'Invalid video sticker pack request';
-        throw new ValidationError(message);
-      }
-
-      const candidateGrids = files.map(file => this.fileToImageInput(file));
-      const requestTimestamp = Date.now();
-      const agent = await this.openRouterService.buildVideoStickerPackPrompt({
-        candidateGrids,
-        candidateCount,
+      validateVideoStickerPackRequestShape({
+        candidateGridCount: files.length,
+        candidateCount: candidates.length,
         selectedStartMs,
         selectedEndMs,
-        userPrompt: prompt,
       });
 
-      const { imageBuffer, metadata: aiMetadata } =
-        await this.openRouterService.generateImageWithInputs(
-          buildVideoStickerPackGenerationPrompt(agent.plan.generationPrompt),
-          this.toBase64Inputs(candidateGrids),
-          config.models.imageGeneration,
-          false
-        );
+      const result = await this.videoStickerPackAgentService.generatePlan({
+        candidateGrids: files.map(file => this.fileToImageInput(file)),
+        candidates,
+        selectedStartMs,
+        selectedEndMs,
+        ...(sourceDurationMs != null ? { sourceDurationMs } : {}),
+        prompt: typeof body.prompt === 'string' ? body.prompt : undefined,
+        maxStaticStickers: Number(body.maxStaticStickers),
+        maxAnimatedStickers: Number(body.maxAnimatedStickers),
+      });
 
-      const imageResult = await this.saveGeneratedImage({
-        imageBuffer,
+      await this.processingHistoryService.create({
         userId,
-        subDir: `generate-video-sticker-pack/${requestTimestamp}`,
-        baseName: 'generated-video-sticker-pack',
-      });
-      imageResult.textAssetDecoration = buildEmptyTextAssetDecoration(
-        'detected',
-        'Captions embedded per selected video sticker cell'
-      );
-
-      await this.recordGenerateHistory(userId, {
+        type: 'generate',
         inputData: {
           mode: 'video-sticker-pack',
           candidateGridCount: files.length,
-          candidateCount,
+          candidateCount: candidates.length,
           selectedStartMs,
           selectedEndMs,
           sourceDurationMs,
-          inputLayout: VIDEO_STICKER_PACK_INPUT_LAYOUT,
-          outputLayout: VIDEO_STICKER_PACK_OUTPUT_LAYOUT,
-          maxCandidates: VIDEO_STICKER_PACK_MAX_CANDIDATES,
-          maxCandidateGrids: VIDEO_STICKER_PACK_MAX_GRIDS,
-          selectedCells: agent.plan.selectedCells,
+          staticCount: result.plan.staticStickers.length,
+          animatedCount: result.plan.animatedStickers.length,
         },
-        images: [imageResult],
+        outputFiles: [],
       });
 
-      const metadata: GenerationMetadata = {
-        model: config.models.imageGeneration,
-        improvementAgentModel: config.models.improvementAgent,
-        ...mergeAiMetadata([agent.metadata, aiMetadata]),
-        mode: 'video-sticker-pack',
-        inputCount: files.length,
-        outputCount: 1,
-        gridLayout: VIDEO_STICKER_PACK_OUTPUT_LAYOUT,
-        cellCount: 16,
-        selectedCells: agent.plan.selectedCells,
-        selectionReasoning: agent.plan.selectionReasoning,
-        outputSize: '512x512',
-        backgroundRemoved: false,
-        backgroundRemovalMethod: 'none',
-      };
-
-      res.status(200).json(buildSuccessResponse({ images: [imageResult], metadata }));
+      res.status(200).json(buildSuccessResponse(result));
     } catch (error) {
       next(error);
     }

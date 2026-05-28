@@ -1,11 +1,5 @@
 import { z } from 'zod';
 import { tryParseGridLayout } from './grid-layout';
-import {
-  VIDEO_STICKER_PACK_INPUT_LAYOUT,
-  VIDEO_STICKER_PACK_MAX_CANDIDATES,
-  VIDEO_STICKER_PACK_MAX_SEGMENT_MS,
-  VIDEO_STICKER_PACK_OUTPUT_LAYOUT,
-} from './video-sticker-pack';
 
 const optionalPositiveInt = z.preprocess((val: unknown) => {
   if (val === '' || val === null || val === undefined) {
@@ -22,6 +16,14 @@ const optionalNonNegativeInt = z.preprocess((val: unknown) => {
 }, z.coerce.number().int().nonnegative().optional());
 
 const oldGenerateGridFields = ['grid', 'rows', 'cols', 'layout', 'split', 'normalize'] as const;
+
+const optionalBoundedPositiveInt = (max: number, fallback: number): z.ZodType<number> =>
+  z.preprocess((val: unknown): unknown => {
+    if (val === '' || val === null || val === undefined) {
+      return fallback;
+    }
+    return val;
+  }, z.coerce.number().int().positive().max(max)) as z.ZodType<number>;
 
 export const generateImageSchema = z
   .object({
@@ -68,29 +70,17 @@ export const generateStickerPackSchema = z
 
 export const generateVideoStickerPackSchema = z
   .object({
-    layout: z.string().max(32).default(VIDEO_STICKER_PACK_OUTPUT_LAYOUT),
-    candidateLayout: z.string().max(32).default(VIDEO_STICKER_PACK_INPUT_LAYOUT),
-    candidateCount: z.coerce.number().int().min(1).max(VIDEO_STICKER_PACK_MAX_CANDIDATES),
+    candidateManifest: z.string().min(2),
+    layout: z.literal('4x4').default('4x4'),
+    candidateLayout: z.literal('4x4').default('4x4'),
     selectedStartMs: z.coerce.number().int().nonnegative(),
     selectedEndMs: z.coerce.number().int().positive(),
     sourceDurationMs: optionalNonNegativeInt,
-    prompt: z.string().max(2000).optional(),
+    prompt: z.string().trim().max(1000).optional(),
+    maxStaticStickers: optionalBoundedPositiveInt(16, 8),
+    maxAnimatedStickers: optionalBoundedPositiveInt(4, 2),
   })
   .superRefine((data, ctx) => {
-    if (data.layout !== VIDEO_STICKER_PACK_OUTPUT_LAYOUT) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Video sticker pack output layout must be 4x4 for MVP',
-        path: ['layout'],
-      });
-    }
-    if (data.candidateLayout !== VIDEO_STICKER_PACK_INPUT_LAYOUT) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Video sticker pack candidate layout must be 4x4 for MVP',
-        path: ['candidateLayout'],
-      });
-    }
     if (data.selectedEndMs <= data.selectedStartMs) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -98,10 +88,10 @@ export const generateVideoStickerPackSchema = z
         path: ['selectedEndMs'],
       });
     }
-    if (data.selectedEndMs - data.selectedStartMs > VIDEO_STICKER_PACK_MAX_SEGMENT_MS) {
+    if (data.sourceDurationMs != null && data.sourceDurationMs > 0 && data.selectedEndMs > data.sourceDurationMs) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'Selected video segment must be at most 60000 ms',
+        message: 'selectedEndMs cannot exceed sourceDurationMs',
         path: ['selectedEndMs'],
       });
     }
