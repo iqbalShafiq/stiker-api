@@ -2,8 +2,16 @@ import fs from 'fs/promises';
 import path from 'path';
 import { pathToFileURL } from 'node:url';
 import sharp from 'sharp';
-import type { Config as ImglyBackgroundRemovalConfig } from '@imgly/background-removal-node';
 import { config } from '../config';
+
+interface ImglyBackgroundRemovalConfig {
+  publicPath: string;
+  model: 'small' | 'medium' | 'large';
+  output: {
+    format: 'image/png';
+    quality: number;
+  };
+}
 
 /**
  * Local ONNX segmentation via IMG.LY (@imgly/background-removal-node).

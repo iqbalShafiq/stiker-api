@@ -40,13 +40,15 @@ export function buildErrorResponse(
   code: string,
   message: string,
   details?: unknown,
-  requestId?: string
+  requestId?: string,
+  subcode?: string
 ): ApiResponse<never> {
   return {
     success: false,
     error: {
       code,
       message,
+      subcode,
       details,
     },
     meta: {

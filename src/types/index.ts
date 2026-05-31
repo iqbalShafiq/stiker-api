@@ -64,6 +64,7 @@ export interface ApiResponse<T> {
   error?: {
     code: string;
     message: string;
+    subcode?: string;
     details?: unknown;
   };
   meta?: {

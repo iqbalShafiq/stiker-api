@@ -21,6 +21,11 @@ services:
     container_name: stiker-api-redis-test
     ports:
       - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_test_data:

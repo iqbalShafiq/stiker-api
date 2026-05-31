@@ -27,6 +27,10 @@ import { AdminController } from './controllers/admin.controller';
 import { ProcessingHistoryController } from './controllers/processing-history.controller';
 import { ShareController } from './controllers/share.controller';
 import { SocialController } from './controllers/social.controller';
+import { LegalController } from './controllers/legal.controller';
+import { AiUsageController } from './controllers/ai-usage.controller';
+import { AiQuotaController } from './controllers/ai-quota.controller';
+import { requireAiQuota } from './middleware/ai-quota.middleware';
 import { asyncHandler } from './utils/async-handler';
 
 interface RequestWithId extends Request {
@@ -112,6 +116,19 @@ const adminController = new AdminController();
 const processingHistoryController = new ProcessingHistoryController();
 const shareController = new ShareController();
 const socialController = new SocialController();
+const legalController = new LegalController();
+const aiUsageController = new AiUsageController();
+const aiQuotaController = new AiQuotaController();
+
+// Legal routes (public)
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/legal', (req, res, next) => legalController.getSummary(req, res, next));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/legal/privacy', (req, res, next) => legalController.getPrivacy(req, res, next));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/legal/terms', (req, res, next) => legalController.getTerms(req, res, next));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/legal/retention', (req, res, next) => legalController.getRetention(req, res, next));
 
 // Auth routes (public)
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
@@ -132,6 +149,16 @@ app.put('/api/v1/auth/me', authenticateToken, (req, res, next) => {
 });
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.post('/api/v1/auth/change-password', authenticateToken, asyncHandler((req, res, next) => authController.changePassword(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.delete('/api/v1/auth/me', authenticateToken, asyncHandler((req, res, next) => authController.deleteMe(req, res, next)));
+
+// AI usage & quota (protected)
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/ai/usage', authenticateToken, asyncHandler((req, res, next) => aiUsageController.getUsage(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/ai/quota/reserve', authenticateToken, asyncHandler((req, res, next) => aiQuotaController.reserve(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/ai/quota/finalize', authenticateToken, asyncHandler((req, res, next) => aiQuotaController.finalize(req, res, next)));
 
 // Sticker routes (public)
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
@@ -257,6 +284,7 @@ app.post(
   '/api/v1/generate',
   // eslint-disable-next-line @typescript-eslint/no-misused-promises
   authenticateToken,
+  requireAiQuota('generate'),
   upload.single('image'),
   validateRequest(generateImageSchema),
   asyncHandler((req, res, next) => generateController.generate(req, res, next))
@@ -266,6 +294,7 @@ app.post(
   '/api/v1/generate/sticker-pack',
   // eslint-disable-next-line @typescript-eslint/no-misused-promises
   authenticateToken,
+  requireAiQuota('generate'),
   upload.single('image'),
   validateRequest(generateStickerPackSchema),
   asyncHandler((req, res, next) => generateController.generateStickerPack(req, res, next))
@@ -275,6 +304,7 @@ app.post(
   '/api/v1/generate/video-sticker-pack',
   // eslint-disable-next-line @typescript-eslint/no-misused-promises
   authenticateToken,
+  requireAiQuota('videoStickerPack'),
   upload.array('candidate_grids', 2),
   validateRequest(generateVideoStickerPackSchema),
   asyncHandler((req, res, next) => generateController.generateVideoStickerPack(req, res, next))
@@ -284,6 +314,7 @@ app.post(
   '/api/v1/generate/improvement',
   // eslint-disable-next-line @typescript-eslint/no-misused-promises
   authenticateToken,
+  requireAiQuota('improve'),
   upload.array('images', 64),
   asyncHandler((req, res, next) => generateController.improve(req, res, next))
 );
@@ -292,6 +323,7 @@ app.post(
   '/api/v1/grid/split',
   // eslint-disable-next-line @typescript-eslint/no-misused-promises
   authenticateToken,
+  requireAiQuota('gridSplit'),
   upload.single('image'),
   asyncHandler((req, res, next) => gridController.split(req, res, next))
 );
@@ -300,6 +332,7 @@ app.post(
   '/api/v1/grid/split/text-assets',
   // eslint-disable-next-line @typescript-eslint/no-misused-promises
   authenticateToken,
+  requireAiQuota('gridSplit'),
   upload.array('images', 64),
   asyncHandler((req, res, next) => gridController.extractTextAssets(req, res, next))
 );
@@ -308,6 +341,7 @@ app.post(
   '/api/v1/background/remove',
   // eslint-disable-next-line @typescript-eslint/no-misused-promises
   authenticateToken,
+  requireAiQuota('backgroundRemove'),
   upload.single('image'),
   asyncHandler((req, res, next) => backgroundController.remove(req, res, next))
 );

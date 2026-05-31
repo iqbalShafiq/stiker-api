@@ -5,6 +5,7 @@ import type { AuthRequest } from '../middleware/auth.middleware';
 import { buildPaginatedSuccessResponse, buildSuccessResponse } from '../utils/response-builder';
 import { ValidationError, NotFoundError, ForbiddenError } from '../errors';
 import { SharePermission } from '@prisma/client';
+import { withShareLinkUrls } from '../utils/share-links';
 
 export class StickerPackController {
   private stickerPackService: StickerPackService;
@@ -15,12 +16,9 @@ export class StickerPackController {
     this.shareService = new StickerPackShareService();
   }
 
-  private withPackShareUrl(req: AuthRequest, link: Record<string, unknown>): Record<string, unknown> {
+  private withPackShareUrl(_req: AuthRequest, link: Record<string, unknown>): Record<string, unknown> {
     const token = String(link.token ?? '');
-    return {
-      ...link,
-      shareUrl: `${req.protocol}://${req.get('host') ?? 'localhost'}/api/v1/share/pack/${token}`,
-    };
+    return withShareLinkUrls('pack', token, link);
   }
 
   async create(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {

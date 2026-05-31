@@ -6,8 +6,15 @@ import { hashPassword, comparePassword } from '../utils/password';
 import {
   AppError,
   ValidationError,
+  InvalidCredentialsError,
+  AccountInactiveError,
+  RefreshTokenInvalidError,
+  RefreshTokenNotFoundError,
+  RefreshTokenExpiredError,
+  CurrentPasswordIncorrectError,
+  EmailAlreadyInUseError,
+  UsernameAlreadyInUseError,
   UnauthorizedError,
-  ConflictError,
 } from '../errors';
 
 export interface RegisterInput {
@@ -96,14 +103,14 @@ export class AuthService {
       where: { email: input.email },
     });
     if (existingEmail) {
-      throw new ConflictError('Email already in use');
+      throw new EmailAlreadyInUseError();
     }
 
     const existingUsername = await prisma.user.findUnique({
       where: { username: input.username },
     });
     if (existingUsername) {
-      throw new ConflictError('Username already in use');
+      throw new UsernameAlreadyInUseError();
     }
 
     const userRole = await prisma.role.findUnique({
@@ -162,16 +169,16 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new UnauthorizedError('Invalid email or password');
+      throw new InvalidCredentialsError();
     }
 
     if (!user.isActive) {
-      throw new UnauthorizedError('Account is deactivated');
+      throw new AccountInactiveError();
     }
 
     const isValid = await comparePassword(input.password, user.passwordHash);
     if (!isValid) {
-      throw new UnauthorizedError('Invalid email or password');
+      throw new InvalidCredentialsError();
     }
 
     const payload: TokenPayload = {
@@ -213,7 +220,7 @@ export class AuthService {
     try {
       jwt.verify(refreshToken, config.jwtRefreshSecret);
     } catch {
-      throw new UnauthorizedError('Invalid refresh token');
+      throw new RefreshTokenInvalidError();
     }
 
     const storedToken = await prisma.refreshToken.findUnique({
@@ -222,14 +229,14 @@ export class AuthService {
     });
 
     if (!storedToken) {
-      throw new UnauthorizedError('Refresh token not found');
+      throw new RefreshTokenNotFoundError();
     }
 
     if (storedToken.expiresAt < new Date()) {
       await prisma.refreshToken.deleteMany({
         where: { token: refreshToken },
       });
-      throw new UnauthorizedError('Refresh token expired');
+      throw new RefreshTokenExpiredError();
     }
 
     await prisma.refreshToken.deleteMany({
@@ -295,7 +302,7 @@ export class AuthService {
 
     const isValid = await comparePassword(currentPassword, user.passwordHash);
     if (!isValid) {
-      throw new UnauthorizedError('Current password is incorrect');
+      throw new CurrentPasswordIncorrectError();
     }
 
     const newPasswordHash = await hashPassword(newPassword);
@@ -307,6 +314,49 @@ export class AuthService {
 
     await prisma.refreshToken.deleteMany({
       where: { userId },
+    });
+  }
+
+  async deleteAccount(userId: string, currentPassword: string): Promise<void> {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new UnauthorizedError('User not found', 'UNAUTHORIZED');
+    }
+
+    const isValid = await comparePassword(currentPassword, user.passwordHash);
+    if (!isValid) {
+      throw new CurrentPasswordIncorrectError();
+    }
+
+    const deletedAt = new Date();
+    const anonymizedEmail = `deleted_${userId}@deleted.local`;
+    const anonymizedUsername = `deleted_${userId.replace(/-/g, '')}`;
+
+    const newPasswordHash = await hashPassword(crypto.randomUUID());
+
+    await prisma.$transaction(async (tx) => {
+      await tx.refreshToken.deleteMany({ where: { userId } });
+      await tx.sticker.updateMany({
+        where: { ownerId: userId, deletedAt: null },
+        data: { deletedAt },
+      });
+      await tx.stickerPack.updateMany({
+        where: { ownerId: userId, deletedAt: null },
+        data: { deletedAt },
+      });
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          isActive: false,
+          email: anonymizedEmail,
+          username: anonymizedUsername,
+          displayName: 'Deleted User',
+          passwordHash: newPasswordHash,
+        },
+      });
     });
   }
 }

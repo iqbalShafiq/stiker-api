@@ -34,7 +34,13 @@ export function errorHandler(
   // Handle custom AppErrors
   if (err instanceof AppError) {
     res.status(err.statusCode).json(
-      buildErrorResponse(err.code, err.message)
+      buildErrorResponse(
+        err.code,
+        err.message,
+        err.details,
+        undefined,
+        err.subcode
+      )
     );
     return;
   }

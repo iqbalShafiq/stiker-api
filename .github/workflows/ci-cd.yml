@@ -33,6 +33,11 @@ jobs:
           - 5432:5432
       redis:
         image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
         ports:
           - 6379:6379
     env:
@@ -77,6 +82,7 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sticker_api_test
           REDIS_URL: redis://localhost:6379
+          AI_QUOTA_FAIL_CLOSED: 'true'
           NODE_ENV: test
           JWT_SECRET: test-jwt-secret-for-ci
           JWT_REFRESH_SECRET: test-jwt-refresh-secret-for-ci

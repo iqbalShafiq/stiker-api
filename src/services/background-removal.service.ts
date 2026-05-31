@@ -1,6 +1,7 @@
 import logger from '../utils/logger';
 import { ImageService } from './image.service';
 import { getSegmentationBackgroundRemovalService } from './segmentation-background-removal.service';
+import { shouldUseImglyBackgroundRemoval } from './imgly-background-removal-toggle';
 
 export interface BackgroundRemovalResult {
   processedBuffer: Buffer;
@@ -15,18 +16,21 @@ export async function removeBackgroundWithFallback(
 ): Promise<BackgroundRemovalResult> {
   const imageService = new ImageService();
 
-  try {
-    const processedBuffer = await getSegmentationBackgroundRemovalService().remove(imageBuffer);
-    return {
-      processedBuffer,
-      method: 'imgly-onnx',
-    };
-  } catch (error) {
-    logger.warn({ error }, 'IMG.LY background removal failed, falling back to brightness threshold');
-    const processedBuffer = await imageService.removeBackground(imageBuffer);
-    return {
-      processedBuffer,
-      method: 'brightness-threshold-fallback',
-    };
+  if (shouldUseImglyBackgroundRemoval()) {
+    try {
+      const processedBuffer = await getSegmentationBackgroundRemovalService().remove(imageBuffer);
+      return {
+        processedBuffer,
+        method: 'imgly-onnx',
+      };
+    } catch (error) {
+      logger.warn({ error }, 'IMG.LY background removal failed, falling back to brightness threshold');
+    }
   }
+
+  const processedBuffer = await imageService.removeBackground(imageBuffer);
+  return {
+    processedBuffer,
+    method: 'brightness-threshold-fallback',
+  };
 }

@@ -5,6 +5,7 @@ import type { AuthRequest } from '../middleware/auth.middleware';
 import { buildSuccessResponse } from '../utils/response-builder';
 import { ValidationError, NotFoundError, ForbiddenError } from '../errors';
 import { SharePermission } from '@prisma/client';
+import { withShareLinkUrls } from '../utils/share-links';
 
 export class StickerController {
   private stickerService: StickerService;
@@ -29,12 +30,9 @@ export class StickerController {
     return share;
   }
 
-  private withStickerShareUrl(req: AuthRequest, link: Record<string, unknown>): Record<string, unknown> {
+  private withStickerShareUrl(_req: AuthRequest, link: Record<string, unknown>): Record<string, unknown> {
     const token = String(link.token ?? '');
-    return {
-      ...link,
-      shareUrl: `${req.protocol}://${req.get('host') ?? 'localhost'}/api/v1/share/sticker/${token}`,
-    };
+    return withShareLinkUrls('sticker', token, link);
   }
 
   async getMyStickers(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {

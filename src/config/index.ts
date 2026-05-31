@@ -6,6 +6,10 @@ dotenv.config();
 const imglyBgModelRaw = process.env.IMGLY_BG_MODEL;
 const imglyBgModel: 'small' | 'medium' | 'large' =
   imglyBgModelRaw === 'small' || imglyBgModelRaw === 'large' ? imglyBgModelRaw : 'medium';
+const imglyBgEnabled =
+  process.env.IMGLY_BG_ENABLED === undefined
+    ? (process.env.NODE_ENV ?? 'development') !== 'test'
+    : process.env.IMGLY_BG_ENABLED !== 'false';
 
 /** Bundled WASM/ONNX live here unless you override IMGLY_BG_PUBLIC_PATH and self-host assets. */
 const defaultImglyAssetsDir = path.join(
@@ -82,6 +86,7 @@ export const config = {
   uploadDir: process.env.UPLOAD_DIR ?? 'uploads',
   corsOrigin: process.env.CORS_ORIGIN ?? '*',
   imglyBackgroundRemoval: {
+    enabled: imglyBgEnabled,
     publicPath: process.env.IMGLY_BG_PUBLIC_PATH ?? defaultImglyAssetsDir,
     model: imglyBgModel,
     maxConcurrency: Math.max(1, parseInt(process.env.IMGLY_BG_MAX_CONCURRENCY ?? '2', 10)),
@@ -114,6 +119,68 @@ export const config = {
   jwtAccessExpiration: process.env.JWT_ACCESS_EXPIRATION ?? '15m',
   jwtRefreshExpiration: process.env.JWT_REFRESH_EXPIRATION ?? '7d',
   storageProvider: process.env.STORAGE_PROVIDER ?? 'local',
+  appDeepLinkScheme: process.env.APP_DEEP_LINK_SCHEME ?? 'setiker',
+  publicWebBaseUrl: process.env.PUBLIC_WEB_BASE_URL ?? process.env.APP_URL ?? 'http://localhost:3000',
+  historyExpirationDays: Math.max(1, parseInt(process.env.HISTORY_EXPIRATION_DAYS ?? '7', 10)),
+  cleanupIntervalHours: Math.max(1, parseInt(process.env.CLEANUP_INTERVAL_HOURS ?? '24', 10)),
+  redisEnabled: process.env.REDIS_ENABLED !== 'false',
+  aiQuotaFailClosed: process.env.AI_QUOTA_FAIL_CLOSED === undefined
+    ? (process.env.NODE_ENV ?? 'development') !== 'development'
+    : process.env.AI_QUOTA_FAIL_CLOSED === 'true',
+  /** @deprecated Use aiQuota.dailyPointLimit — kept for legacy env compatibility */
+  aiDailyLimits: {
+    generate: Math.max(1, parseInt(process.env.AI_DAILY_GENERATE_LIMIT ?? '50', 10)),
+    gridSplit: Math.max(1, parseInt(process.env.AI_DAILY_GRID_SPLIT_LIMIT ?? '100', 10)),
+    backgroundRemove: Math.max(1, parseInt(process.env.AI_DAILY_BACKGROUND_REMOVE_LIMIT ?? '100', 10)),
+    videoStickerPack: Math.max(1, parseInt(process.env.AI_DAILY_VIDEO_PACK_LIMIT ?? '10', 10)),
+    improve: Math.max(1, parseInt(process.env.AI_DAILY_IMPROVE_LIMIT ?? '50', 10)),
+  },
+  aiQuota: {
+    dailyPointLimit: Math.max(1, parseInt(process.env.AI_DAILY_POINT_LIMIT ?? '100', 10)),
+    reservationTtlSeconds: Math.max(60, parseInt(process.env.AI_RESERVATION_TTL_SECONDS ?? '3600', 10)),
+    operationCosts: ((): {
+      generate: number;
+      gridSplit: number;
+      backgroundRemove: number;
+      videoStickerPack: number;
+      improve: number;
+    } => {
+      const defaults = {
+        generate: 1,
+        gridSplit: 1,
+        backgroundRemove: 1,
+        videoStickerPack: 1,
+        improve: 1,
+      };
+      if (process.env.AI_OPERATION_COSTS) {
+        try {
+          const parsed = JSON.parse(process.env.AI_OPERATION_COSTS) as Record<string, number>;
+          return {
+            generate: Math.max(0, parsed.generate ?? defaults.generate),
+            gridSplit: Math.max(0, parsed.gridSplit ?? defaults.gridSplit),
+            backgroundRemove: Math.max(0, parsed.backgroundRemove ?? defaults.backgroundRemove),
+            videoStickerPack: Math.max(0, parsed.videoStickerPack ?? defaults.videoStickerPack),
+            improve: Math.max(0, parsed.improve ?? defaults.improve),
+          };
+        } catch {
+          // fall through to per-key env
+        }
+      }
+      return {
+        generate: Math.max(0, parseInt(process.env.AI_COST_GENERATE ?? String(defaults.generate), 10)),
+        gridSplit: Math.max(0, parseInt(process.env.AI_COST_GRID_SPLIT ?? String(defaults.gridSplit), 10)),
+        backgroundRemove: Math.max(
+          0,
+          parseInt(process.env.AI_COST_BACKGROUND_REMOVE ?? String(defaults.backgroundRemove), 10)
+        ),
+        videoStickerPack: Math.max(
+          0,
+          parseInt(process.env.AI_COST_VIDEO_PACK ?? String(defaults.videoStickerPack), 10)
+        ),
+        improve: Math.max(0, parseInt(process.env.AI_COST_IMPROVE ?? String(defaults.improve), 10)),
+      };
+    })(),
+  },
 } as const;
 
 export type Config = typeof config;

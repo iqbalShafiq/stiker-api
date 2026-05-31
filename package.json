@@ -10,11 +10,11 @@
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
-    "test:up": "docker-compose -f docker-compose.test.yml up -d && sleep 3 && npx prisma migrate deploy",
-    "test:down": "docker-compose -f docker-compose.test.yml down -v"
+    "test": "VITE_CJS_IGNORE_WARNING=true vitest run",
+    "test:watch": "VITE_CJS_IGNORE_WARNING=true vitest",
+    "test:coverage": "VITE_CJS_IGNORE_WARNING=true vitest run --coverage",
+    "test:up": "COMPOSE_IGNORE_ORPHANS=true docker-compose -f docker-compose.test.yml up -d && sleep 3 && DATABASE_URL=postgresql://postgres:postgres@localhost:5433/sticker_api_test REDIS_URL=redis://localhost:6380 npx prisma migrate deploy",
+    "test:down": "COMPOSE_IGNORE_ORPHANS=true docker-compose -f docker-compose.test.yml down -v"
   },
   "keywords": [
     "express",

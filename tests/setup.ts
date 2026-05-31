@@ -7,3 +7,4 @@ process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres:po
 process.env.JWT_SECRET = 'test-jwt-secret';
 process.env.JWT_REFRESH_SECRET = 'test-jwt-refresh-secret';
 process.env.REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6380';
+process.env.IMGLY_BG_ENABLED = 'false';

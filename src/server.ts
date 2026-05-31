@@ -1,11 +1,27 @@
 import app from './app';
 import { config } from './config';
 import logger from './utils/logger';
+import { CleanupService } from './utils/cleanup';
 
 const server = app.listen(config.port, config.host, () => {
   logger.info(
     `Server running on ${config.host}:${config.port} in ${config.nodeEnv} mode`
   );
+
+  const cleanupService = new CleanupService();
+  const intervalMs = config.cleanupIntervalHours * 60 * 60 * 1000;
+  void cleanupService.runCleanup().then((result) => {
+    logger.info(result, 'Initial cleanup completed');
+  }).catch((err) => {
+    logger.error({ err }, 'Initial cleanup failed');
+  });
+  setInterval(() => {
+    void cleanupService.runCleanup().then((result) => {
+      logger.info(result, 'Scheduled cleanup completed');
+    }).catch((err) => {
+      logger.error({ err }, 'Scheduled cleanup failed');
+    });
+  }, intervalMs);
 });
 
 process.on('SIGTERM', () => {

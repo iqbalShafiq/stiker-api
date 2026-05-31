@@ -2,13 +2,42 @@ import type { Request, Response, NextFunction } from 'express';
 import { AuthService } from '../services/auth.service';
 import type { AuthRequest } from '../middleware/auth.middleware';
 import { buildSuccessResponse } from '../utils/response-builder';
-import { ValidationError } from '../errors';
+import { config } from '../config';
+import { RefreshTokenMissingError, ValidationError } from '../errors';
+
+function parseExpirationToSeconds(expiration: string): number {
+  const match = expiration.match(/^(\d+)([smhd])$/);
+  if (!match) {
+    return 900;
+  }
+  const value = parseInt(match[1], 10);
+  const unit = match[2];
+  switch (unit) {
+    case 's':
+      return value;
+    case 'm':
+      return value * 60;
+    case 'h':
+      return value * 60 * 60;
+    case 'd':
+      return value * 24 * 60 * 60;
+    default:
+      return 900;
+  }
+}
 
 export class AuthController {
   private authService: AuthService;
 
   constructor() {
     this.authService = new AuthService();
+  }
+
+  private accessTokenPayload(accessToken: string): { accessToken: string; expiresIn: number } {
+    return {
+      accessToken,
+      expiresIn: parseExpirationToSeconds(config.jwtAccessExpiration),
+    };
   }
 
   private setRefreshTokenCookie(res: Response, token: string): void {
@@ -48,7 +77,7 @@ export class AuthController {
       res.status(201).json(
         buildSuccessResponse({
           user: result.user,
-          accessToken: result.tokens.accessToken,
+          ...this.accessTokenPayload(result.tokens.accessToken),
         })
       );
     } catch (error) {
@@ -74,7 +103,7 @@ export class AuthController {
       res.status(200).json(
         buildSuccessResponse({
           user: result.user,
-          accessToken: result.tokens.accessToken,
+          ...this.accessTokenPayload(result.tokens.accessToken),
         })
       );
     } catch (error) {
@@ -100,21 +129,22 @@ export class AuthController {
 
   async refresh(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const refreshToken: unknown = req.cookies?.refresh_token;
+      const body = req.body as Record<string, unknown> | undefined;
+      const bodyToken = typeof body?.refreshToken === 'string' ? body.refreshToken : undefined;
+      const cookies = req.cookies as { refresh_token?: unknown } | undefined;
+      const cookieToken = cookies?.refresh_token;
+      const refreshToken =
+        bodyToken ?? (typeof cookieToken === 'string' ? cookieToken : undefined);
 
-      if (typeof refreshToken !== 'string' || !refreshToken) {
-        throw new ValidationError('Refresh token is required');
+      if (!refreshToken) {
+        throw new RefreshTokenMissingError();
       }
 
       const tokens = await this.authService.refreshAccessToken(refreshToken);
 
       this.setRefreshTokenCookie(res, tokens.refreshToken);
 
-      res.status(200).json(
-        buildSuccessResponse({
-          accessToken: tokens.accessToken,
-        })
-      );
+      res.status(200).json(buildSuccessResponse(this.accessTokenPayload(tokens.accessToken)));
     } catch (error) {
       next(error);
     }
@@ -137,6 +167,26 @@ export class AuthController {
   updateMe(_req: AuthRequest, res: Response, next: NextFunction): void {
     try {
       res.status(200).json(buildSuccessResponse({ message: 'Update profile endpoint - placeholder' }));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async deleteMe(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user?.id) {
+        throw new ValidationError('User not authenticated');
+      }
+
+      const { currentPassword } = req.body as Record<string, unknown>;
+      if (!currentPassword) {
+        throw new ValidationError('Current password is required');
+      }
+
+      await this.authService.deleteAccount(req.user.id, String(currentPassword));
+      this.clearRefreshTokenCookie(res);
+
+      res.status(200).json(buildSuccessResponse({ message: 'Account deleted successfully' }));
     } catch (error) {
       next(error);
     }

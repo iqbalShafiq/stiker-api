@@ -2,7 +2,12 @@ import type { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
 import { prisma } from '../prisma/client';
-import { UnauthorizedError } from '../errors';
+import {
+  AccountInactiveError,
+  TokenExpiredError,
+  TokenInvalidError,
+  UnauthorizedError,
+} from '../errors';
 
 export interface AuthRequest extends Request {
   user?: {
@@ -36,10 +41,10 @@ export async function authenticateToken(
       decoded = jwt.verify(token, config.jwtSecret) as jwt.JwtPayload;
     } catch (err) {
       if (err instanceof jwt.TokenExpiredError) {
-        return next(new UnauthorizedError('Token has expired'));
+        return next(new TokenExpiredError());
       }
       if (err instanceof jwt.JsonWebTokenError) {
-        return next(new UnauthorizedError('Invalid token'));
+        return next(new TokenInvalidError());
       }
       return next(new UnauthorizedError('Authentication required'));
     }
@@ -58,7 +63,7 @@ export async function authenticateToken(
     }
 
     if (!user.isActive) {
-      return next(new UnauthorizedError('User account is inactive'));
+      return next(new AccountInactiveError('User account is inactive'));
     }
 
     req.user = {

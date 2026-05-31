@@ -4,6 +4,7 @@ import logger from '../utils/logger';
 import { ValidationError } from '../errors';
 import { ImageService } from './image.service';
 import { getSegmentationBackgroundRemovalService } from './segmentation-background-removal.service';
+import { shouldUseImglyBackgroundRemoval } from './imgly-background-removal-toggle';
 
 export interface AnimatedGifRemovalResult {
   processedBuffer: Buffer;
@@ -66,37 +67,49 @@ export async function removeBackgroundFromAnimatedGif(
   const loop = typeof animMeta.loop === 'number' ? animMeta.loop : 0;
 
   const imageService = new ImageService();
-  const segmentation = getSegmentationBackgroundRemovalService();
 
   let method: string;
   let framePngs512: Buffer[];
 
-  try {
-    framePngs512 = [];
-    for (let page = 0; page < frameCount; page++) {
-      const framePng = await sharp(gifBuffer, { page, pages: 1 }).png().toBuffer();
-      const removed = await segmentation.remove(framePng);
-      let staged = await imageService.reinforceAlphaForGifQuantization(
-        removed,
-        config.animatedGif.alphaBoostDivisor
-      );
-      if (config.animatedGif.alphaCloseKernel >= 3) {
-        staged = await imageService.morphologicalCloseAlpha(staged, config.animatedGif.alphaCloseKernel);
+  if (shouldUseImglyBackgroundRemoval()) {
+    const segmentation = getSegmentationBackgroundRemovalService();
+
+    try {
+      framePngs512 = [];
+      for (let page = 0; page < frameCount; page++) {
+        const framePng = await sharp(gifBuffer, { page, pages: 1 }).png().toBuffer();
+        const removed = await segmentation.remove(framePng);
+        let staged = await imageService.reinforceAlphaForGifQuantization(
+          removed,
+          config.animatedGif.alphaBoostDivisor
+        );
+        if (config.animatedGif.alphaCloseKernel >= 3) {
+          staged = await imageService.morphologicalCloseAlpha(staged, config.animatedGif.alphaCloseKernel);
+        }
+        staged = await imageService.stripResidualNearCornerBackground(
+          framePng,
+          staged,
+          config.animatedGif.cornerBackgroundStripDistance
+        );
+        const squared = await imageService.resizeToSquareContain(staged, 512);
+        framePngs512.push(squared);
       }
-      staged = await imageService.stripResidualNearCornerBackground(
-        framePng,
-        staged,
-        config.animatedGif.cornerBackgroundStripDistance
+      method = 'imgly-onnx-animated-gif';
+    } catch (err) {
+      logger.warn(
+        { err },
+        'IMG.LY background removal failed for animated GIF, falling back to neutral-bright key on all frames'
       );
-      const squared = await imageService.resizeToSquareContain(staged, 512);
-      framePngs512.push(squared);
+      framePngs512 = [];
+      for (let page = 0; page < frameCount; page++) {
+        const framePng = await sharp(gifBuffer, { page, pages: 1 }).png().toBuffer();
+        const removed = await imageService.removeNeutralBrightBackground(framePng);
+        const squared = await imageService.resizeToSquareContain(removed, 512);
+        framePngs512.push(squared);
+      }
+      method = 'neutral-bright-fallback-animated-gif';
     }
-    method = 'imgly-onnx-animated-gif';
-  } catch (err) {
-    logger.warn(
-      { err },
-      'IMG.LY background removal failed for animated GIF, falling back to neutral-bright key on all frames'
-    );
+  } else {
     framePngs512 = [];
     for (let page = 0; page < frameCount; page++) {
       const framePng = await sharp(gifBuffer, { page, pages: 1 }).png().toBuffer();
