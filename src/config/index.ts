@@ -138,12 +138,14 @@ export const config = {
   aiQuota: {
     dailyPointLimit: Math.max(1, parseInt(process.env.AI_DAILY_POINT_LIMIT ?? '100', 10)),
     reservationTtlSeconds: Math.max(60, parseInt(process.env.AI_RESERVATION_TTL_SECONDS ?? '3600', 10)),
+    packImportEnabled: process.env.PACK_IMPORT_ENABLED !== 'false',
     operationCosts: ((): {
       generate: number;
       gridSplit: number;
       backgroundRemove: number;
       videoStickerPack: number;
       improve: number;
+      packImport: number;
     } => {
       const defaults = {
         generate: 1,
@@ -151,6 +153,7 @@ export const config = {
         backgroundRemove: 1,
         videoStickerPack: 1,
         improve: 1,
+        packImport: 1,
       };
       if (process.env.AI_OPERATION_COSTS) {
         try {
@@ -161,6 +164,7 @@ export const config = {
             backgroundRemove: Math.max(0, parsed.backgroundRemove ?? defaults.backgroundRemove),
             videoStickerPack: Math.max(0, parsed.videoStickerPack ?? defaults.videoStickerPack),
             improve: Math.max(0, parsed.improve ?? defaults.improve),
+            packImport: Math.max(0, parsed.packImport ?? defaults.packImport),
           };
         } catch {
           // fall through to per-key env
@@ -178,6 +182,10 @@ export const config = {
           parseInt(process.env.AI_COST_VIDEO_PACK ?? String(defaults.videoStickerPack), 10)
         ),
         improve: Math.max(0, parseInt(process.env.AI_COST_IMPROVE ?? String(defaults.improve), 10)),
+        packImport: Math.max(
+          0,
+          parseInt(process.env.AI_COST_PACK_IMPORT ?? String(defaults.packImport), 10)
+        ),
       };
     })(),
   },

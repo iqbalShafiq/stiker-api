@@ -1,7 +1,20 @@
 import { prisma } from '../prisma/client';
 import { Prisma, StickerVisibility, SharePermission } from '@prisma/client';
 import { RoleService } from './role.service';
-import { ForbiddenError, NotFoundError, ValidationError } from '../errors';
+import { ForbiddenError, NotFoundError } from '../errors';
+import {
+  buildPublicBaseWhere,
+  buildSearchFilter,
+  getPublicOrderBy,
+  loadViewerSocialState,
+  mapPackWithSocial,
+  normalizePublicQuery,
+  PUBLIC_PACK_INCLUDE,
+  type PublicStickerPackQuery,
+  type PublicStickerPackSort,
+} from '../utils/pack-query';
+import { aiUsageService } from './ai-usage.service';
+import { notificationService } from './notification.service';
 
 export interface CreateStickerPackInput {
   ownerId: string;
@@ -39,13 +52,7 @@ export interface AddStickerToPackInput {
 }
 
 export type StickerPackAction = 'read' | 'update' | 'delete';
-export type PublicStickerPackSort = 'recent' | 'popular' | 'downloads' | 'likes';
-
-export interface PublicStickerPackQuery {
-  page?: number;
-  limit?: number;
-  sort?: PublicStickerPackSort;
-}
+export type { PublicStickerPackQuery, PublicStickerPackSort };
 
 export class StickerPackService {
   private roleService: RoleService;
@@ -153,79 +160,38 @@ export class StickerPackService {
     });
   }
 
-  private normalizePublicQuery(query: PublicStickerPackQuery): Required<PublicStickerPackQuery> {
-    const page = Math.max(1, Math.floor(query.page ?? 1));
-    const limit = Math.min(50, Math.max(1, Math.floor(query.limit ?? 20)));
-    const sort = query.sort ?? 'recent';
-
-    if (!['recent', 'popular', 'downloads', 'likes'].includes(sort)) {
-      throw new ValidationError('Invalid sort value');
-    }
-
-    return { page, limit, sort };
-  }
-
-  private getPublicOrderBy(sort: PublicStickerPackSort): Prisma.StickerPackOrderByWithRelationInput[] {
-    if (sort === 'popular') {
-      return [{ likeCount: 'desc' }, { downloadCount: 'desc' }, { createdAt: 'desc' }];
-    }
-
-    if (sort === 'downloads') {
-      return [{ downloadCount: 'desc' }, { createdAt: 'desc' }];
-    }
-
-    if (sort === 'likes') {
-      return [{ likeCount: 'desc' }, { createdAt: 'desc' }];
-    }
-
-    return [{ createdAt: 'desc' }];
-  }
-
-  async findPublicPaginated(query: PublicStickerPackQuery = {}): Promise<{
-    data: Prisma.StickerPackGetPayload<{
-      include: {
-        owner: { select: { id: true; username: true; displayName: true; followerCount: true } };
-        stickers: { include: { sticker: true }; orderBy: { order: 'asc' } };
-      }
-    }>[];
-    pagination: { page: number; limit: number; total: number; totalPages: number };
-  }> {
-    const { page, limit, sort } = this.normalizePublicQuery(query);
-    const where = {
-      visibility: StickerVisibility.PUBLIC,
-      deletedAt: null,
+  private async paginatePublicPacks(
+    where: Prisma.StickerPackWhereInput,
+    query: PublicStickerPackQuery,
+    viewerId?: string
+  ) {
+    const { page, limit, sort } = normalizePublicQuery(query);
+    const fullWhere = {
+      ...buildPublicBaseWhere(),
+      ...where,
+      ...buildSearchFilter(query.q),
     };
 
     const [total, data] = await prisma.$transaction([
-      prisma.stickerPack.count({ where }),
+      prisma.stickerPack.count({ where: fullWhere }),
       prisma.stickerPack.findMany({
-        where,
+        where: fullWhere,
         skip: (page - 1) * limit,
         take: limit,
-        orderBy: this.getPublicOrderBy(sort),
-        include: {
-          owner: {
-            select: {
-              id: true,
-              username: true,
-              displayName: true,
-              followerCount: true,
-            },
-          },
-          stickers: {
-            include: {
-              sticker: true,
-            },
-            orderBy: {
-              order: 'asc',
-            },
-          },
-        },
+        orderBy: getPublicOrderBy(sort),
+        include: PUBLIC_PACK_INCLUDE,
       }),
     ]);
 
+    const enriched = await Promise.all(
+      data.map(async (pack) => {
+        const social = await loadViewerSocialState(pack, viewerId);
+        return mapPackWithSocial(pack, social);
+      })
+    );
+
     return {
-      data,
+      data: enriched,
       pagination: {
         page,
         limit,
@@ -233,6 +199,62 @@ export class StickerPackService {
         totalPages: Math.ceil(total / limit),
       },
     };
+  }
+
+  async findPublicPaginated(query: PublicStickerPackQuery = {}, viewerId?: string) {
+    const ownerFilter = query.ownerId ? { ownerId: query.ownerId } : {};
+    return this.paginatePublicPacks(ownerFilter, query, viewerId);
+  }
+
+  async findSavedPaginated(userId: string, query: PublicStickerPackQuery = {}) {
+    const savedPackIds = await prisma.stickerPackSave.findMany({
+      where: { userId },
+      select: { stickerPackId: true },
+    });
+    const ids = savedPackIds.map((s) => s.stickerPackId);
+    if (ids.length === 0) {
+      const { page, limit } = normalizePublicQuery(query);
+      return {
+        data: [],
+        pagination: { page, limit, total: 0, totalPages: 0 },
+      };
+    }
+    return this.paginatePublicPacks({ id: { in: ids } }, query, userId);
+  }
+
+  async findFollowingPaginated(userId: string, query: PublicStickerPackQuery = {}) {
+    const following = await prisma.userFollow.findMany({
+      where: { followerId: userId },
+      select: { followingId: true },
+    });
+    const ownerIds = following.map((f) => f.followingId);
+    if (ownerIds.length === 0) {
+      const { page, limit } = normalizePublicQuery(query);
+      return {
+        data: [],
+        pagination: { page, limit, total: 0, totalPages: 0 },
+      };
+    }
+    return this.paginatePublicPacks({ ownerId: { in: ownerIds } }, query, userId);
+  }
+
+  async findSharedWithMePaginated(userId: string, query: PublicStickerPackQuery = {}) {
+    const shares = await prisma.stickerPackShare.findMany({
+      where: {
+        sharedWithId: userId,
+        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+      },
+      select: { stickerPackId: true },
+    });
+    const ids = shares.map((s) => s.stickerPackId);
+    if (ids.length === 0) {
+      const { page, limit } = normalizePublicQuery(query);
+      return {
+        data: [],
+        pagination: { page, limit, total: 0, totalPages: 0 },
+      };
+    }
+    return this.paginatePublicPacks({ id: { in: ids } }, query, userId);
   }
 
   async findPublic(): Promise<Prisma.StickerPackGetPayload<{
@@ -266,13 +288,36 @@ export class StickerPackService {
     });
   }
 
-  async findPublicById(id: string): Promise<Prisma.StickerPackGetPayload<{
-    include: {
-      owner: { select: { id: true; username: true; displayName: true; followerCount: true } };
-      stickers: { include: { sticker: true } };
+  async findPublicById(id: string, viewerId?: string) {
+    const pack = await prisma.stickerPack.findFirst({
+      where: {
+        id,
+        visibility: StickerVisibility.PUBLIC,
+        deletedAt: null,
+      },
+      include: PUBLIC_PACK_INCLUDE,
+    });
+
+    if (!pack) {
+      return null;
     }
-  }> | null> {
-    return prisma.stickerPack.findFirst({
+
+    const social = await loadViewerSocialState(pack, viewerId);
+    return mapPackWithSocial(pack, social);
+  }
+
+  async importPublicPack(id: string, userId: string): Promise<{
+    pack: Prisma.StickerPackGetPayload<{
+      include: {
+        owner: { select: { id: true; username: true; displayName: true } };
+        stickers: { include: { sticker: true } };
+      };
+    }>;
+    pointCost: number;
+    ownerCredited: number;
+    pointsRemaining: number;
+  }> {
+    const source = await prisma.stickerPack.findFirst({
       where: {
         id,
         visibility: StickerVisibility.PUBLIC,
@@ -280,46 +325,30 @@ export class StickerPackService {
       },
       include: {
         owner: {
-          select: {
-            id: true,
-            username: true,
-            displayName: true,
-            followerCount: true,
-          },
+          select: { id: true, username: true, displayName: true },
         },
         stickers: {
-          include: {
-            sticker: true,
-          },
-          orderBy: {
-            order: 'asc',
-          },
+          include: { sticker: true },
+          orderBy: { order: 'asc' },
         },
       },
     });
-  }
 
-  async importPublicPack(id: string, userId: string): Promise<Prisma.StickerPackGetPayload<{
-    include: {
-      owner: { select: { id: true; username: true; displayName: true } };
-      stickers: { include: { sticker: true } };
-    }
-  }>> {
-    const pack = await this.findPublicById(id);
-
-    if (!pack) {
+    if (!source) {
       throw new NotFoundError('Public sticker pack not found');
     }
 
-    return prisma.$transaction(async (tx) => {
+    const transfer = await aiUsageService.transferPointsForPackImport(userId, source.ownerId);
+
+    const pack = await prisma.$transaction(async (tx) => {
       return tx.stickerPack.create({
         data: {
           owner: { connect: { id: userId } },
-          name: pack.name,
-          description: pack.description,
+          name: source.name,
+          description: source.description,
           visibility: StickerVisibility.PRIVATE,
           stickers: {
-            create: pack.stickers.map((item) => ({
+            create: source.stickers.map((item) => ({
               order: item.order,
               sticker: {
                 create: {
@@ -357,6 +386,23 @@ export class StickerPackService {
         },
       });
     });
+
+    if (source.ownerId !== userId) {
+      void notificationService.create({
+        userId: source.ownerId,
+        type: 'PACK_IMPORT',
+        title: 'Someone imported your pack',
+        body: `Your pack "${source.name}" was imported`,
+        payload: { packId: source.id, importerId: userId, pointCost: transfer.pointCost },
+      });
+    }
+
+    return {
+      pack,
+      pointCost: transfer.pointCost,
+      ownerCredited: transfer.ownerCredited,
+      pointsRemaining: transfer.usage.pointsRemaining,
+    };
   }
 
   async update(id: string, userId: string, input: UpdateStickerPackInput): Promise<Prisma.StickerPackGetPayload<{

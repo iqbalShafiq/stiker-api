@@ -547,10 +547,12 @@ describe('Sticker Pack Routes Integration', () => {
         .set('Authorization', `Bearer ${user2Token}`);
 
       expect(response.status).toBe(201);
-      expect(response.body.data.ownerId).toBe(user2Id);
-      expect(response.body.data.id).not.toBe(createResponse.body.data.id);
-      expect(response.body.data.visibility).toBe('PRIVATE');
-      expect(response.body.data.stickers).toHaveLength(1);
+      expect(response.body.data.pack.ownerId).toBe(user2Id);
+      expect(response.body.data.pack.id).not.toBe(createResponse.body.data.id);
+      expect(response.body.data.pack.visibility).toBe('PRIVATE');
+      expect(response.body.data.pack.stickers).toHaveLength(1);
+      expect(typeof response.body.data.pointCost).toBe('number');
+      expect(typeof response.body.data.pointsRemaining).toBe('number');
     });
 
     test('should like, save, download, follow, and undo idempotent actions', async () => {

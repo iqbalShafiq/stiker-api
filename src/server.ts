@@ -2,6 +2,7 @@ import app from './app';
 import { config } from './config';
 import logger from './utils/logger';
 import { CleanupService } from './utils/cleanup';
+import { featuredService, getFeaturedCronIntervalMs } from './services/featured.service';
 
 const server = app.listen(config.port, config.host, () => {
   logger.info(
@@ -22,6 +23,16 @@ const server = app.listen(config.port, config.host, () => {
       logger.error({ err }, 'Scheduled cleanup failed');
     });
   }, intervalMs);
+
+  const featuredIntervalMs = getFeaturedCronIntervalMs();
+  void featuredService.recomputeFeaturedPack().catch((err) => {
+    logger.error({ err }, 'Initial featured pack computation failed');
+  });
+  setInterval(() => {
+    void featuredService.recomputeFeaturedPack().catch((err) => {
+      logger.error({ err }, 'Scheduled featured pack computation failed');
+    });
+  }, featuredIntervalMs);
 });
 
 process.on('SIGTERM', () => {

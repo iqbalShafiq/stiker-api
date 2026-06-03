@@ -220,6 +220,27 @@ export class StickerPackShareService {
     return link;
   }
 
+  async listCollaborators(stickerPackId: string, ownerId: string) {
+    const hasOwnership = await this.checkOwnership(stickerPackId, ownerId);
+    if (!hasOwnership) {
+      throw new ForbiddenError('You do not have permission to list collaborators for this sticker pack');
+    }
+
+    return prisma.stickerPackShare.findMany({
+      where: { stickerPackId },
+      include: {
+        sharedWith: {
+          select: {
+            id: true,
+            username: true,
+            displayName: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   async listActiveLinks(stickerPackId: string, ownerId: string): Promise<Prisma.StickerPackShareLinkGetPayload<object>[]> {
     const hasOwnership = await this.checkOwnership(stickerPackId, ownerId);
     if (!hasOwnership) {

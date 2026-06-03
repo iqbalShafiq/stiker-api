@@ -1,25 +1,27 @@
 import { Prisma, StickerVisibility } from '@prisma/client';
 import { prisma } from '../prisma/client';
 import { NotFoundError, ValidationError } from '../errors';
+import { notificationService } from './notification.service';
 
 export class SocialService {
-  private async ensurePublicPack(stickerPackId: string): Promise<void> {
+  private async ensurePublicPack(stickerPackId: string): Promise<{ id: string; ownerId: string; name: string }> {
     const pack = await prisma.stickerPack.findFirst({
       where: {
         id: stickerPackId,
         visibility: StickerVisibility.PUBLIC,
         deletedAt: null,
       },
-      select: { id: true },
+      select: { id: true, ownerId: true, name: true },
     });
 
     if (!pack) {
       throw new NotFoundError('Public sticker pack not found');
     }
+    return pack;
   }
 
   async likePack(stickerPackId: string, userId: string): Promise<{ liked: true; likeCount: number }> {
-    await this.ensurePublicPack(stickerPackId);
+    const publicPack = await this.ensurePublicPack(stickerPackId);
 
     const pack = await prisma.$transaction(async (tx) => {
       const existing = await tx.stickerPackLike.findUnique({
@@ -55,6 +57,16 @@ export class SocialService {
       });
     });
 
+    if (publicPack.ownerId !== userId) {
+      void notificationService.create({
+        userId: publicPack.ownerId,
+        type: 'LIKE',
+        title: 'New like on your pack',
+        body: `Your pack "${publicPack.name}" was liked`,
+        payload: { packId: stickerPackId, actorId: userId },
+      });
+    }
+
     return { liked: true, likeCount: pack.likeCount };
   }
 
@@ -84,7 +96,7 @@ export class SocialService {
   }
 
   async savePack(stickerPackId: string, userId: string): Promise<{ saved: true; saveCount: number }> {
-    await this.ensurePublicPack(stickerPackId);
+    const publicPack = await this.ensurePublicPack(stickerPackId);
 
     const pack = await prisma.$transaction(async (tx) => {
       const existing = await tx.stickerPackSave.findUnique({
@@ -119,6 +131,16 @@ export class SocialService {
         select: { saveCount: true },
       });
     });
+
+    if (publicPack.ownerId !== userId) {
+      void notificationService.create({
+        userId: publicPack.ownerId,
+        type: 'SAVE',
+        title: 'Pack saved',
+        body: `Someone saved your pack "${publicPack.name}"`,
+        payload: { packId: stickerPackId, actorId: userId },
+      });
+    }
 
     return { saved: true, saveCount: pack.saveCount };
   }
@@ -220,6 +242,14 @@ export class SocialService {
       ]);
 
       return { followerCount: targetUser.followerCount, followingCount: followerUser.followingCount };
+    });
+
+    void notificationService.create({
+      userId: followingId,
+      type: 'FOLLOW',
+      title: 'New follower',
+      body: 'Someone started following you',
+      payload: { followerId },
     });
 
     return { following: true, ...counts };

@@ -2,9 +2,17 @@ import { prisma } from '../prisma/client';
 import { Prisma } from '@prisma/client';
 import { NotFoundError, ValidationError } from '../errors';
 
+export type ProcessingHistoryType =
+  | 'generate'
+  | 'grid-split'
+  | 'background-remove'
+  | 'sticker-pack'
+  | 'improve'
+  | 'video-sticker-pack';
+
 export interface CreateHistoryInput {
   userId: string;
-  type: 'generate' | 'grid-split' | 'background-remove';
+  type: ProcessingHistoryType;
   inputData?: Record<string, unknown>;
   outputFiles: Array<{
     url: string;
@@ -17,7 +25,15 @@ export interface CreateHistoryInput {
 
 export class ProcessingHistoryService {
   private assertValidType(type?: string): void {
-    if (type && !['generate', 'grid-split', 'background-remove'].includes(type)) {
+    const valid: ProcessingHistoryType[] = [
+      'generate',
+      'grid-split',
+      'background-remove',
+      'sticker-pack',
+      'improve',
+      'video-sticker-pack',
+    ];
+    if (type && !valid.includes(type as ProcessingHistoryType)) {
       throw new ValidationError('Invalid processing history type');
     }
   }

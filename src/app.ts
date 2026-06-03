@@ -13,6 +13,7 @@ import { upload } from './middleware/upload-handler';
 import { validateRequest } from './middleware/validate-request';
 import { errorHandler } from './middleware/error-handler';
 import { authenticateToken } from './middleware/auth.middleware';
+import { optionalAuthenticateToken } from './middleware/optional-auth.middleware';
 import { requireRole } from './middleware/role.middleware';
 import { generateImageSchema, generateStickerPackSchema, generateVideoStickerPackSchema } from './utils/validators';
 import { GenerateController } from './controllers/generate.controller';
@@ -30,6 +31,10 @@ import { SocialController } from './controllers/social.controller';
 import { LegalController } from './controllers/legal.controller';
 import { AiUsageController } from './controllers/ai-usage.controller';
 import { AiQuotaController } from './controllers/ai-quota.controller';
+import { UserProfileController } from './controllers/user-profile.controller';
+import { NotificationController } from './controllers/notification.controller';
+import { FeaturedController } from './controllers/featured.controller';
+import { PromptPresetController } from './controllers/prompt-preset.controller';
 import { requireAiQuota } from './middleware/ai-quota.middleware';
 import { asyncHandler } from './utils/async-handler';
 
@@ -119,6 +124,10 @@ const socialController = new SocialController();
 const legalController = new LegalController();
 const aiUsageController = new AiUsageController();
 const aiQuotaController = new AiQuotaController();
+const userProfileController = new UserProfileController();
+const notificationController = new NotificationController();
+const featuredController = new FeaturedController();
+const promptPresetController = new PromptPresetController();
 
 // Legal routes (public)
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
@@ -184,13 +193,51 @@ app.get('/api/v1/stickers/:id/links', authenticateToken, asyncHandler((req, res,
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.delete('/api/v1/stickers/:id/link/:linkId', authenticateToken, asyncHandler((req, res, next) => stickerController.revokeShareLink(req, res, next)));
 
+// Featured (public)
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/featured/today', optionalAuthenticateToken, asyncHandler((req, res, next) => featuredController.getToday(req, res, next)));
+
+// Prompt presets (public read; admin CRUD)
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/prompt-presets', asyncHandler((req, res, next) => promptPresetController.list(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/admin/prompt-presets', authenticateToken, requireRole('admin'), asyncHandler((req, res, next) => promptPresetController.listAll(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/admin/prompt-presets', authenticateToken, requireRole('admin'), asyncHandler((req, res, next) => promptPresetController.create(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.put('/api/v1/admin/prompt-presets/:slug', authenticateToken, requireRole('admin'), asyncHandler((req, res, next) => promptPresetController.update(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.delete('/api/v1/admin/prompt-presets/:slug', authenticateToken, requireRole('admin'), asyncHandler((req, res, next) => promptPresetController.remove(req, res, next)));
+
+// User profile (public + search)
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/users/search', authenticateToken, asyncHandler((req, res, next) => userProfileController.searchUsers(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/users/:id/public', optionalAuthenticateToken, asyncHandler((req, res, next) => userProfileController.getPublicProfile(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/users/:id/packs/public', optionalAuthenticateToken, asyncHandler((req, res, next) => userProfileController.getPublicPacks(req, res, next)));
+
+// Notifications (protected)
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/notifications', authenticateToken, asyncHandler((req, res, next) => notificationController.list(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.patch('/api/v1/notifications/:id/read', authenticateToken, asyncHandler((req, res, next) => notificationController.markRead(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/notifications/read-all', authenticateToken, asyncHandler((req, res, next) => notificationController.markAllRead(req, res, next)));
+
 // Sticker Pack routes (public)
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
-app.get('/api/v1/sticker-packs/public', asyncHandler((req, res, next) => stickerPackController.getPublicStickerPacks(req, res, next)));
+app.get('/api/v1/sticker-packs/public', optionalAuthenticateToken, asyncHandler((req, res, next) => stickerPackController.getPublicStickerPacks(req, res, next)));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
-app.get('/api/v1/sticker-packs/public/:id', asyncHandler((req, res, next) => stickerPackController.getPublicStickerPack(req, res, next)));
+app.get('/api/v1/sticker-packs/public/:id', optionalAuthenticateToken, asyncHandler((req, res, next) => stickerPackController.getPublicStickerPack(req, res, next)));
 
 // Sticker Pack routes (protected)
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/sticker-packs/saved', authenticateToken, asyncHandler((req, res, next) => stickerPackController.getSavedStickerPacks(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/sticker-packs/following', authenticateToken, asyncHandler((req, res, next) => stickerPackController.getFollowingStickerPacks(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/sticker-packs/shared-with-me', authenticateToken, asyncHandler((req, res, next) => stickerPackController.getSharedWithMeStickerPacks(req, res, next)));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.get('/api/v1/sticker-packs', authenticateToken, asyncHandler((req, res, next) => stickerPackController.getMyStickerPacks(req, res, next)));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
@@ -225,6 +272,8 @@ app.post('/api/v1/sticker-packs/:id/share', authenticateToken, asyncHandler((req
 app.delete('/api/v1/sticker-packs/:id/share', authenticateToken, asyncHandler((req, res, next) => stickerPackController.removeUserShare(req, res, next)));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.post('/api/v1/sticker-packs/:id/link', authenticateToken, asyncHandler((req, res, next) => stickerPackController.createShareLink(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/sticker-packs/:id/collaborators', authenticateToken, asyncHandler((req, res, next) => stickerPackController.listCollaborators(req, res, next)));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.get('/api/v1/sticker-packs/:id/links', authenticateToken, asyncHandler((req, res, next) => stickerPackController.listShareLinks(req, res, next)));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises

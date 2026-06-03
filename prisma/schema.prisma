@@ -77,6 +77,8 @@ model User {
   processingHistory  ProcessingHistory[]
   followerCount      Int @default(0)
   followingCount     Int @default(0)
+  subscriptionTier   String @default("free")
+  notifications      UserNotification[]
 
   @@index([email])
   @@index([username])
@@ -200,11 +202,59 @@ model StickerPack {
   likes       StickerPackLike[]
   saves       StickerPackSave[]
   downloads   StickerPackDownload[]
+  featured    FeaturedStickerPack?
 
   @@index([ownerId])
   @@index([visibility])
   @@index([deletedAt])
   @@index([updatedAt])
+}
+
+model FeaturedStickerPack {
+  id            String   @id @default(uuid())
+  stickerPackId String   @unique
+  score         Float
+  windowStart   DateTime
+  windowEnd     DateTime
+  createdAt     DateTime @default(now())
+
+  stickerPack StickerPack @relation(fields: [stickerPackId], references: [id], onDelete: Cascade)
+
+  @@index([windowEnd])
+  @@index([score])
+}
+
+model UserNotification {
+  id        String    @id @default(uuid())
+  userId    String
+  type      String
+  title     String
+  body      String?
+  payload   Json?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
+}
+
+/// Curated AI prompt templates for generate flows (managed server-side).
+model PromptPreset {
+  id            String   @id @default(uuid())
+  slug          String   @unique
+  title         String
+  category      String
+  prompt        String
+  referenceHint String?
+  sortOrder     Int      @default(0)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([category])
+  @@index([isActive, sortOrder])
 }
 
 model StickerPackSticker {

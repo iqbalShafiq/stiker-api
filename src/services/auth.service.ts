@@ -281,6 +281,9 @@ export class AuthService {
       role: user.role.name,
       isActive: user.isActive,
       emailVerified: user.emailVerified,
+      subscriptionTier: user.subscriptionTier,
+      followerCount: user.followerCount,
+      followingCount: user.followingCount,
       createdAt: user.createdAt,
     };
   }

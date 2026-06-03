@@ -6,6 +6,7 @@ import { buildPaginatedSuccessResponse, buildSuccessResponse } from '../utils/re
 import { ValidationError, NotFoundError, ForbiddenError } from '../errors';
 import { SharePermission } from '@prisma/client';
 import { withShareLinkUrls } from '../utils/share-links';
+import { notificationService } from '../services/notification.service';
 
 export class StickerPackController {
   private stickerPackService: StickerPackService;
@@ -69,12 +70,59 @@ export class StickerPackController {
     }
   }
 
+  private parsePublicQuery(req: AuthRequest) {
+    const page = typeof req.query.page === 'string' ? Number(req.query.page) : undefined;
+    const limit = typeof req.query.limit === 'string' ? Number(req.query.limit) : undefined;
+    const sort = typeof req.query.sort === 'string'
+      ? req.query.sort as 'recent' | 'popular' | 'downloads' | 'likes' | 'saves'
+      : undefined;
+    const q = typeof req.query.q === 'string' ? req.query.q : undefined;
+    const ownerId = typeof req.query.ownerId === 'string' ? req.query.ownerId : undefined;
+    return { page, limit, sort, q, ownerId };
+  }
+
   async getPublicStickerPacks(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const page = typeof req.query.page === 'string' ? Number(req.query.page) : undefined;
-      const limit = typeof req.query.limit === 'string' ? Number(req.query.limit) : undefined;
-      const sort = typeof req.query.sort === 'string' ? req.query.sort as 'recent' | 'popular' | 'downloads' | 'likes' : undefined;
-      const result = await this.stickerPackService.findPublicPaginated({ page, limit, sort });
+      const result = await this.stickerPackService.findPublicPaginated(
+        this.parsePublicQuery(req),
+        req.user?.id
+      );
+      res.status(200).json(buildPaginatedSuccessResponse(result.data, result.pagination));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getSavedStickerPacks(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user?.id) {
+        throw new ValidationError('User not authenticated');
+      }
+      const result = await this.stickerPackService.findSavedPaginated(req.user.id, this.parsePublicQuery(req));
+      res.status(200).json(buildPaginatedSuccessResponse(result.data, result.pagination));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getFollowingStickerPacks(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user?.id) {
+        throw new ValidationError('User not authenticated');
+      }
+      const result = await this.stickerPackService.findFollowingPaginated(req.user.id, this.parsePublicQuery(req));
+      res.status(200).json(buildPaginatedSuccessResponse(result.data, result.pagination));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getSharedWithMeStickerPacks(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user?.id) {
+        throw new ValidationError('User not authenticated');
+      }
+      const result = await this.stickerPackService.findSharedWithMePaginated(req.user.id, this.parsePublicQuery(req));
       res.status(200).json(buildPaginatedSuccessResponse(result.data, result.pagination));
     } catch (error) {
       next(error);
@@ -89,7 +137,7 @@ export class StickerPackController {
         throw new ValidationError('Sticker pack ID is required');
       }
 
-      const pack = await this.stickerPackService.findPublicById(id);
+      const pack = await this.stickerPackService.findPublicById(id, req.user?.id);
       if (!pack) {
         throw new NotFoundError('Public sticker pack not found');
       }
@@ -112,8 +160,8 @@ export class StickerPackController {
         throw new ValidationError('Sticker pack ID is required');
       }
 
-      const pack = await this.stickerPackService.importPublicPack(id, req.user.id);
-      res.status(201).json(buildSuccessResponse(pack));
+      const result = await this.stickerPackService.importPublicPack(id, req.user.id);
+      res.status(201).json(buildSuccessResponse(result));
     } catch (error) {
       next(error);
     }
@@ -314,6 +362,14 @@ export class StickerPackController {
         expirationDate
       );
 
+      void notificationService.create({
+        userId: String(sharedWithId),
+        type: 'COLLAB_INVITE',
+        title: 'Pack shared with you',
+        body: 'You were invited to collaborate on a sticker pack',
+        payload: { packId: id, grantedBy: req.user.id, permission: sharePermission },
+      });
+
       res.status(201).json(buildSuccessResponse(share));
     } catch (error) {
       next(error);
@@ -373,6 +429,24 @@ export class StickerPackController {
       );
 
       res.status(201).json(buildSuccessResponse(this.withPackShareUrl(req, link as Record<string, unknown>)));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async listCollaborators(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user?.id) {
+        throw new ValidationError('User not authenticated');
+      }
+
+      const { id } = req.params;
+      if (!id) {
+        throw new ValidationError('Sticker pack ID is required');
+      }
+
+      const collaborators = await this.shareService.listCollaborators(id, req.user.id);
+      res.status(200).json(buildSuccessResponse(collaborators));
     } catch (error) {
       next(error);
     }

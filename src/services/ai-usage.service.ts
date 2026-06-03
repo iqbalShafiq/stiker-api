@@ -9,7 +9,8 @@ export type AiOperation =
   | 'gridSplit'
   | 'backgroundRemove'
   | 'videoStickerPack'
-  | 'improve';
+  | 'improve'
+  | 'packImport';
 
 export type AiReservationOutcome = 'committed' | 'released';
 
@@ -19,6 +20,7 @@ export interface AiUsageCounts {
   backgroundRemove: number;
   videoStickerPack: number;
   improve: number;
+  packImport: number;
 }
 
 export interface AiUsageSnapshot {
@@ -54,7 +56,33 @@ const OPERATIONS: AiOperation[] = [
   'backgroundRemove',
   'videoStickerPack',
   'improve',
+  'packImport',
 ];
+
+const TRANSFER_POINTS_SCRIPT = `
+local fromUsedKey = KEYS[1]
+local fromOutstandingKey = KEYS[2]
+local toUsedKey = KEYS[3]
+local amount = tonumber(ARGV[1])
+local pointLimit = tonumber(ARGV[2])
+local ttl = tonumber(ARGV[3])
+
+local fromUsed = tonumber(redis.call('GET', fromUsedKey) or '0')
+local fromOutstanding = tonumber(redis.call('GET', fromOutstandingKey) or '0')
+if fromUsed + fromOutstanding + amount > pointLimit then
+  return {0, fromUsed, fromOutstanding}
+end
+
+redis.call('INCRBY', fromUsedKey, amount)
+redis.call('EXPIRE', fromUsedKey, ttl)
+
+local toUsed = tonumber(redis.call('GET', toUsedKey) or '0')
+local credited = math.min(amount, toUsed)
+local newToUsed = toUsed - credited
+redis.call('SET', toUsedKey, tostring(newToUsed), 'EX', ttl)
+
+return {1, fromUsed + amount, credited}
+`;
 
 function dayKeyForDate(date: Date): string {
   return date.toISOString().slice(0, 10);
@@ -621,6 +649,65 @@ export class AiUsageService {
   async reserveForRequest(userId: string, operation: AiOperation): Promise<string> {
     const result = await this.reserve(userId, operation);
     return result.reservationId;
+  }
+
+  async transferPointsForPackImport(
+    fromUserId: string,
+    toUserId: string
+  ): Promise<{ pointCost: number; ownerCredited: number; usage: AiUsageSnapshot }> {
+    const operation: AiOperation = 'packImport';
+    const amount = getCost(operation);
+    if (amount <= 0 || !config.aiQuota.packImportEnabled) {
+      const usage = await this.getUsage(fromUserId);
+      return { pointCost: 0, ownerCredited: 0, usage };
+    }
+
+    if (fromUserId === toUserId) {
+      const usage = await this.getUsage(fromUserId);
+      return { pointCost: 0, ownerCredited: 0, usage };
+    }
+
+    await this.assertCanReserve(fromUserId, operation);
+
+    const now = new Date();
+    const dayKey = dayKeyForDate(now);
+    const ttl = usageTtlSeconds(now);
+    const pointLimit = getPointLimit();
+    const redis = await getReadyRedis();
+
+    if (!redis) {
+      if (!failOpenOnRedisError()) {
+        throw redisRequiredError();
+      }
+      const usage = await this.getUsage(fromUserId);
+      return { pointCost: 0, ownerCredited: 0, usage };
+    }
+
+    const raw = parseScriptResult(
+      await redis.eval(
+        TRANSFER_POINTS_SCRIPT,
+        3,
+        usedPointsKey(fromUserId, dayKey),
+        outstandingPointsKey(fromUserId, dayKey),
+        usedPointsKey(toUserId, dayKey),
+        String(amount),
+        String(pointLimit),
+        String(ttl)
+      )
+    );
+
+    const applied = parseNumber(raw[0]) === 1;
+    if (!applied) {
+      const snapshot = await this.getUsage(fromUserId);
+      this.throwQuotaExceeded(operation, snapshot);
+    }
+
+    const usage = await this.getUsage(fromUserId);
+    return {
+      pointCost: amount,
+      ownerCredited: parseNumber(raw[2]),
+      usage,
+    };
   }
 }
 

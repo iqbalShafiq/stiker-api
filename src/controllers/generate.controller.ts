@@ -229,7 +229,7 @@ export class GenerateController {
           inputImage: Boolean(req.file),
         },
         images: [imageResult],
-      });
+      }, 'sticker-pack');
 
       const metadata: GenerationMetadata = {
         model: config.models.imageGeneration,
@@ -284,7 +284,7 @@ export class GenerateController {
         await this.recordGenerateHistory(userId, {
           inputData: { mode: 'improvement-single', inputCount: 1 },
           images: [imageResult],
-        });
+        }, 'improve');
 
         const metadata: GenerationMetadata = {
           model: config.models.imageGeneration,
@@ -340,7 +340,7 @@ export class GenerateController {
           maxCellsPerImage: IMPROVEMENT_GRID_MAX_CELLS,
         },
         images,
-      });
+      }, 'improve');
 
       const metadata: GenerationMetadata = {
         model: config.models.imageGeneration,
@@ -392,7 +392,7 @@ export class GenerateController {
 
       await this.processingHistoryService.create({
         userId,
-        type: 'generate',
+        type: 'video-sticker-pack',
         inputData: {
           mode: 'video-sticker-pack',
           candidateGridCount: files.length,
@@ -467,11 +467,12 @@ export class GenerateController {
     input: {
       inputData: Record<string, unknown>;
       images: ImageResult[];
-    }
+    },
+    type: 'generate' | 'sticker-pack' | 'improve' = 'generate'
   ): Promise<void> {
     await this.processingHistoryService.create({
       userId,
-      type: 'generate',
+      type,
       inputData: input.inputData,
       outputFiles: input.images.map(image => ({
         url: image.url,
