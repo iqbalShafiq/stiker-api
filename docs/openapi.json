@@ -4440,6 +4440,92 @@
           }
         }
       }
+    },
+    "/api/v1/sticker-packs/saved": {
+      "get": {
+        "summary": "Get saved public sticker packs",
+        "tags": ["Sticker Packs", "Social"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } },
+          { "name": "sort", "in": "query", "schema": { "type": "string", "enum": ["recent", "popular", "downloads", "likes", "saves"] } },
+          { "name": "q", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Paginated saved packs" }, "401": { "$ref": "#/components/responses/UnauthorizedError" } }
+      }
+    },
+    "/api/v1/sticker-packs/following": {
+      "get": {
+        "summary": "Get sticker packs from followed creators",
+        "tags": ["Sticker Packs", "Social"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } },
+          { "name": "sort", "in": "query", "schema": { "type": "string" } },
+          { "name": "q", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Paginated following feed" }, "401": { "$ref": "#/components/responses/UnauthorizedError" } }
+      }
+    },
+    "/api/v1/sticker-packs/shared-with-me": {
+      "get": {
+        "summary": "Get sticker packs shared with the current user",
+        "tags": ["Sticker Packs", "Social"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } },
+          { "name": "sort", "in": "query", "schema": { "type": "string" } },
+          { "name": "q", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Paginated shared packs" }, "401": { "$ref": "#/components/responses/UnauthorizedError" } }
+      }
+    },
+    "/api/v1/notifications": {
+      "get": {
+        "summary": "List user notifications",
+        "tags": ["Social"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } },
+          { "name": "unreadOnly", "in": "query", "schema": { "type": "boolean", "default": false } }
+        ],
+        "responses": { "200": { "description": "Notifications with unreadCount in meta" }, "401": { "$ref": "#/components/responses/UnauthorizedError" } }
+      }
+    },
+    "/api/v1/notifications/read-all": {
+      "post": {
+        "summary": "Mark all notifications as read",
+        "tags": ["Social"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "200": { "description": "All marked read" }, "401": { "$ref": "#/components/responses/UnauthorizedError" } }
+      }
+    },
+    "/api/v1/notifications/{id}/read": {
+      "patch": {
+        "summary": "Mark one notification as read",
+        "tags": ["Social"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Marked read" }, "401": { "$ref": "#/components/responses/UnauthorizedError" } }
+      }
+    },
+    "/api/v1/prompt-presets": {
+      "get": {
+        "summary": "List active prompt presets",
+        "tags": ["Generation"],
+        "responses": { "200": { "description": "Prompt presets" } }
+      }
+    },
+    "/api/v1/featured/today": {
+      "get": {
+        "summary": "Featured sticker pack of the day",
+        "tags": ["Social"],
+        "responses": { "200": { "description": "Featured pack" } }
+      }
     }
   },
   "components": {
