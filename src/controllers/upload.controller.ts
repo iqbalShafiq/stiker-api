@@ -7,6 +7,7 @@ import type { AuthRequest } from '../middleware/auth.middleware';
 import { buildSuccessResponse } from '../utils/response-builder';
 import { ValidationError } from '../errors';
 import { StickerVisibility } from '@prisma/client';
+import { hasStickerVisibilityInput, parseStickerVisibilityInput } from '../utils/visibility';
 
 export class UploadController {
   private stickerService: StickerService;
@@ -76,7 +77,14 @@ export class UploadController {
       const stickerPackId = body.stickerPackId ? String(body.stickerPackId) : undefined;
       const stickerPackName = body.stickerPackName ? String(body.stickerPackName) : undefined;
       const stickerPackDescription = body.stickerPackDescription ? String(body.stickerPackDescription) : undefined;
-      const visibility = String(body.visibility ?? 'private').toUpperCase() as StickerVisibility;
+      let visibility: StickerVisibility = StickerVisibility.PRIVATE;
+      if (hasStickerVisibilityInput(body)) {
+        const parsedVisibility = parseStickerVisibilityInput(body);
+        if (parsedVisibility === undefined) {
+          throw new ValidationError('Invalid visibility value');
+        }
+        visibility = parsedVisibility;
+      }
       const existingStickerIds = body.existingStickerIds ? JSON.parse(String(body.existingStickerIds)) as string[] : [];
 
       let packId = stickerPackId;
@@ -90,6 +98,8 @@ export class UploadController {
           visibility,
         });
         packId = pack.id;
+      } else if (packId && hasStickerVisibilityInput(body)) {
+        await this.stickerPackService.update(packId, userId, { visibility });
       }
 
       const uploadedStickers = [];

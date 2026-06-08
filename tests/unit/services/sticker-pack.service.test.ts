@@ -22,6 +22,10 @@ vi.mock('../../../src/prisma/client', () => ({
       aggregate: vi.fn(),
       updateMany: vi.fn(),
     },
+    sticker: {
+      updateMany: vi.fn(),
+    },
+    $transaction: vi.fn(),
   },
 }));
 
@@ -36,6 +40,12 @@ describe('StickerPackService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    (mockedPrisma.$transaction as ReturnType<typeof vi.fn>).mockImplementation(async (callback) => {
+      return callback({
+        stickerPack: mockedPrisma.stickerPack,
+        sticker: mockedPrisma.sticker,
+      });
+    });
   });
 
   describe('create', () => {

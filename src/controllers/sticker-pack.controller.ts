@@ -7,6 +7,7 @@ import { ValidationError, NotFoundError, ForbiddenError } from '../errors';
 import { SharePermission } from '@prisma/client';
 import { withShareLinkUrls } from '../utils/share-links';
 import { notificationService } from '../services/notification.service';
+import { parseStickerVisibilityInput } from '../utils/visibility';
 
 export class StickerPackController {
   private stickerPackService: StickerPackService;
@@ -28,17 +29,23 @@ export class StickerPackController {
         throw new ValidationError('User not authenticated');
       }
 
-      const { name, description, visibility, stickers } = req.body as Record<string, unknown>;
+      const body = req.body as Record<string, unknown>;
+      const { name, description, stickers } = body;
 
       if (!name || String(name).trim().length === 0) {
         throw new ValidationError('Sticker pack name is required');
+      }
+
+      const visibility = parseStickerVisibilityInput(body);
+      if (body.visibility != null && body.visibility !== '' && visibility === undefined) {
+        throw new ValidationError('Invalid visibility value');
       }
 
       const pack = await this.stickerPackService.create({
         ownerId: req.user.id,
         name: String(name),
         description: description ? String(description) : undefined,
-        visibility: visibility ? String(visibility).toUpperCase() as 'PUBLIC' | 'PRIVATE' | 'UNLISTED' : undefined,
+        visibility,
         stickers: Array.isArray(stickers) ? stickers.map((s: Record<string, unknown>) => ({
           name: String(s.name ?? 'Untitled'),
           filename: String(s.filename ?? ''),
@@ -203,7 +210,8 @@ export class StickerPackController {
       }
 
       const { id } = req.params;
-      const { name, description, visibility } = req.body as Record<string, unknown>;
+      const body = req.body as Record<string, unknown>;
+      const { name, description } = body;
 
       if (!id) {
         throw new ValidationError('Sticker pack ID is required');
@@ -219,8 +227,12 @@ export class StickerPackController {
         updateData.description = String(description);
       }
 
-      if (visibility !== undefined) {
-        updateData.visibility = String(visibility).toUpperCase() as 'PUBLIC' | 'PRIVATE' | 'UNLISTED';
+      if (body.visibility !== undefined || body.isPublic !== undefined || body.public !== undefined) {
+        const visibility = parseStickerVisibilityInput(body);
+        if (visibility === undefined) {
+          throw new ValidationError('Invalid visibility value');
+        }
+        updateData.visibility = visibility;
       }
 
       const pack = await this.stickerPackService.update(id, req.user.id, updateData);

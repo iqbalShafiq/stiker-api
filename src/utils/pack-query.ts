@@ -21,6 +21,11 @@ export const PUBLIC_PACK_INCLUDE = {
     },
   },
   stickers: {
+    where: {
+      sticker: {
+        deletedAt: null,
+      },
+    },
     include: {
       sticker: true,
     },
@@ -54,6 +59,9 @@ export function buildPublicBaseWhere(
   return {
     visibility: StickerVisibility.PUBLIC,
     deletedAt: null,
+    owner: {
+      isActive: true,
+    },
     ...extra,
   };
 }

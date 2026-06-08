@@ -232,6 +232,55 @@ describe('Sticker Pack Routes Integration', () => {
       expect(response.body.data[0].visibility).toBe('PUBLIC');
     });
 
+    test('should return public pack when created with isPublic true', async () => {
+      const createResponse = await request(app)
+        .post('/api/v1/sticker-packs')
+        .set('Authorization', `Bearer ${user1Token}`)
+        .send({
+          name: 'Is Public Pack',
+          isPublic: true,
+        });
+
+      expect(createResponse.status).toBe(201);
+      expect(createResponse.body.data.visibility).toBe('PUBLIC');
+
+      const response = await request(app)
+        .get('/api/v1/sticker-packs/public')
+        .set('Authorization', `Bearer ${user2Token}`)
+        .query({ page: 1, limit: 20, sort: 'recent' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.data.some((pack: { id: string }) => pack.id === createResponse.body.data.id)).toBe(true);
+    });
+
+    test('should expose private pack after update with isPublic true', async () => {
+      const createResponse = await request(app)
+        .post('/api/v1/sticker-packs')
+        .set('Authorization', `Bearer ${user1Token}`)
+        .send({
+          name: 'Toggle Public Pack',
+          visibility: 'private',
+        });
+
+      const packId = createResponse.body.data.id as string;
+
+      const updateResponse = await request(app)
+        .put(`/api/v1/sticker-packs/${packId}`)
+        .set('Authorization', `Bearer ${user1Token}`)
+        .send({ isPublic: true });
+
+      expect(updateResponse.status).toBe(200);
+      expect(updateResponse.body.data.visibility).toBe('PUBLIC');
+
+      const response = await request(app)
+        .get('/api/v1/sticker-packs/public')
+        .set('Authorization', `Bearer ${user2Token}`)
+        .query({ page: 1, limit: 20, sort: 'recent' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.data.some((pack: { id: string }) => pack.id === packId)).toBe(true);
+    });
+
     test('should return paginated public sticker packs', async () => {
       await request(app)
         .post('/api/v1/sticker-packs')
@@ -832,6 +881,37 @@ describe('Upload Route Integration', () => {
     expect(response.status).toBe(201);
     expect(response.body.success).toBe(true);
     expect(response.body.data.stickerPackId).toBe(existingPackId);
+  });
+
+  test('should promote existing pack to public when upload sends visibility public', async () => {
+    const packResponse = await request(app)
+      .post('/api/v1/sticker-packs')
+      .set('Authorization', `Bearer ${user1Token}`)
+      .send({
+        name: 'Promote On Upload',
+        visibility: 'private',
+      });
+
+    const existingPackId = packResponse.body.data.id as string;
+
+    const uploadResponse = await request(app)
+      .post('/api/v1/upload')
+      .set('Authorization', `Bearer ${user1Token}`)
+      .field('stickerPackId', existingPackId)
+      .field('visibility', 'public')
+      .attach('images', TEST_IMAGE_BUFFER, 'test-sticker.png');
+
+    expect(uploadResponse.status).toBe(201);
+
+    const pack = await request(app)
+      .get(`/api/v1/sticker-packs/${existingPackId}`)
+      .set('Authorization', `Bearer ${user1Token}`);
+    expect(pack.body.data.visibility).toBe('PUBLIC');
+
+    const publicList = await request(app)
+      .get('/api/v1/sticker-packs/public')
+      .query({ page: 1, limit: 20, sort: 'recent' });
+    expect(publicList.body.data.some((item: { id: string }) => item.id === existingPackId)).toBe(true);
   });
 
   test('should return 400 without files', async () => {

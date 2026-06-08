@@ -422,27 +422,50 @@ export class StickerPackService {
       throw new ForbiddenError('You do not have permission to update this sticker pack');
     }
 
-    return prisma.stickerPack.update({
-      where: { id },
-      data: {
-        ...(input.name !== undefined && { name: input.name }),
-        ...(input.description !== undefined && { description: input.description }),
-        ...(input.visibility !== undefined && { visibility: input.visibility }),
-      },
-      include: {
-        owner: {
-          select: {
-            id: true,
-            username: true,
-            displayName: true,
+    if (input.visibility !== undefined && !Object.values(StickerVisibility).includes(input.visibility)) {
+      throw new ForbiddenError('Invalid visibility value');
+    }
+
+    return prisma.$transaction(async (tx) => {
+      const updatedPack = await tx.stickerPack.update({
+        where: { id },
+        data: {
+          ...(input.name !== undefined && { name: input.name }),
+          ...(input.description !== undefined && { description: input.description }),
+          ...(input.visibility !== undefined && { visibility: input.visibility }),
+        },
+        include: {
+          owner: {
+            select: {
+              id: true,
+              username: true,
+              displayName: true,
+            },
+          },
+          stickers: {
+            include: {
+              sticker: true,
+            },
+            orderBy: {
+              order: 'asc',
+            },
           },
         },
-        stickers: {
-          include: {
-            sticker: true,
+      });
+
+      if (input.visibility !== undefined) {
+        await tx.sticker.updateMany({
+          where: {
+            deletedAt: null,
+            stickerPacks: {
+              some: { stickerPackId: id },
+            },
           },
-        },
-      },
+          data: { visibility: input.visibility },
+        });
+      }
+
+      return updatedPack;
     });
   }
 
