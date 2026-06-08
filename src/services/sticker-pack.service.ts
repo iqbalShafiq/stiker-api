@@ -529,6 +529,23 @@ export class StickerPackService {
     });
   }
 
+  async clearPackStickers(stickerPackId: string, userId: string): Promise<void> {
+    const pack = await this.findById(stickerPackId);
+
+    if (!pack) {
+      throw new NotFoundError('Sticker pack not found');
+    }
+
+    const hasAccess = await this.checkAccess(stickerPackId, userId, 'update');
+    if (!hasAccess) {
+      throw new ForbiddenError('You do not have permission to modify this sticker pack');
+    }
+
+    await prisma.stickerPackSticker.deleteMany({
+      where: { stickerPackId },
+    });
+  }
+
   async removeSticker(stickerPackId: string, stickerId: string, userId: string): Promise<void> {
     const pack = await this.findById(stickerPackId);
 

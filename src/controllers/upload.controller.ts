@@ -86,6 +86,8 @@ export class UploadController {
         visibility = parsedVisibility;
       }
       const existingStickerIds = body.existingStickerIds ? JSON.parse(String(body.existingStickerIds)) as string[] : [];
+      const replaceStickers = body.replaceStickers === true
+        || String(body.replaceStickers ?? '').toLowerCase() === 'true';
 
       let packId = stickerPackId;
 
@@ -100,6 +102,10 @@ export class UploadController {
         packId = pack.id;
       } else if (packId && hasStickerVisibilityInput(body)) {
         await this.stickerPackService.update(packId, userId, { visibility });
+      }
+
+      if (packId && replaceStickers) {
+        await this.stickerPackService.clearPackStickers(packId, userId);
       }
 
       const uploadedStickers = [];

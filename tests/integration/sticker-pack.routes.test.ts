@@ -883,6 +883,44 @@ describe('Upload Route Integration', () => {
     expect(response.body.data.stickerPackId).toBe(existingPackId);
   });
 
+  test('should replace existing pack stickers when replaceStickers is true', async () => {
+    const packResponse = await request(app)
+      .post('/api/v1/sticker-packs')
+      .set('Authorization', `Bearer ${user1Token}`)
+      .send({
+        name: 'Replace Pack',
+        visibility: 'private',
+        stickers: [
+          {
+            name: 'Original',
+            filename: 'original.png',
+            url: '/uploads/original.png',
+          },
+        ],
+      });
+
+    expect(packResponse.status).toBe(201);
+    const existingPackId = packResponse.body.data.id as string;
+
+    const response = await request(app)
+      .post('/api/v1/upload')
+      .set('Authorization', `Bearer ${user1Token}`)
+      .field('stickerPackId', existingPackId)
+      .field('replaceStickers', 'true')
+      .field('visibility', 'private')
+      .attach('images', TEST_IMAGE_BUFFER, 'replacement-sticker.png');
+
+    expect(response.status).toBe(201);
+    expect(response.body.data.stickers).toHaveLength(1);
+
+    const pack = await request(app)
+      .get(`/api/v1/sticker-packs/${existingPackId}`)
+      .set('Authorization', `Bearer ${user1Token}`);
+
+    expect(pack.body.data.stickers).toHaveLength(1);
+    expect(pack.body.data.stickers[0].sticker.name).toBe('replacement-sticker');
+  });
+
   test('should promote existing pack to public when upload sends visibility public', async () => {
     const packResponse = await request(app)
       .post('/api/v1/sticker-packs')

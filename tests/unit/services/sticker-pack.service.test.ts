@@ -232,6 +232,26 @@ describe('StickerPackService', () => {
     });
   });
 
+  describe('clearPackStickers', () => {
+    it('should remove all sticker relations for owner', async () => {
+      const mockPack = {
+        id: 'pack-1',
+        ownerId: 'user-1',
+        deletedAt: null,
+        stickers: [],
+        owner: { id: 'user-1', username: 'test', displayName: null },
+      };
+
+      (mockedPrisma.stickerPack.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(mockPack);
+
+      await service.clearPackStickers('pack-1', 'user-1');
+
+      expect(mockedPrisma.stickerPackSticker.deleteMany).toHaveBeenCalledWith({
+        where: { stickerPackId: 'pack-1' },
+      });
+    });
+  });
+
   describe('checkAccess', () => {
     it('should return true for owner', async () => {
       const mockPack = {
