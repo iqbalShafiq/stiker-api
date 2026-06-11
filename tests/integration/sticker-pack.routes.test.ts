@@ -1132,6 +1132,37 @@ describe('Sync Route Integration', () => {
     expect(response.status).toBe(401);
   });
 
+  test('should not include another user public pack in sync', async () => {
+    const user2 = await registerUser(
+      `stickerpack-test-sync-other-${Date.now()}@example.com`,
+      TEST_PASSWORD,
+      { username: `syncother${Date.now()}`, displayName: 'Other Sync User' }
+    );
+
+    const publicPackResponse = await request(app)
+      .post('/api/v1/sticker-packs')
+      .set('Authorization', `Bearer ${user2.token}`)
+      .send({
+        name: 'Other User Public Pack',
+        visibility: 'public',
+      });
+
+    expect(publicPackResponse.status).toBe(201);
+    const otherPackId = publicPackResponse.body.data.id as string;
+
+    const syncResponse = await request(app)
+      .get('/api/v1/sync')
+      .set('Authorization', `Bearer ${user1Token}`);
+
+    expect(syncResponse.status).toBe(200);
+    const syncedPackIds = [
+      ...syncResponse.body.data.stickerPacks.created,
+      ...syncResponse.body.data.stickerPacks.updated,
+    ].map((pack: { id: string }) => pack.id);
+
+    expect(syncedPackIds).not.toContain(otherPackId);
+  });
+
   test('should expose sticker pack deletion from upload API in sync deleted list', async () => {
     const packResponse = await request(app)
       .post('/api/v1/sticker-packs')

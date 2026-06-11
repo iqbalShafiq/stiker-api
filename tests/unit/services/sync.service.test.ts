@@ -188,7 +188,7 @@ describe('SyncService', () => {
       expect(result.stickerPacks.created[0].id).toBe('pack-shared');
     });
 
-    it('should include stickers from accessible packs in sync', async () => {
+    it('should include stickers from shared packs in sync', async () => {
       const now = new Date();
       const mockPacks = [];
       const mockStickers = [
@@ -204,7 +204,12 @@ describe('SyncService', () => {
             stickerPack: {
               id: 'pack-1',
               ownerId: 'user-2',
-              visibility: 'PUBLIC',
+              visibility: 'PRIVATE',
+              shares: [{
+                sharedWithId: 'user-1',
+                permission: 'VIEW',
+                expiresAt: null,
+              }],
             },
           }],
         },
@@ -217,6 +222,28 @@ describe('SyncService', () => {
 
       expect(result.stickers.created).toHaveLength(1);
       expect(result.stickers.created[0].id).toBe('sticker-in-pack');
+    });
+
+    it('should scope sticker pack query to owned and shared packs only', async () => {
+      (mockedPrisma.stickerPack.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+      (mockedPrisma.sticker.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+
+      await service.sync({ userId: 'user-1' });
+
+      const packQuery = (mockedPrisma.stickerPack.findMany as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      expect(packQuery.where.OR).toEqual(
+        expect.arrayContaining([
+          { ownerId: 'user-1' },
+          expect.objectContaining({
+            shares: expect.objectContaining({
+              some: expect.objectContaining({ sharedWithId: 'user-1' }),
+            }),
+          }),
+        ])
+      );
+      expect(packQuery.where.OR).not.toEqual(
+        expect.arrayContaining([{ visibility: 'PUBLIC' }])
+      );
     });
   });
 });

@@ -24,12 +24,12 @@ export class SyncService {
     const lastSyncAt = input.lastSyncAt ?? new Date(0);
     const now = new Date();
 
-    // Get all sticker packs accessible by user
+    // Personal library sync: owned packs and packs explicitly shared with the user.
+    // Public catalog packs are served via /sticker-packs/public, not pull sync.
     const stickerPacks = await prisma.stickerPack.findMany({
       where: {
         OR: [
           { ownerId: input.userId },
-          { visibility: 'PUBLIC' },
           {
             shares: {
               some: {
@@ -71,12 +71,11 @@ export class SyncService {
     const updatedPacks = stickerPacks.filter(p => p.createdAt < lastSyncAt && p.updatedAt >= lastSyncAt && p.deletedAt === null);
     const deletedPacks = stickerPacks.filter(p => p.deletedAt !== null && p.deletedAt >= lastSyncAt);
 
-    // Get all stickers accessible by user
+    // Stickers owned by the user or belonging to owned/shared packs only.
     const stickers = await prisma.sticker.findMany({
       where: {
         OR: [
           { ownerId: input.userId },
-          { visibility: 'PUBLIC' },
           {
             shares: {
               some: {
@@ -94,7 +93,6 @@ export class SyncService {
                 stickerPack: {
                   OR: [
                     { ownerId: input.userId },
-                    { visibility: 'PUBLIC' },
                     {
                       shares: {
                         some: {
