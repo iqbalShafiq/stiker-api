@@ -189,6 +189,48 @@ export const config = {
       };
     })(),
   },
+  billing: {
+    dailyResetTimezone: process.env.BILLING_DAILY_RESET_TIMEZONE ?? 'Asia/Jakarta',
+    freeDailyPointLimit: Math.max(1, parseInt(process.env.BILLING_FREE_DAILY_POINT_LIMIT ?? '100', 10)),
+    premiumDailyPointLimit: Math.max(1, parseInt(process.env.BILLING_PREMIUM_DAILY_POINT_LIMIT ?? '500', 10)),
+    googlePlay: {
+      packageName: process.env.GOOGLE_PLAY_PACKAGE_NAME ?? 'com.setiker.app',
+      serviceAccountJsonPath: process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_PATH ?? '',
+      rtdnVerificationToken: process.env.GOOGLE_PLAY_RTDN_VERIFICATION_TOKEN ?? '',
+      mockMode: process.env.GOOGLE_PLAY_MOCK_MODE === 'true' || process.env.NODE_ENV === 'test',
+    },
+    apple: {
+      bundleId: process.env.APPLE_BUNDLE_ID ?? 'com.setiker.app',
+      issuerId: process.env.APPLE_APP_STORE_ISSUER_ID ?? '',
+      keyId: process.env.APPLE_APP_STORE_KEY_ID ?? '',
+      privateKeyPath: process.env.APPLE_APP_STORE_PRIVATE_KEY_PATH ?? '',
+      appAppleId: process.env.APPLE_APP_STORE_APP_ID ?? '',
+      environment: (process.env.APPLE_APP_STORE_ENVIRONMENT ?? 'Sandbox') as 'Sandbox' | 'Production',
+      mockMode: process.env.APPLE_MOCK_MODE === 'true' || process.env.NODE_ENV === 'test',
+    },
+    xendit: {
+      enabled: process.env.XENDIT_ENABLED === 'true',
+      secretKey: process.env.XENDIT_SECRET_KEY ?? '',
+      webhookToken: process.env.XENDIT_WEBHOOK_TOKEN ?? '',
+      productPricesIdr: ((): Record<string, number> => {
+        const defaults: Record<string, number> = {
+          token_pack_s: 29000,
+          token_pack_m: 79000,
+          token_pack_l: 199000,
+          premium_monthly: 49000,
+          premium_yearly: 449000,
+        };
+        const raw = process.env.XENDIT_PRODUCT_PRICES_JSON;
+        if (!raw) return defaults;
+        try {
+          const parsed = JSON.parse(raw) as Record<string, number>;
+          return { ...defaults, ...parsed };
+        } catch {
+          return defaults;
+        }
+      })(),
+    },
+  },
 } as const;
 
 export type Config = typeof config;

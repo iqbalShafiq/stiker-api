@@ -220,7 +220,16 @@ export class StickerPackShareService {
     return link;
   }
 
-  async listCollaborators(stickerPackId: string, ownerId: string) {
+  async listCollaborators(
+    stickerPackId: string,
+    ownerId: string
+  ): Promise<
+    Prisma.StickerPackShareGetPayload<{
+      include: {
+        sharedWith: { select: { id: true; username: true; displayName: true } };
+      };
+    }>[]
+  > {
     const hasOwnership = await this.checkOwnership(stickerPackId, ownerId);
     if (!hasOwnership) {
       throw new ForbiddenError('You do not have permission to list collaborators for this sticker pack');

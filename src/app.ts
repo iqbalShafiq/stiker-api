@@ -35,6 +35,7 @@ import { UserProfileController } from './controllers/user-profile.controller';
 import { NotificationController } from './controllers/notification.controller';
 import { FeaturedController } from './controllers/featured.controller';
 import { PromptPresetController } from './controllers/prompt-preset.controller';
+import { billingController } from './controllers/billing.controller';
 import { requireAiQuota } from './middleware/ai-quota.middleware';
 import { asyncHandler } from './utils/async-handler';
 
@@ -168,6 +169,28 @@ app.get('/api/v1/ai/usage', authenticateToken, asyncHandler((req, res, next) => 
 app.post('/api/v1/ai/quota/reserve', authenticateToken, asyncHandler((req, res, next) => aiQuotaController.reserve(req, res, next)));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.post('/api/v1/ai/quota/finalize', authenticateToken, asyncHandler((req, res, next) => aiQuotaController.finalize(req, res, next)));
+
+// Billing (store-compliant IAP)
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/billing/products', optionalAuthenticateToken, asyncHandler((req, res, next) => billingController.listProducts(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/billing/google-play/verify', authenticateToken, asyncHandler((req, res, next) => billingController.verifyGooglePlay(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/billing/apple/verify', authenticateToken, asyncHandler((req, res, next) => billingController.verifyApple(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/billing/purchases', authenticateToken, asyncHandler((req, res, next) => billingController.listPurchases(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/billing/subscription/me', authenticateToken, asyncHandler((req, res, next) => billingController.getSubscription(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/billing/restore', authenticateToken, asyncHandler((req, res, next) => billingController.restore(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/billing/google-play/rtdn', asyncHandler((req, res, next) => billingController.googlePlayRtdn(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/billing/apple/notifications', asyncHandler((req, res, next) => billingController.appleNotifications(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/billing/xendit/checkout', authenticateToken, asyncHandler((req, res, next) => billingController.xenditCheckout(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/billing/xendit/webhook', asyncHandler((req, res, next) => billingController.xenditWebhook(req, res, next)));
 
 // Sticker routes (public)
 // eslint-disable-next-line @typescript-eslint/no-misused-promises

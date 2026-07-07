@@ -38,5 +38,40 @@ and production. Use `npm run test:up` for the isolated test stack; it starts Red
 
 - **HTTP 2xx** on an AI route → reservation committed (points used).
 - **HTTP error** → reservation released (no charge).
+
+## Store-compliant billing (Google Play / Apple IAP)
+
+Setiker Play Store and App Store builds must use **Google Play Billing** and **StoreKit** for digital goods (token packs, subscriptions). Xendit is optional for non-store builds only (`XENDIT_ENABLED=true`).
+
+### Compliance
+
+- Do not expose Xendit/QRIS checkout in Google Play or App Store builds for in-app digital goods.
+- Purchases are verified server-side before entitlements are granted.
+- Purchased token balance is stored in Postgres (`UserCreditBalance` + `TokenLedgerEntry`).
+- Daily AI quota resets in `BILLING_DAILY_RESET_TIMEZONE` (default `Asia/Jakarta`).
+- Consumption order: subscription/free daily allowance first, then purchased tokens.
+
+### Billing endpoints
+
+- `GET /api/v1/billing/products` — product catalog (no localized prices)
+- `POST /api/v1/billing/google-play/verify` — verify Play purchase token
+- `POST /api/v1/billing/apple/verify` — verify StoreKit transaction
+- `GET /api/v1/billing/purchases` — purchase history
+- `GET /api/v1/billing/subscription/me` — active subscription
+- `POST /api/v1/billing/restore` — restore entitlements
+- `POST /api/v1/billing/google-play/rtdn` — Play Real-time Developer Notifications
+- `POST /api/v1/billing/apple/notifications` — App Store Server Notifications
+
+### Billing environment
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `BILLING_DAILY_RESET_TIMEZONE` | `Asia/Jakarta` | Daily quota reset timezone |
+| `BILLING_FREE_DAILY_POINT_LIMIT` | `100` | Free tier daily points |
+| `BILLING_PREMIUM_DAILY_POINT_LIMIT` | `500` | Premium tier daily points |
+| `GOOGLE_PLAY_PACKAGE_NAME` | `com.setiker.app` | Android package name |
+| `GOOGLE_PLAY_MOCK_MODE` | `false` | Mock verifier for dev/test |
+| `APPLE_MOCK_MODE` | `false` | Mock Apple verifier for dev/test |
+| `XENDIT_ENABLED` | `false` | Non-store checkout only |
 - **Client finalize `committed`** (e.g. user cancel) → charged even without 2xx.
 - **Client finalize `released`** → not charged.

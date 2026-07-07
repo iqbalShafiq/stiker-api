@@ -68,6 +68,10 @@
     },
     {
       "name": "Processing History"
+    },
+    {
+      "name": "Billing",
+      "description": "Store-compliant in-app purchase and entitlement endpoints"
     }
   ],
   "paths": {
@@ -4526,6 +4530,175 @@
         "tags": ["Social"],
         "responses": { "200": { "description": "Featured pack" } }
       }
+    },
+    "/api/v1/billing/products": {
+      "get": {
+        "summary": "List active billing products",
+        "tags": ["Billing"],
+        "responses": {
+          "200": {
+            "description": "Billing product catalog",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "products": {
+                          "type": "array",
+                          "items": { "$ref": "#/components/schemas/BillingProduct" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/billing/google-play/verify": {
+      "post": {
+        "summary": "Verify Google Play purchase and grant entitlements",
+        "tags": ["Billing"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/GooglePlayVerifyRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Purchase verified", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PurchaseVerifyResponse" } } } },
+          "401": { "$ref": "#/components/responses/UnauthorizedError" }
+        }
+      }
+    },
+    "/api/v1/billing/apple/verify": {
+      "post": {
+        "summary": "Verify Apple App Store purchase and grant entitlements",
+        "tags": ["Billing"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/AppleVerifyRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Purchase verified", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PurchaseVerifyResponse" } } } },
+          "401": { "$ref": "#/components/responses/UnauthorizedError" }
+        }
+      }
+    },
+    "/api/v1/billing/purchases": {
+      "get": {
+        "summary": "List user purchase history",
+        "tags": ["Billing"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } },
+          { "name": "offset", "in": "query", "schema": { "type": "integer", "default": 0 } }
+        ],
+        "responses": {
+          "200": { "description": "Purchase list" },
+          "401": { "$ref": "#/components/responses/UnauthorizedError" }
+        }
+      }
+    },
+    "/api/v1/billing/subscription/me": {
+      "get": {
+        "summary": "Get current subscription snapshot",
+        "tags": ["Billing"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Subscription snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "$ref": "#/components/schemas/SubscriptionSnapshot" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/UnauthorizedError" }
+        }
+      }
+    },
+    "/api/v1/billing/restore": {
+      "post": {
+        "summary": "Restore store purchases",
+        "tags": ["Billing"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RestorePurchasesRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Restore result" },
+          "401": { "$ref": "#/components/responses/UnauthorizedError" }
+        }
+      }
+    },
+    "/api/v1/billing/google-play/rtdn": {
+      "post": {
+        "summary": "Google Play Real-Time Developer Notifications (Pub/Sub push)",
+        "tags": ["Billing"],
+        "responses": { "200": { "description": "Notification accepted" }, "401": { "description": "Invalid verification token" } }
+      }
+    },
+    "/api/v1/billing/apple/notifications": {
+      "post": {
+        "summary": "Apple App Store Server Notifications V2",
+        "tags": ["Billing"],
+        "responses": { "200": { "description": "Notification accepted" } }
+      }
+    },
+    "/api/v1/billing/xendit/checkout": {
+      "post": {
+        "summary": "Create Xendit checkout session (non-store builds only)",
+        "tags": ["Billing"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["productCode"],
+                "properties": { "productCode": { "type": "string" } }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Checkout session created" },
+          "401": { "$ref": "#/components/responses/UnauthorizedError" }
+        }
+      }
+    },
+    "/api/v1/billing/xendit/webhook": {
+      "post": {
+        "summary": "Xendit payment webhook",
+        "tags": ["Billing"],
+        "responses": { "200": { "description": "Webhook processed" } }
+      }
     }
   },
   "components": {
@@ -6310,6 +6483,88 @@
                 "type": "string"
               }
             }
+          }
+        }
+      },
+      "BillingProduct": {
+        "type": "object",
+        "properties": {
+          "code": { "type": "string" },
+          "type": { "type": "string", "enum": ["consumable_token_pack", "subscription", "non_consumable"] },
+          "name": { "type": "string" },
+          "description": { "type": "string", "nullable": true },
+          "tokenAmount": { "type": "integer", "nullable": true },
+          "tierCode": { "type": "string", "nullable": true },
+          "dailyPointLimit": { "type": "integer", "nullable": true },
+          "googlePlayProductId": { "type": "string", "nullable": true },
+          "appleProductId": { "type": "string", "nullable": true },
+          "sortOrder": { "type": "integer" }
+        }
+      },
+      "GooglePlayVerifyRequest": {
+        "type": "object",
+        "required": ["productCode", "productId", "purchaseToken", "packageName"],
+        "properties": {
+          "productCode": { "type": "string" },
+          "productId": { "type": "string" },
+          "purchaseToken": { "type": "string" },
+          "packageName": { "type": "string" }
+        }
+      },
+      "AppleVerifyRequest": {
+        "type": "object",
+        "required": ["productCode", "productId", "transactionId", "signedTransactionInfo"],
+        "properties": {
+          "productCode": { "type": "string" },
+          "productId": { "type": "string" },
+          "transactionId": { "type": "string" },
+          "originalTransactionId": { "type": "string" },
+          "signedTransactionInfo": { "type": "string" }
+        }
+      },
+      "PurchaseVerifyResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "data": {
+            "type": "object",
+            "properties": {
+              "purchaseId": { "type": "string" },
+              "status": { "type": "string" },
+              "productCode": { "type": "string" },
+              "type": { "type": "string" },
+              "tokenAmountCredited": { "type": "integer" },
+              "purchasedTokenBalance": { "type": "integer" },
+              "subscriptionTier": { "type": "string" },
+              "effectiveDailyLimit": { "type": "integer" },
+              "shouldConsume": { "type": "boolean" },
+              "shouldAcknowledge": { "type": "boolean" }
+            }
+          }
+        }
+      },
+      "SubscriptionSnapshot": {
+        "type": "object",
+        "properties": {
+          "active": { "type": "boolean" },
+          "productCode": { "type": "string", "nullable": true },
+          "tierCode": { "type": "string" },
+          "status": { "type": "string", "nullable": true },
+          "currentPeriodEnd": { "type": "string", "format": "date-time", "nullable": true },
+          "autoRenewing": { "type": "boolean" },
+          "cancelAtPeriodEnd": { "type": "boolean" }
+        }
+      },
+      "RestorePurchasesRequest": {
+        "type": "object",
+        "properties": {
+          "googlePlay": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/GooglePlayVerifyRequest" }
+          },
+          "apple": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/AppleVerifyRequest" }
           }
         }
       }

@@ -101,6 +101,71 @@ async function main() {
   });
 
   console.log('Seed completed successfully');
+
+  const billingProducts = [
+    {
+      code: 'token_pack_s',
+      type: 'CONSUMABLE_TOKEN_PACK' as const,
+      name: 'Token Pack S',
+      description: '100 AI tokens (non-expiring)',
+      tokenAmount: 100,
+      googlePlayProductId: 'token_pack_s',
+      appleProductId: 'token_pack_s',
+      sortOrder: 1,
+    },
+    {
+      code: 'token_pack_m',
+      type: 'CONSUMABLE_TOKEN_PACK' as const,
+      name: 'Token Pack M',
+      description: '300 AI tokens (non-expiring)',
+      tokenAmount: 300,
+      googlePlayProductId: 'token_pack_m',
+      appleProductId: 'token_pack_m',
+      sortOrder: 2,
+    },
+    {
+      code: 'token_pack_l',
+      type: 'CONSUMABLE_TOKEN_PACK' as const,
+      name: 'Token Pack L',
+      description: '900 AI tokens (non-expiring)',
+      tokenAmount: 900,
+      googlePlayProductId: 'token_pack_l',
+      appleProductId: 'token_pack_l',
+      sortOrder: 3,
+    },
+    {
+      code: 'premium_monthly',
+      type: 'SUBSCRIPTION' as const,
+      name: 'Premium Monthly',
+      description: '500 daily AI points + Premium badge',
+      tierCode: 'premium',
+      dailyPointLimit: 500,
+      googlePlayProductId: 'premium_monthly',
+      appleProductId: 'premium_monthly',
+      sortOrder: 10,
+    },
+    {
+      code: 'premium_yearly',
+      type: 'SUBSCRIPTION' as const,
+      name: 'Premium Yearly',
+      description: '500 daily AI points + Premium badge',
+      tierCode: 'premium',
+      dailyPointLimit: 500,
+      googlePlayProductId: 'premium_yearly',
+      appleProductId: 'premium_yearly',
+      sortOrder: 11,
+    },
+  ];
+
+  for (const product of billingProducts) {
+    await prisma.billingProduct.upsert({
+      where: { code: product.code },
+      update: product,
+      create: product,
+    });
+  }
+
+  console.log('Billing products seeded');
 }
 
 main()

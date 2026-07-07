@@ -1,3 +1,4 @@
+import type { UserNotification } from '@prisma/client';
 import { prisma } from '../prisma/client';
 import { Prisma } from '@prisma/client';
 import { NotFoundError } from '../errors';
@@ -36,7 +37,16 @@ export class NotificationService {
     }
   }
 
-  async list(userId: string, page = 1, limit = 20, unreadOnly = false) {
+  async list(
+    userId: string,
+    page = 1,
+    limit = 20,
+    unreadOnly = false
+  ): Promise<{
+    data: UserNotification[];
+    unreadCount: number;
+    pagination: { page: number; limit: number; total: number; totalPages: number };
+  }> {
     const safePage = Math.max(1, page);
     const safeLimit = Math.min(50, Math.max(1, limit));
     const where = {

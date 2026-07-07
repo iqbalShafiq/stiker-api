@@ -10,9 +10,18 @@ import {
   mapPackWithSocial,
   normalizePublicQuery,
   PUBLIC_PACK_INCLUDE,
+  type PackWithPublicInclude,
+  type PackViewerSocialState,
   type PublicStickerPackQuery,
   type PublicStickerPackSort,
 } from '../utils/pack-query';
+
+type PublicPackListItem = PackWithPublicInclude & PackViewerSocialState;
+
+type PaginatedPublicPacks = {
+  data: PublicPackListItem[];
+  pagination: { page: number; limit: number; total: number; totalPages: number };
+};
 import { aiUsageService } from './ai-usage.service';
 import { notificationService } from './notification.service';
 
@@ -164,7 +173,7 @@ export class StickerPackService {
     where: Prisma.StickerPackWhereInput,
     query: PublicStickerPackQuery,
     viewerId?: string
-  ) {
+  ): Promise<PaginatedPublicPacks> {
     const { page, limit, sort } = normalizePublicQuery(query);
     const fullWhere = {
       ...buildPublicBaseWhere(),
@@ -201,12 +210,18 @@ export class StickerPackService {
     };
   }
 
-  async findPublicPaginated(query: PublicStickerPackQuery = {}, viewerId?: string) {
+  async findPublicPaginated(
+    query: PublicStickerPackQuery = {},
+    viewerId?: string
+  ): Promise<PaginatedPublicPacks> {
     const ownerFilter = query.ownerId ? { ownerId: query.ownerId } : {};
     return this.paginatePublicPacks(ownerFilter, query, viewerId);
   }
 
-  async findSavedPaginated(userId: string, query: PublicStickerPackQuery = {}) {
+  async findSavedPaginated(
+    userId: string,
+    query: PublicStickerPackQuery = {}
+  ): Promise<PaginatedPublicPacks> {
     const savedPackIds = await prisma.stickerPackSave.findMany({
       where: { userId },
       select: { stickerPackId: true },
@@ -222,7 +237,10 @@ export class StickerPackService {
     return this.paginatePublicPacks({ id: { in: ids } }, query, userId);
   }
 
-  async findFollowingPaginated(userId: string, query: PublicStickerPackQuery = {}) {
+  async findFollowingPaginated(
+    userId: string,
+    query: PublicStickerPackQuery = {}
+  ): Promise<PaginatedPublicPacks> {
     const following = await prisma.userFollow.findMany({
       where: { followerId: userId },
       select: { followingId: true },
@@ -238,7 +256,10 @@ export class StickerPackService {
     return this.paginatePublicPacks({ ownerId: { in: ownerIds } }, query, userId);
   }
 
-  async findSharedWithMePaginated(userId: string, query: PublicStickerPackQuery = {}) {
+  async findSharedWithMePaginated(
+    userId: string,
+    query: PublicStickerPackQuery = {}
+  ): Promise<PaginatedPublicPacks> {
     const shares = await prisma.stickerPackShare.findMany({
       where: {
         sharedWithId: userId,
@@ -288,7 +309,7 @@ export class StickerPackService {
     });
   }
 
-  async findPublicById(id: string, viewerId?: string) {
+  async findPublicById(id: string, viewerId?: string): Promise<PublicPackListItem | null> {
     const pack = await prisma.stickerPack.findFirst({
       where: {
         id,

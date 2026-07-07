@@ -79,6 +79,10 @@ model User {
   followingCount     Int @default(0)
   subscriptionTier   String @default("free")
   notifications      UserNotification[]
+  purchases          Purchase[]
+  creditBalance      UserCreditBalance?
+  tokenLedgerEntries TokenLedgerEntry[]
+  subscriptions      UserSubscription[]
 
   @@index([email])
   @@index([username])
@@ -389,4 +393,156 @@ model ProcessingHistory {
   @@index([type])
   @@index([expiresAt])
   @@index([createdAt])
+}
+
+enum BillingProvider {
+  GOOGLE_PLAY
+  APPLE_APP_STORE
+  XENDIT
+  ADMIN
+  PROMO
+}
+
+enum PurchaseType {
+  CONSUMABLE_TOKEN_PACK
+  SUBSCRIPTION
+  NON_CONSUMABLE
+}
+
+enum PurchaseStatus {
+  PENDING
+  VERIFIED
+  FULFILLED
+  FAILED
+  REFUNDED
+  REVOKED
+  EXPIRED
+  CANCELLED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  GRACE_PERIOD
+  ON_HOLD
+  PAUSED
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+  REVOKED
+}
+
+model BillingProduct {
+  id                  String       @id @default(uuid())
+  code                String       @unique
+  type                PurchaseType
+  name                String
+  description         String?
+  tokenAmount         Int?
+  tierCode            String?
+  dailyPointLimit     Int?
+  isActive            Boolean      @default(true)
+  sortOrder           Int          @default(0)
+  googlePlayProductId String?
+  appleProductId      String?
+  xenditProductCode   String?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+}
+
+model Purchase {
+  id                            String          @id @default(uuid())
+  userId                        String
+  provider                      BillingProvider
+  type                          PurchaseType
+  status                        PurchaseStatus  @default(PENDING)
+  productCode                   String
+  productName                   String
+  tokenAmount                   Int?
+  tierCode                      String?
+  dailyPointLimit               Int?
+  providerProductId             String?
+  providerPurchaseToken         String?
+  providerTransactionId         String?
+  providerOriginalTransactionId String?
+  providerOrderId               String?
+  providerStatus                String?
+  providerPayload               Json?
+  verifiedAt                    DateTime?
+  fulfilledAt                   DateTime?
+  refundedAt                    DateTime?
+  revokedAt                     DateTime?
+  expiresAt                     DateTime?
+  idempotencyKey                String          @unique
+  metadata                      Json?
+  createdAt                     DateTime        @default(now())
+  updatedAt                     DateTime        @updatedAt
+  user                          User            @relation(fields: [userId], references: [id])
+
+  @@index([userId, status])
+  @@index([provider, providerTransactionId])
+  @@index([provider, providerPurchaseToken])
+  @@index([productCode])
+}
+
+model UserCreditBalance {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  balance   Int      @default(0)
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model TokenLedgerEntry {
+  id             String   @id @default(uuid())
+  userId         String
+  purchaseId     String?
+  delta          Int
+  balanceAfter   Int
+  reason         String
+  source         String
+  idempotencyKey String   @unique
+  metadata       Json?
+  createdAt      DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([purchaseId])
+}
+
+model UserSubscription {
+  id                            String             @id @default(uuid())
+  userId                        String
+  provider                      BillingProvider
+  productCode                   String
+  tierCode                      String
+  status                        SubscriptionStatus @default(ACTIVE)
+  providerSubscriptionId        String?
+  providerOriginalTransactionId String?
+  providerPurchaseToken         String?
+  currentPeriodStart            DateTime?
+  currentPeriodEnd              DateTime?
+  autoRenewing                  Boolean            @default(false)
+  cancelAtPeriodEnd             Boolean            @default(false)
+  lastVerifiedAt                DateTime?
+  metadata                      Json?
+  createdAt                     DateTime           @default(now())
+  updatedAt                     DateTime           @updatedAt
+  user                          User               @relation(fields: [userId], references: [id])
+
+  @@index([userId, status])
+  @@index([provider, providerSubscriptionId])
+  @@index([provider, providerPurchaseToken])
+}
+
+model StoreNotificationEvent {
+  id          String          @id @default(uuid())
+  provider    BillingProvider
+  eventId     String          @unique
+  eventType   String
+  purchaseId  String?
+  payload     Json
+  processedAt DateTime?
+  createdAt   DateTime        @default(now())
+
+  @@index([provider, eventType, createdAt])
 }

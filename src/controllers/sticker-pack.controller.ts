@@ -77,7 +77,13 @@ export class StickerPackController {
     }
   }
 
-  private parsePublicQuery(req: AuthRequest) {
+  private parsePublicQuery(req: AuthRequest): {
+    page: number | undefined;
+    limit: number | undefined;
+    sort: 'recent' | 'popular' | 'downloads' | 'likes' | 'saves' | undefined;
+    q: string | undefined;
+    ownerId: string | undefined;
+  } {
     const page = typeof req.query.page === 'string' ? Number(req.query.page) : undefined;
     const limit = typeof req.query.limit === 'string' ? Number(req.query.limit) : undefined;
     const sort = typeof req.query.sort === 'string'
