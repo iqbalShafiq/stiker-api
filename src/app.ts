@@ -29,6 +29,7 @@ import { ProcessingHistoryController } from './controllers/processing-history.co
 import { ShareController } from './controllers/share.controller';
 import { SocialController } from './controllers/social.controller';
 import { LegalController } from './controllers/legal.controller';
+import { moderationController } from './controllers/moderation.controller';
 import { AiUsageController } from './controllers/ai-usage.controller';
 import { AiQuotaController } from './controllers/ai-quota.controller';
 import { UserProfileController } from './controllers/user-profile.controller';
@@ -132,13 +133,45 @@ const promptPresetController = new PromptPresetController();
 
 // Legal routes (public)
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/privacy', (req, res, next) => legalController.getPrivacyHtml(req, res, next));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/terms', (req, res, next) => legalController.getTermsHtml(req, res, next));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/retention', (req, res, next) => legalController.getRetentionHtml(req, res, next));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/account-deletion', (req, res, next) => legalController.getAccountDeletionHtml(req, res, next));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.get('/api/v1/legal', (req, res, next) => legalController.getSummary(req, res, next));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.get('/api/v1/legal/privacy', (req, res, next) => legalController.getPrivacy(req, res, next));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.get('/api/v1/legal/terms', (req, res, next) => legalController.getTerms(req, res, next));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/legal/account-deletion', (req, res, next) => legalController.getAccountDeletion(req, res, next));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.get('/api/v1/legal/retention', (req, res, next) => legalController.getRetention(req, res, next));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/legal/account-deletion/request', asyncHandler((req, res, next) => moderationController.submitAccountDeletionRequest(req, res, next)));
+
+// Moderation & safety routes
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/sticker-packs/:id/report', authenticateToken, asyncHandler((req, res, next) => moderationController.reportPack(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/processing-history/:id/report', authenticateToken, asyncHandler((req, res, next) => moderationController.reportProcessingHistory(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/users/:id/block', authenticateToken, asyncHandler((req, res, next) => moderationController.blockUser(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.delete('/api/v1/users/:id/block', authenticateToken, asyncHandler((req, res, next) => moderationController.unblockUser(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/users/blocked', authenticateToken, asyncHandler((req, res, next) => moderationController.listBlockedUsers(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/admin/content-reports', authenticateToken, requireRole('admin'), asyncHandler((req, res, next) => moderationController.listContentReports(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.patch('/api/v1/admin/content-reports/:id', authenticateToken, requireRole('admin'), asyncHandler((req, res, next) => moderationController.reviewContentReport(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/admin/account-deletion-requests', authenticateToken, requireRole('admin'), asyncHandler((req, res, next) => moderationController.listAccountDeletionRequests(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.patch('/api/v1/admin/account-deletion-requests/:id', authenticateToken, requireRole('admin'), asyncHandler((req, res, next) => moderationController.processAccountDeletionRequest(req, res, next)));
 
 // Auth routes (public)
 // eslint-disable-next-line @typescript-eslint/no-misused-promises

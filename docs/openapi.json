@@ -330,6 +330,76 @@
             }
           }
         }
+      },
+      "delete": {
+        "summary": "Delete current user account",
+        "description": "Permanently deletes the authenticated user's account after password confirmation.",
+        "tags": [
+          "Auth"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteAccountRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Account deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/auth/change-password": {
@@ -4699,6 +4769,378 @@
         "tags": ["Billing"],
         "responses": { "200": { "description": "Webhook processed" } }
       }
+    },
+    "/api/v1/legal": {
+      "get": {
+        "summary": "Legal document summary",
+        "description": "Returns URLs and version metadata for privacy policy, terms, retention policy, and account deletion instructions.",
+        "tags": ["Legal"],
+        "responses": {
+          "200": {
+            "description": "Legal summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "$ref": "#/components/schemas/LegalSummary" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/legal/privacy": {
+      "get": {
+        "summary": "Privacy policy",
+        "tags": ["Legal"],
+        "responses": {
+          "200": {
+            "description": "Privacy policy document",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "$ref": "#/components/schemas/LegalDocument" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/legal/terms": {
+      "get": {
+        "summary": "Terms of service",
+        "tags": ["Legal"],
+        "responses": {
+          "200": {
+            "description": "Terms of service document",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "$ref": "#/components/schemas/LegalDocument" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/legal/account-deletion": {
+      "get": {
+        "summary": "Account deletion instructions",
+        "tags": ["Legal"],
+        "responses": {
+          "200": {
+            "description": "Account deletion policy document",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "$ref": "#/components/schemas/LegalDocument" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/legal/retention": {
+      "get": {
+        "summary": "Data retention policy",
+        "tags": ["Legal"],
+        "responses": {
+          "200": {
+            "description": "Retention policy document",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "$ref": "#/components/schemas/RetentionPolicyDocument" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/legal/account-deletion/request": {
+      "post": {
+        "summary": "Submit web account deletion request",
+        "description": "Public endpoint for Play Console account deletion URL. Rate-limited per IP and email hash.",
+        "tags": ["Legal"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/AccountDeletionWebRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Deletion request accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "message": { "type": "string" },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Validation error" }
+        }
+      }
+    },
+    "/api/v1/sticker-packs/{id}/report": {
+      "post": {
+        "summary": "Report a public sticker pack",
+        "tags": ["Moderation"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ContentReportRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Report submitted" },
+          "401": { "$ref": "#/components/responses/UnauthorizedError" },
+          "403": { "description": "Cannot report own pack or non-public pack" },
+          "404": { "description": "Pack not found" },
+          "409": { "description": "Duplicate report" }
+        }
+      }
+    },
+    "/api/v1/processing-history/{id}/report": {
+      "post": {
+        "summary": "Report AI-generated output",
+        "tags": ["Moderation"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ContentReportRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Report submitted" },
+          "401": { "$ref": "#/components/responses/UnauthorizedError" },
+          "404": { "description": "Processing history not found" },
+          "409": { "description": "Duplicate report" }
+        }
+      }
+    },
+    "/api/v1/users/{id}/block": {
+      "post": {
+        "summary": "Block a user",
+        "tags": ["Moderation"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "User blocked" },
+          "401": { "$ref": "#/components/responses/UnauthorizedError" }
+        }
+      },
+      "delete": {
+        "summary": "Unblock a user",
+        "tags": ["Moderation"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "User unblocked" },
+          "401": { "$ref": "#/components/responses/UnauthorizedError" }
+        }
+      }
+    },
+    "/api/v1/users/blocked": {
+      "get": {
+        "summary": "List blocked user IDs",
+        "tags": ["Moderation"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Blocked users",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "blockedUserIds": {
+                          "type": "array",
+                          "items": { "type": "string" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/UnauthorizedError" }
+        }
+      }
+    },
+    "/api/v1/admin/content-reports": {
+      "get": {
+        "summary": "List open content reports",
+        "tags": ["Admin", "Moderation"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Open reports" },
+          "401": { "$ref": "#/components/responses/UnauthorizedError" },
+          "403": { "description": "Admin role required" }
+        }
+      }
+    },
+    "/api/v1/admin/content-reports/{id}": {
+      "patch": {
+        "summary": "Review a content report",
+        "tags": ["Admin", "Moderation"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["status"],
+                "properties": {
+                  "status": { "$ref": "#/components/schemas/ContentReportStatus" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Report updated" },
+          "401": { "$ref": "#/components/responses/UnauthorizedError" },
+          "403": { "description": "Admin role required" },
+          "404": { "description": "Report not found" }
+        }
+      }
+    },
+    "/api/v1/admin/account-deletion-requests": {
+      "get": {
+        "summary": "List pending account deletion requests",
+        "tags": ["Admin", "Legal"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Pending deletion requests" },
+          "401": { "$ref": "#/components/responses/UnauthorizedError" },
+          "403": { "description": "Admin role required" }
+        }
+      }
+    },
+    "/api/v1/admin/account-deletion-requests/{id}": {
+      "patch": {
+        "summary": "Process account deletion request",
+        "tags": ["Admin", "Legal"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["status"],
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": ["PROCESSED", "REJECTED"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Deletion request updated" },
+          "401": { "$ref": "#/components/responses/UnauthorizedError" },
+          "403": { "description": "Admin role required" }
+        }
+      }
     }
   },
   "components": {
@@ -5074,6 +5516,103 @@
           "currentPassword",
           "newPassword"
         ]
+      },
+      "DeleteAccountRequest": {
+        "type": "object",
+        "properties": {
+          "currentPassword": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "currentPassword"
+        ]
+      },
+      "LegalSection": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "body": { "type": "string" }
+        },
+        "required": ["id", "title", "body"]
+      },
+      "LegalDocument": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string" },
+          "version": { "type": "string" },
+          "effectiveDate": { "type": "string" },
+          "summary": { "type": "string" },
+          "url": { "type": "string", "format": "uri" },
+          "sections": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/LegalSection" }
+          }
+        },
+        "required": ["title", "version", "effectiveDate", "summary", "sections"]
+      },
+      "LegalSummary": {
+        "type": "object",
+        "properties": {
+          "privacyUrl": { "type": "string", "format": "uri" },
+          "termsUrl": { "type": "string", "format": "uri" },
+          "retentionUrl": { "type": "string", "format": "uri" },
+          "accountDeletionUrl": { "type": "string", "format": "uri" },
+          "version": { "type": "string" },
+          "effectiveDate": { "type": "string" }
+        },
+        "required": ["privacyUrl", "termsUrl", "retentionUrl", "accountDeletionUrl", "version", "effectiveDate"]
+      },
+      "RetentionPolicyDocument": {
+        "type": "object",
+        "properties": {
+          "processingHistoryDays": { "type": "integer" },
+          "deletedAccountGraceDays": { "type": "integer" },
+          "aiInputHandling": { "type": "string" },
+          "description": { "type": "string" },
+          "url": { "type": "string", "format": "uri" },
+          "sections": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/LegalSection" }
+          }
+        },
+        "required": ["processingHistoryDays", "deletedAccountGraceDays", "aiInputHandling", "description", "sections"]
+      },
+      "AccountDeletionWebRequest": {
+        "type": "object",
+        "properties": {
+          "email": { "type": "string", "format": "email" },
+          "reason": { "type": "string", "maxLength": 1000 },
+          "confirmed": { "type": "boolean" }
+        },
+        "required": ["email", "confirmed"]
+      },
+      "ContentReportReason": {
+        "type": "string",
+        "enum": [
+          "ILLEGAL",
+          "SEXUAL",
+          "VIOLENCE",
+          "CHILD_SAFETY",
+          "HATE_HARASSMENT",
+          "DECEPTIVE",
+          "IP_INFRINGEMENT",
+          "SPAM",
+          "OTHER"
+        ]
+      },
+      "ContentReportStatus": {
+        "type": "string",
+        "enum": ["OPEN", "REVIEWED", "ACTION_TAKEN", "DISMISSED"]
+      },
+      "ContentReportRequest": {
+        "type": "object",
+        "properties": {
+          "reason": { "$ref": "#/components/schemas/ContentReportReason" },
+          "details": { "type": "string", "maxLength": 2000 }
+        },
+        "required": ["reason"]
       },
       "CreateStickerRequest": {
         "type": "object",

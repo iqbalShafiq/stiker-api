@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { ProcessingHistoryService } from '../services/processing-history.service';
 import { config } from '../config';
+import { accountPurgeService } from '../services/account-purge.service';
 
 export class CleanupService {
   private historyService: ProcessingHistoryService;
@@ -10,7 +11,7 @@ export class CleanupService {
     this.historyService = new ProcessingHistoryService();
   }
 
-  async runCleanup(): Promise<{ deletedRecords: number; deletedFiles: number }> {
+  async runCleanup(): Promise<{ deletedRecords: number; deletedFiles: number; purgedStorage: number; purgeFailed: number }> {
     // Get all expired records before deletion to know which files to clean
     const expiredRecords = await this.historyService.findExpired();
 
@@ -37,7 +38,14 @@ export class CleanupService {
     // Delete files
     const deletedFiles = this.deleteFiles(Array.from(filePathsToDelete));
 
-    return { deletedRecords, deletedFiles };
+    const purgeResult = await accountPurgeService.runPendingPurges();
+
+    return {
+      deletedRecords,
+      deletedFiles,
+      purgedStorage: purgeResult.purged,
+      purgeFailed: purgeResult.failed,
+    };
   }
 
   deleteFiles(filePaths: string[]): number {

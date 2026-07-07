@@ -1,6 +1,7 @@
 import type { Response, NextFunction } from 'express';
 import type { AuthRequest } from '../middleware/auth.middleware';
 import { featuredService } from '../services/featured.service';
+import { userBlockService } from '../services/user-block.service';
 import { buildSuccessResponse } from '../utils/response-builder';
 import { loadViewerSocialState, mapPackWithSocial } from '../utils/pack-query';
 
@@ -11,6 +12,13 @@ export class FeaturedController {
       if (!featured) {
         res.status(200).json(buildSuccessResponse(null));
         return;
+      }
+      if (req.user?.id) {
+        const blockedIds = await userBlockService.listBlockedIds(req.user.id);
+        if (blockedIds.includes(featured.pack.ownerId)) {
+          res.status(200).json(buildSuccessResponse(null));
+          return;
+        }
       }
       const social = await loadViewerSocialState(featured.pack, req.user?.id);
       res.status(200).json(

@@ -2,6 +2,8 @@ import { prisma } from '../prisma/client';
 import { Prisma, StickerVisibility, SharePermission } from '@prisma/client';
 import { RoleService } from './role.service';
 import { ForbiddenError, NotFoundError } from '../errors';
+import { contentSafetyService } from './content-safety.service';
+import { userBlockService } from './user-block.service';
 import {
   buildPublicBaseWhere,
   buildSearchFilter,
@@ -80,6 +82,13 @@ export class StickerPackService {
 
     if (!Object.values(StickerVisibility).includes(visibility)) {
       throw new ForbiddenError('Invalid visibility value');
+    }
+
+    if (visibility === StickerVisibility.PUBLIC) {
+      contentSafetyService.assertPublishable({
+        name: input.name,
+        description: input.description,
+      });
     }
 
     return prisma.stickerPack.create({
@@ -175,9 +184,11 @@ export class StickerPackService {
     viewerId?: string
   ): Promise<PaginatedPublicPacks> {
     const { page, limit, sort } = normalizePublicQuery(query);
+    const blockFilter = await userBlockService.getBlockedOwnerFilter(viewerId);
     const fullWhere = {
       ...buildPublicBaseWhere(),
       ...where,
+      ...blockFilter,
       ...buildSearchFilter(query.q),
     };
 
@@ -323,6 +334,13 @@ export class StickerPackService {
       return null;
     }
 
+    if (viewerId) {
+      const blockedIds = await userBlockService.listBlockedIds(viewerId);
+      if (blockedIds.includes(pack.ownerId)) {
+        return null;
+      }
+    }
+
     const social = await loadViewerSocialState(pack, viewerId);
     return mapPackWithSocial(pack, social);
   }
@@ -445,6 +463,13 @@ export class StickerPackService {
 
     if (input.visibility !== undefined && !Object.values(StickerVisibility).includes(input.visibility)) {
       throw new ForbiddenError('Invalid visibility value');
+    }
+
+    if (input.visibility === StickerVisibility.PUBLIC) {
+      contentSafetyService.assertPublishable({
+        name: input.name ?? pack.name,
+        description: input.description ?? pack.description ?? undefined,
+      });
     }
 
     return prisma.$transaction(async (tx) => {

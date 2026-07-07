@@ -1,8 +1,10 @@
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
+import { StickerVisibility, SubscriptionStatus } from '@prisma/client';
 import { config } from '../config';
 import { prisma } from '../prisma/client';
 import { hashPassword, comparePassword } from '../utils/password';
+import { accountPurgeService } from './account-purge.service';
 import {
   AppError,
   ValidationError,
@@ -334,22 +336,90 @@ export class AuthService {
       throw new CurrentPasswordIncorrectError();
     }
 
+    await this.performAccountDeletionInternal(userId);
+  }
+
+  /** Admin/web deletion fulfillment — skips password check. */
+  async performAccountDeletionInternal(userId: string): Promise<void> {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user?.isActive) {
+      return;
+    }
+
     const deletedAt = new Date();
     const anonymizedEmail = `deleted_${userId}@deleted.local`;
     const anonymizedUsername = `deleted_${userId.replace(/-/g, '')}`;
-
     const newPasswordHash = await hashPassword(crypto.randomUUID());
+    const storagePaths: string[] = [];
+
+    const stickers = await prisma.sticker.findMany({
+      where: { ownerId: userId, deletedAt: null },
+      select: { filename: true },
+    });
+    for (const sticker of stickers) {
+      if (sticker.filename) storagePaths.push(sticker.filename);
+    }
+
+    const historyRecords = await prisma.processingHistory.findMany({
+      where: { userId },
+      select: { outputFiles: true },
+    });
+    for (const record of historyRecords) {
+      storagePaths.push(...extractOutputFilePaths(record.outputFiles));
+    }
 
     await prisma.$transaction(async (tx) => {
       await tx.refreshToken.deleteMany({ where: { userId } });
+
+      await tx.stickerPack.updateMany({
+        where: { ownerId: userId, deletedAt: null },
+        data: { deletedAt, visibility: StickerVisibility.PRIVATE },
+      });
+
       await tx.sticker.updateMany({
         where: { ownerId: userId, deletedAt: null },
         data: { deletedAt },
       });
-      await tx.stickerPack.updateMany({
-        where: { ownerId: userId, deletedAt: null },
-        data: { deletedAt },
+
+      await tx.processingHistory.deleteMany({ where: { userId } });
+
+      await tx.stickerPackLike.deleteMany({ where: { userId } });
+      await tx.stickerPackSave.deleteMany({ where: { userId } });
+      await tx.stickerPackDownload.deleteMany({ where: { userId } });
+      await tx.userFollow.deleteMany({
+        where: { OR: [{ followerId: userId }, { followingId: userId }] },
       });
+      await tx.stickerPackShare.deleteMany({
+        where: { OR: [{ sharedWithId: userId }, { grantedBy: userId }] },
+      });
+      await tx.stickerPackShareLink.deleteMany({ where: { createdBy: userId } });
+      await tx.userBlock.deleteMany({
+        where: { OR: [{ blockerId: userId }, { blockedId: userId }] },
+      });
+
+      await tx.userSubscription.updateMany({
+        where: {
+          userId,
+          status: {
+            in: [
+              SubscriptionStatus.ACTIVE,
+              SubscriptionStatus.GRACE_PERIOD,
+              SubscriptionStatus.ON_HOLD,
+              SubscriptionStatus.PAUSED,
+              SubscriptionStatus.PAST_DUE,
+            ],
+          },
+        },
+        data: {
+          status: SubscriptionStatus.CANCELLED,
+          autoRenewing: false,
+          cancelAtPeriodEnd: true,
+        },
+      });
+
       await tx.user.update({
         where: { id: userId },
         data: {
@@ -358,8 +428,24 @@ export class AuthService {
           username: anonymizedUsername,
           displayName: 'Deleted User',
           passwordHash: newPasswordHash,
+          followerCount: 0,
+          followingCount: 0,
         },
       });
     });
+
+    await accountPurgeService.enqueuePaths(storagePaths);
   }
+}
+
+function extractOutputFilePaths(outputFiles: unknown): string[] {
+  if (!Array.isArray(outputFiles)) return [];
+  const paths: string[] = [];
+  for (const item of outputFiles) {
+    if (item && typeof item === 'object' && 'path' in item) {
+      const filePath = (item as { path?: string }).path;
+      if (filePath) paths.push(filePath);
+    }
+  }
+  return paths;
 }
