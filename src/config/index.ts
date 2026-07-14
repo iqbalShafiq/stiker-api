@@ -118,6 +118,11 @@ export const config = {
   jwtRefreshSecret: process.env.JWT_REFRESH_SECRET ?? 'your-jwt-refresh-secret-key-change-in-production',
   jwtAccessExpiration: process.env.JWT_ACCESS_EXPIRATION ?? '15m',
   jwtRefreshExpiration: process.env.JWT_REFRESH_EXPIRATION ?? '7d',
+  /** OAuth client IDs accepted as Google ID token `aud` (Web serverClientId + optional Android). */
+  googleClientIds: (process.env.GOOGLE_CLIENT_IDS ?? '')
+    .split(',')
+    .map((id) => id.trim())
+    .filter((id) => id.length > 0),
   storageProvider: process.env.STORAGE_PROVIDER ?? 'local',
   appDeepLinkScheme: process.env.APP_DEEP_LINK_SCHEME ?? 'setiker',
   publicWebBaseUrl: process.env.PUBLIC_WEB_BASE_URL ?? process.env.APP_URL ?? 'http://localhost:3000',

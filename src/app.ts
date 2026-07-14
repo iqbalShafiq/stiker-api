@@ -179,6 +179,10 @@ app.post('/api/v1/auth/register', asyncHandler((req, res, next) => authControlle
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.post('/api/v1/auth/login', asyncHandler((req, res, next) => authController.login(req, res, next)));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/auth/google', asyncHandler((req, res, next) => authController.loginWithGoogle(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/auth/google/link-with-password', asyncHandler((req, res, next) => authController.linkGoogleWithPassword(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.post('/api/v1/auth/refresh', asyncHandler((req, res, next) => authController.refresh(req, res, next)));
 
 // Auth routes (protected)
@@ -190,6 +194,12 @@ app.get('/api/v1/auth/me', authenticateToken, asyncHandler((req, res, next) => a
 app.put('/api/v1/auth/me', authenticateToken, asyncHandler((req, res, next) => authController.updateMe(req, res, next)));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.post('/api/v1/auth/change-password', authenticateToken, asyncHandler((req, res, next) => authController.changePassword(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/auth/set-password', authenticateToken, asyncHandler((req, res, next) => authController.setPassword(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/auth/google/link', authenticateToken, asyncHandler((req, res, next) => authController.linkGoogle(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.delete('/api/v1/auth/google', authenticateToken, asyncHandler((req, res, next) => authController.unlinkGoogle(req, res, next)));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.delete('/api/v1/auth/me', authenticateToken, asyncHandler((req, res, next) => authController.deleteMe(req, res, next)));
 

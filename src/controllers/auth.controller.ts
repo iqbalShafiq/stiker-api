@@ -111,9 +111,105 @@ export class AuthController {
     }
   }
 
+  async loginWithGoogle(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { idToken } = req.body as Record<string, unknown>;
+      if (!idToken) {
+        throw new ValidationError('idToken is required');
+      }
+
+      const result = await this.authService.loginWithGoogle(String(idToken));
+      this.setRefreshTokenCookie(res, result.tokens.refreshToken);
+
+      res.status(200).json(
+        buildSuccessResponse({
+          user: result.user,
+          ...this.accessTokenPayload(result.tokens.accessToken),
+        })
+      );
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async linkGoogleWithPassword(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { idToken, email, password } = req.body as Record<string, unknown>;
+      if (!idToken || !email || !password) {
+        throw new ValidationError('idToken, email, and password are required');
+      }
+
+      const result = await this.authService.linkGoogleWithPassword(
+        String(idToken),
+        String(email),
+        String(password)
+      );
+      this.setRefreshTokenCookie(res, result.tokens.refreshToken);
+
+      res.status(200).json(
+        buildSuccessResponse({
+          user: result.user,
+          ...this.accessTokenPayload(result.tokens.accessToken),
+        })
+      );
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async linkGoogle(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user?.id) {
+        throw new ValidationError('User not authenticated');
+      }
+      const { idToken } = req.body as Record<string, unknown>;
+      if (!idToken) {
+        throw new ValidationError('idToken is required');
+      }
+
+      const user = await this.authService.linkGoogle(req.user.id, String(idToken));
+      res.status(200).json(buildSuccessResponse(user));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async unlinkGoogle(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user?.id) {
+        throw new ValidationError('User not authenticated');
+      }
+      const user = await this.authService.unlinkGoogle(req.user.id);
+      res.status(200).json(buildSuccessResponse(user));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async setPassword(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user?.id) {
+        throw new ValidationError('User not authenticated');
+      }
+      const { newPassword } = req.body as Record<string, unknown>;
+      if (!newPassword) {
+        throw new ValidationError('newPassword is required');
+      }
+
+      await this.authService.setPassword(req.user.id, String(newPassword));
+      res.status(200).json(buildSuccessResponse({ message: 'Password set successfully' }));
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async logout(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const refreshToken: unknown = req.cookies?.refresh_token;
+      const body = req.body as Record<string, unknown> | undefined;
+      const bodyToken = typeof body?.refreshToken === 'string' ? body.refreshToken : undefined;
+      const cookieToken = req.cookies?.refresh_token;
+      const refreshToken =
+        bodyToken ?? (typeof cookieToken === 'string' ? cookieToken : undefined);
 
       if (typeof refreshToken === 'string' && refreshToken) {
         await this.authService.logout(refreshToken);
@@ -201,11 +297,10 @@ export class AuthController {
       }
 
       const { currentPassword } = req.body as Record<string, unknown>;
-      if (!currentPassword) {
-        throw new ValidationError('Current password is required');
-      }
-
-      await this.authService.deleteAccount(req.user.id, String(currentPassword));
+      await this.authService.deleteAccount(
+        req.user.id,
+        currentPassword == null ? undefined : String(currentPassword)
+      );
       this.clearRefreshTokenCookie(res);
 
       res.status(200).json(buildSuccessResponse({ message: 'Account deleted successfully' }));

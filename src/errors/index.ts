@@ -163,6 +163,51 @@ export class UsernameAlreadyInUseError extends ConflictError {
   }
 }
 
+export class AccountExistsPasswordError extends ConflictError {
+  constructor(
+    message: string = 'An account with this email already exists. Sign in with your password to link Google.',
+    details?: ErrorDetails
+  ) {
+    super(message, 'ACCOUNT_EXISTS_PASSWORD', details);
+  }
+}
+
+export class GoogleAlreadyLinkedError extends ConflictError {
+  constructor(message: string = 'This Google account is already linked to another user') {
+    super(message, 'GOOGLE_ALREADY_LINKED');
+  }
+}
+
+export class InvalidGoogleTokenError extends UnauthorizedError {
+  constructor(message: string = 'Invalid Google ID token') {
+    super(message, 'INVALID_GOOGLE_TOKEN');
+  }
+}
+
+export class EmailNotVerifiedError extends UnauthorizedError {
+  constructor(message: string = 'Google email is not verified') {
+    super(message, 'EMAIL_NOT_VERIFIED');
+  }
+}
+
+export class UseGoogleSignInError extends UnauthorizedError {
+  constructor(message: string = 'This account uses Google Sign-In. Continue with Google.') {
+    super(message, 'USE_GOOGLE_SIGN_IN');
+  }
+}
+
+export class NoPasswordSetError extends AppError {
+  constructor(message: string = 'No password is set for this account') {
+    super(message, 400, 'VALIDATION_ERROR', 'NO_PASSWORD_SET');
+  }
+}
+
+export class CannotUnlinkSoleAuthError extends AppError {
+  constructor(message: string = 'Cannot unlink the only sign-in method. Set a password first.') {
+    super(message, 400, 'VALIDATION_ERROR', 'CANNOT_UNLINK_SOLE_AUTH');
+  }
+}
+
 export class NotFoundError extends AppError {
   constructor(message: string = 'Resource not found') {
     super(message, 404, 'NOT_FOUND');

@@ -2,6 +2,43 @@
 
 Express API for Setiker sticker generation and cloud sync.
 
+## Sign in with Google
+
+Mobile clients send a Google **ID token** to `POST /api/v1/auth/google`. The API verifies the token with `google-auth-library` (never trust client-only identity). Stable user key is Google **`sub`**, stored in `AuthIdentity`.
+
+### Google Cloud Console checklist
+
+1. Use **separate** Cloud projects for development and production.
+2. Configure the **OAuth consent screen** (app name, logo, generic support email, Privacy Policy / ToS URLs).
+3. Create OAuth client IDs in the same brand project:
+   - **Web** application — this client ID is the Android Credential Manager `serverClientId` and the primary `aud` for server verification.
+   - **Android** — package name `com.setiker.app` plus SHA-1 fingerprints for **debug** keystore and **Play App Signing**.
+4. Set API env `GOOGLE_CLIENT_IDS` to a comma-separated list of accepted audiences (at minimum the Web client ID).
+
+### Debug SHA-1 (local Android)
+
+```bash
+keytool -list -v -alias androiddebugkey -keystore ~/.android/debug.keystore -storepass android -keypass android
+```
+
+On Windows the debug keystore is typically `%USERPROFILE%\.android\debug.keystore`.
+
+### Auth endpoints (Google)
+
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| `POST` | `/api/v1/auth/google` | Public | Login or register with ID token |
+| `POST` | `/api/v1/auth/google/link-with-password` | Public | Link Google when email already has a password |
+| `POST` | `/api/v1/auth/google/link` | Bearer | Link Google while signed in |
+| `DELETE` | `/api/v1/auth/google` | Bearer | Unlink Google (blocked if sole login method) |
+| `POST` | `/api/v1/auth/set-password` | Bearer | Set a password on a Google-only account |
+
+### Environment
+
+| Variable | Description |
+|----------|-------------|
+| `GOOGLE_CLIENT_IDS` | Comma-separated OAuth client IDs accepted as ID token `aud` |
+
 ## AI quota (daily points)
 
 Each authenticated user has a **daily point pool** (default **100**). Each AI operation consumes configurable points. Outstanding reservations count toward the limit so concurrent requests from multiple devices cannot overshoot quota.
