@@ -493,20 +493,23 @@ describe('Auth', () => {
     expect(response.body.success).toBe(false);
   });
 
-  test.sequential('should return placeholder for update profile', async () => {
+  test.sequential('should update profile displayName and username', async () => {
     const email = `cf-test-upd-${Date.now()}@example.com`;
     const username = `upduser${Date.now()}`;
+    const newUsername = `updnew${Date.now()}`;
 
     const reg = await registerUser(email, TEST_PASSWORD, { username });
 
     const response = await request(app)
       .put('/api/v1/auth/me')
       .set('Authorization', `Bearer ${reg.accessToken}`)
-      .send({ displayName: 'Updated' });
+      .send({ displayName: 'Updated', username: newUsername });
 
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
-    expect(response.body.data.message).toContain('placeholder');
+    expect(response.body.data.displayName).toBe('Updated');
+    expect(response.body.data.username).toBe(newUsername);
+    expect(response.body.data.totalPackDownloads).toBe(0);
   });
 
   test.sequential('should change password successfully', async () => {

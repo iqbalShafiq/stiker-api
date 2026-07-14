@@ -279,6 +279,60 @@ describe('Auth Routes Integration', () => {
       expect(response.body.data).toBeDefined();
       expect(response.body.data.email).toBe(uniqueEmail);
       expect(response.body.data.username).toBe(uniqueUsername);
+      expect(response.body.data.totalPackDownloads).toBe(0);
+    });
+
+    it('should update profile fields', async () => {
+      const uniqueEmail = `integration-upd-${Date.now()}@example.com`;
+      const uniqueUsername = `upduser${Date.now()}`;
+      const newUsername = `updnew${Date.now()}`;
+
+      const registerResponse = await request(app)
+        .post('/api/v1/auth/register')
+        .send({
+          email: uniqueEmail,
+          username: uniqueUsername,
+          password: testPassword,
+        });
+
+      const token = registerResponse.body.data.accessToken;
+
+      const response = await request(app)
+        .put('/api/v1/auth/me')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ displayName: 'New Name', username: newUsername });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.displayName).toBe('New Name');
+      expect(response.body.data.username).toBe(newUsername);
+      expect(response.body.data.totalPackDownloads).toBe(0);
+    });
+
+    it('should reject duplicate username on update', async () => {
+      const stamp = Date.now();
+      const first = await request(app)
+        .post('/api/v1/auth/register')
+        .send({
+          email: `dup-a-${stamp}@example.com`,
+          username: `dupa${stamp}`,
+          password: testPassword,
+        });
+      const second = await request(app)
+        .post('/api/v1/auth/register')
+        .send({
+          email: `dup-b-${stamp}@example.com`,
+          username: `dupb${stamp}`,
+          password: testPassword,
+        });
+
+      const response = await request(app)
+        .put('/api/v1/auth/me')
+        .set('Authorization', `Bearer ${second.body.data.accessToken}`)
+        .send({ username: first.body.data.user.username });
+
+      expect(response.status).toBe(409);
+      expect(response.body.success).toBe(false);
     });
 
     it('should return 401 without auth', async () => {

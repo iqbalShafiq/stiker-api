@@ -1,6 +1,7 @@
 import type { Response, NextFunction } from 'express';
 import { StickerService } from '../services/sticker.service';
 import { ShareService } from '../services/share.service';
+import { notificationService } from '../services/notification.service';
 import type { AuthRequest } from '../middleware/auth.middleware';
 import { buildSuccessResponse } from '../utils/response-builder';
 import { ValidationError, NotFoundError, ForbiddenError } from '../errors';
@@ -152,6 +153,10 @@ export class StickerController {
         throw new ValidationError('User ID is required');
       }
 
+      if (String(sharedWithId) === req.user.id) {
+        throw new ValidationError('Cannot share with yourself');
+      }
+
       const permissionStr = String(permission).toLowerCase();
       const sharePermission = permission
         ? (permissionStr === 'full' ? SharePermission.EDIT : (permissionStr.toUpperCase() as SharePermission))
@@ -166,7 +171,37 @@ export class StickerController {
         expirationDate
       );
 
+      void notificationService.create({
+        userId: String(sharedWithId),
+        type: 'COLLAB_INVITE',
+        title: 'Sticker shared with you',
+        body: 'You were invited to collaborate on a sticker',
+        payload: { stickerId: id, grantedBy: req.user.id, permission: sharePermission },
+      });
+
       res.status(201).json(buildSuccessResponse(this.mapShareResponse(share as Record<string, unknown>)));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async listCollaborators(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user?.id) {
+        throw new ValidationError('User not authenticated');
+      }
+
+      const { id } = req.params;
+      if (!id) {
+        throw new ValidationError('Sticker ID is required');
+      }
+
+      const collaborators = await this.shareService.listCollaborators(id, req.user.id);
+      res.status(200).json(
+        buildSuccessResponse(
+          collaborators.map((share) => this.mapShareResponse(share as Record<string, unknown>))
+        )
+      );
     } catch (error) {
       next(error);
     }

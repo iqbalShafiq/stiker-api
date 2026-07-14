@@ -187,9 +187,7 @@ app.post('/api/v1/auth/logout', authenticateToken, asyncHandler((req, res, next)
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.get('/api/v1/auth/me', authenticateToken, asyncHandler((req, res, next) => authController.getMe(req, res, next)));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
-app.put('/api/v1/auth/me', authenticateToken, (req, res, next) => {
-  authController.updateMe(req, res, next);
-});
+app.put('/api/v1/auth/me', authenticateToken, asyncHandler((req, res, next) => authController.updateMe(req, res, next)));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.post('/api/v1/auth/change-password', authenticateToken, asyncHandler((req, res, next) => authController.changePassword(req, res, next)));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
@@ -240,6 +238,8 @@ app.put('/api/v1/stickers/:id', authenticateToken, asyncHandler((req, res, next)
 app.delete('/api/v1/stickers/:id', authenticateToken, asyncHandler((req, res, next) => stickerController.deleteSticker(req, res, next)));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.post('/api/v1/stickers/:id/share', authenticateToken, asyncHandler((req, res, next) => stickerController.shareWithUser(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/stickers/:id/collaborators', authenticateToken, asyncHandler((req, res, next) => stickerController.listCollaborators(req, res, next)));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.delete('/api/v1/stickers/:id/share', authenticateToken, asyncHandler((req, res, next) => stickerController.removeUserShare(req, res, next)));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises

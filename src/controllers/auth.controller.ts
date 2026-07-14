@@ -164,9 +164,31 @@ export class AuthController {
     }
   }
 
-  updateMe(_req: AuthRequest, res: Response, next: NextFunction): void {
+  async updateMe(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      res.status(200).json(buildSuccessResponse({ message: 'Update profile endpoint - placeholder' }));
+      if (!req.user?.id) {
+        throw new ValidationError('User not authenticated');
+      }
+
+      const body = req.body as Record<string, unknown>;
+      const input: { displayName?: string | null; username?: string } = {};
+
+      if (Object.prototype.hasOwnProperty.call(body, 'displayName')) {
+        input.displayName = body.displayName == null ? null : String(body.displayName);
+      }
+      if (Object.prototype.hasOwnProperty.call(body, 'username')) {
+        if (body.username == null || String(body.username).trim().length === 0) {
+          throw new ValidationError('Username is required');
+        }
+        input.username = String(body.username);
+      }
+
+      if (input.displayName === undefined && input.username === undefined) {
+        throw new ValidationError('Provide displayName and/or username to update');
+      }
+
+      const user = await this.authService.updateProfile(req.user.id, input);
+      res.status(200).json(buildSuccessResponse(user));
     } catch (error) {
       next(error);
     }

@@ -49,8 +49,17 @@ export class BillingController {
       if (!req.user?.id) throw new ValidationError('User not authenticated');
       const limit = Math.min(50, parseInt(String(req.query.limit ?? '20'), 10) || 20);
       const offset = Math.max(0, parseInt(String(req.query.offset ?? '0'), 10) || 0);
-      const purchases = await purchaseService.listForUser(req.user.id, limit, offset);
-      res.status(200).json(buildSuccessResponse({ purchases, limit, offset }));
+      const rows = await purchaseService.listForUser(req.user.id, limit + 1, offset);
+      const hasMore = rows.length > limit;
+      const purchases = hasMore ? rows.slice(0, limit) : rows;
+      res.status(200).json(
+        buildSuccessResponse({
+          purchases,
+          limit,
+          offset,
+          hasMore,
+        })
+      );
     } catch (error) {
       next(error);
     }

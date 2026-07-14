@@ -32,6 +32,37 @@ export class UserBlockService {
     return rows.map((r) => r.blockedId);
   }
 
+  async listBlockedUsers(blockerId: string): Promise<{
+    users: Array<{ id: string; username: string; displayName: string | null }>;
+    blockedUserIds: string[];
+  }> {
+    const rows = await prisma.userBlock.findMany({
+      where: { blockerId },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        blockedId: true,
+        blocked: {
+          select: {
+            id: true,
+            username: true,
+            displayName: true,
+          },
+        },
+      },
+    });
+
+    const users = rows.map((row) => ({
+      id: row.blocked.id,
+      username: row.blocked.username,
+      displayName: row.blocked.displayName,
+    }));
+
+    return {
+      users,
+      blockedUserIds: users.map((user) => user.id),
+    };
+  }
+
   async getBlockedOwnerFilter(blockerId?: string): Promise<{ ownerId?: { notIn: string[] } }> {
     if (!blockerId) return {};
     const blockedIds = await this.listBlockedIds(blockerId);

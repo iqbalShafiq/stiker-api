@@ -60,6 +60,15 @@ function validatePassword(password: string): void {
   }
 }
 
+function validateUsername(username: string): void {
+  if (username.length < 3 || username.length > 30) {
+    throw new ValidationError('Username must be between 3 and 30 characters');
+  }
+  if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+    throw new ValidationError('Username may only contain letters, numbers, and underscores');
+  }
+}
+
 function generateTokens(payload: TokenPayload): AuthTokens {
   const accessToken = jwt.sign(payload, config.jwtSecret, {
     expiresIn: config.jwtAccessExpiration as jwt.SignOptions['expiresIn'],
@@ -100,6 +109,7 @@ function parseExpirationToMs(expiration: string): number {
 export class AuthService {
   async register(input: RegisterInput): Promise<{ user: unknown; tokens: AuthTokens }> {
     validatePassword(input.password);
+    validateUsername(input.username.trim());
 
     const existingEmail = await prisma.user.findUnique({
       where: { email: input.email },
@@ -108,8 +118,9 @@ export class AuthService {
       throw new EmailAlreadyInUseError();
     }
 
+    const username = input.username.trim();
     const existingUsername = await prisma.user.findUnique({
-      where: { username: input.username },
+      where: { username },
     });
     if (existingUsername) {
       throw new UsernameAlreadyInUseError();
@@ -127,7 +138,7 @@ export class AuthService {
     const user = await prisma.user.create({
       data: {
         email: input.email,
-        username: input.username,
+        username,
         passwordHash,
         displayName: input.displayName,
         roleId: userRole.id,
@@ -275,6 +286,90 @@ export class AuthService {
       throw new UnauthorizedError('User not found');
     }
 
+    const downloadsAggregate = await prisma.stickerPack.aggregate({
+      where: { ownerId: userId, deletedAt: null },
+      _sum: { downloadCount: true },
+    });
+
+    return this.toPublicUser(user, downloadsAggregate._sum.downloadCount ?? 0);
+  }
+
+  async updateProfile(
+    userId: string,
+    input: { displayName?: string | null; username?: string }
+  ): Promise<unknown> {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { role: true },
+    });
+
+    if (!user) {
+      throw new UnauthorizedError('User not found');
+    }
+
+    const data: { displayName?: string | null; username?: string } = {};
+
+    if (input.username !== undefined) {
+      const username = input.username.trim();
+      validateUsername(username);
+      if (username !== user.username) {
+        const existingUsername = await prisma.user.findUnique({
+          where: { username },
+        });
+        if (existingUsername) {
+          throw new UsernameAlreadyInUseError();
+        }
+        data.username = username;
+      }
+    }
+
+    if (input.displayName !== undefined) {
+      if (input.displayName === null) {
+        data.displayName = null;
+      } else {
+        const trimmed = String(input.displayName).trim();
+        data.displayName = trimmed.length === 0 ? null : trimmed;
+      }
+    }
+
+    if (Object.keys(data).length === 0) {
+      const downloadsAggregate = await prisma.stickerPack.aggregate({
+        where: { ownerId: userId, deletedAt: null },
+        _sum: { downloadCount: true },
+      });
+      return this.toPublicUser(user, downloadsAggregate._sum.downloadCount ?? 0);
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data,
+      include: { role: true },
+    });
+
+    const downloadsAggregate = await prisma.stickerPack.aggregate({
+      where: { ownerId: userId, deletedAt: null },
+      _sum: { downloadCount: true },
+    });
+
+    return this.toPublicUser(updated, downloadsAggregate._sum.downloadCount ?? 0);
+  }
+
+  private toPublicUser(
+    user: {
+      id: string;
+      email: string;
+      username: string;
+      displayName: string | null;
+      role: { name: string };
+      isActive: boolean;
+      emailVerified: boolean;
+      subscriptionTier: string;
+      followerCount: number;
+      followingCount: number;
+      createdAt: Date;
+    },
+    totalPackDownloads: number
+  ): unknown {
     return {
       id: user.id,
       email: user.email,
@@ -286,6 +381,7 @@ export class AuthService {
       subscriptionTier: user.subscriptionTier,
       followerCount: user.followerCount,
       followingCount: user.followingCount,
+      totalPackDownloads,
       createdAt: user.createdAt,
     };
   }

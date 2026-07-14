@@ -91,8 +91,8 @@ export class ModerationController {
 
   async listBlockedUsers(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const blockedIds = await userBlockService.listBlockedIds(req.user!.id);
-      res.status(200).json(buildSuccessResponse({ blockedUserIds: blockedIds }));
+      const result = await userBlockService.listBlockedUsers(req.user!.id);
+      res.status(200).json(buildSuccessResponse(result));
     } catch (error) {
       next(error);
     }
