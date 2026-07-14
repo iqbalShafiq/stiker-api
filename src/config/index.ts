@@ -118,11 +118,26 @@ export const config = {
   jwtRefreshSecret: process.env.JWT_REFRESH_SECRET ?? 'your-jwt-refresh-secret-key-change-in-production',
   jwtAccessExpiration: process.env.JWT_ACCESS_EXPIRATION ?? '15m',
   jwtRefreshExpiration: process.env.JWT_REFRESH_EXPIRATION ?? '7d',
-  /** OAuth client IDs accepted as Google ID token `aud` (Web serverClientId + optional Android). */
+  /** OAuth client IDs accepted as Google ID token `aud` (Web serverClientId + optional Android/iOS). */
   googleClientIds: (process.env.GOOGLE_CLIENT_IDS ?? '')
     .split(',')
     .map((id) => id.trim())
     .filter((id) => id.length > 0),
+  /** Apple Sign-In audiences (iOS bundle id and/or Services ID). */
+  appleClientIds: (process.env.APPLE_CLIENT_IDS ?? '')
+    .split(',')
+    .map((id) => id.trim())
+    .filter((id) => id.length > 0),
+  resend: {
+    apiKey: process.env.RESEND_API_KEY ?? '',
+    from: process.env.RESEND_FROM ?? process.env.SUPPORT_EMAIL ?? 'support@setiker.app',
+  },
+  passwordReset: {
+    tokenTtlMinutes: Math.max(5, parseInt(process.env.PASSWORD_RESET_TOKEN_TTL_MINUTES ?? '60', 10)),
+    urlBase:
+      process.env.PASSWORD_RESET_URL_BASE ??
+      `${process.env.PUBLIC_WEB_BASE_URL ?? process.env.APP_URL ?? 'http://localhost:3000'}/reset-password`,
+  },
   storageProvider: process.env.STORAGE_PROVIDER ?? 'local',
   appDeepLinkScheme: process.env.APP_DEEP_LINK_SCHEME ?? 'setiker',
   publicWebBaseUrl: process.env.PUBLIC_WEB_BASE_URL ?? process.env.APP_URL ?? 'http://localhost:3000',

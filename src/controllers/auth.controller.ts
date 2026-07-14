@@ -334,4 +334,111 @@ export class AuthController {
       next(error);
     }
   }
+
+  async forgotPassword(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { email } = req.body as Record<string, unknown>;
+      if (!email) {
+        throw new ValidationError('Email is required');
+      }
+
+      await this.authService.requestPasswordReset(String(email));
+      res.status(200).json(
+        buildSuccessResponse({
+          message: 'If an account exists for that email, a reset link has been sent.',
+        })
+      );
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async resetPassword(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { token, newPassword } = req.body as Record<string, unknown>;
+      if (!token || !newPassword) {
+        throw new ValidationError('token and newPassword are required');
+      }
+
+      await this.authService.resetPasswordWithToken(String(token), String(newPassword));
+      res.status(200).json(buildSuccessResponse({ message: 'Password updated successfully' }));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async loginWithApple(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { idToken } = req.body as Record<string, unknown>;
+      if (!idToken) {
+        throw new ValidationError('idToken is required');
+      }
+
+      const result = await this.authService.loginWithApple(String(idToken));
+      this.setRefreshTokenCookie(res, result.tokens.refreshToken);
+
+      res.status(200).json(
+        buildSuccessResponse({
+          user: result.user,
+          ...this.accessTokenPayload(result.tokens.accessToken),
+        })
+      );
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async linkAppleWithPassword(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { idToken, email, password } = req.body as Record<string, unknown>;
+      if (!idToken || !email || !password) {
+        throw new ValidationError('idToken, email, and password are required');
+      }
+
+      const result = await this.authService.linkAppleWithPassword(
+        String(idToken),
+        String(email),
+        String(password)
+      );
+      this.setRefreshTokenCookie(res, result.tokens.refreshToken);
+
+      res.status(200).json(
+        buildSuccessResponse({
+          user: result.user,
+          ...this.accessTokenPayload(result.tokens.accessToken),
+        })
+      );
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async linkApple(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user?.id) {
+        throw new ValidationError('User not authenticated');
+      }
+      const { idToken } = req.body as Record<string, unknown>;
+      if (!idToken) {
+        throw new ValidationError('idToken is required');
+      }
+
+      const user = await this.authService.linkApple(req.user.id, String(idToken));
+      res.status(200).json(buildSuccessResponse(user));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async unlinkApple(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user?.id) {
+        throw new ValidationError('User not authenticated');
+      }
+      const user = await this.authService.unlinkApple(req.user.id);
+      res.status(200).json(buildSuccessResponse(user));
+    } catch (error) {
+      next(error);
+    }
+  }
 }

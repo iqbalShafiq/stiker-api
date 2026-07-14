@@ -6,6 +6,8 @@ import { prisma } from '../prisma/client';
 import { hashPassword, comparePassword } from '../utils/password';
 import { accountPurgeService } from './account-purge.service';
 import { verifyGoogleIdToken } from './google-token.verifier';
+import { verifyAppleIdToken } from './apple-token.verifier';
+import { sendPasswordResetEmail } from './mail/resend.mailer';
 import {
   AppError,
   ValidationError,
@@ -19,14 +21,20 @@ import {
   UsernameAlreadyInUseError,
   UnauthorizedError,
   AccountExistsPasswordError,
+  AccountExistsOtherProviderError,
   GoogleAlreadyLinkedError,
-  UseGoogleSignInError,
+  AppleAlreadyLinkedError,
+  UseOauthOrSetPasswordError,
   NoPasswordSetError,
   CannotUnlinkSoleAuthError,
   ConflictError,
+  InvalidPasswordResetTokenError,
 } from '../errors';
 
 export const AUTH_PROVIDER_GOOGLE = 'GOOGLE';
+export const AUTH_PROVIDER_APPLE = 'APPLE';
+
+type AuthIdentityRow = { provider: string; providerUserId: string };
 
 export interface RegisterInput {
   email: string;
@@ -156,14 +164,16 @@ export class AuthService {
       include: { authIdentities: true },
     });
     if (existingEmail) {
-      const isGoogleOnly =
-        !existingEmail.passwordHash &&
-        existingEmail.authIdentities.some((i) => i.provider === AUTH_PROVIDER_GOOGLE);
-      throw new EmailAlreadyInUseError(
-        isGoogleOnly
-          ? 'Email already in use. Sign in with Google instead.'
-          : 'Email already in use'
-      );
+      const oauthProviders = existingEmail.authIdentities
+        .map((i) => i.provider)
+        .filter((p) => p === AUTH_PROVIDER_GOOGLE || p === AUTH_PROVIDER_APPLE);
+      if (!existingEmail.passwordHash && oauthProviders.length > 0) {
+        throw new EmailAlreadyInUseError(
+          'Email already in use. Sign in with your social account, or set a password via forgot password.',
+          { providers: oauthProviders }
+        );
+      }
+      throw new EmailAlreadyInUseError();
     }
 
     const username = input.username.trim();
@@ -218,7 +228,7 @@ export class AuthService {
     }
 
     if (!user.passwordHash) {
-      throw new UseGoogleSignInError();
+      throw this.oauthOnlyLoginError(user.authIdentities);
     }
 
     const isValid = await comparePassword(input.password, user.passwordHash);
@@ -232,6 +242,77 @@ export class AuthService {
       user: this.toAuthUser(user),
       tokens,
     };
+  }
+
+  async requestPasswordReset(emailInput: string): Promise<void> {
+    const email = normalizeEmail(emailInput);
+    const user = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    // Always succeed to avoid account enumeration
+    if (!user || !user.isActive || !user.email) {
+      return;
+    }
+
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = hashResetToken(rawToken);
+    const expiresAt = new Date(Date.now() + config.passwordReset.tokenTtlMinutes * 60 * 1000);
+
+    await prisma.passwordResetToken.create({
+      data: {
+        userId: user.id,
+        tokenHash,
+        expiresAt,
+      },
+    });
+
+    try {
+      await sendPasswordResetEmail({
+        to: user.email,
+        rawToken,
+        isFirstTimeSet: !user.passwordHash,
+      });
+    } catch (error) {
+      await prisma.passwordResetToken.deleteMany({ where: { tokenHash } });
+      throw error;
+    }
+  }
+
+  async resetPasswordWithToken(rawToken: string, newPassword: string): Promise<void> {
+    validatePassword(newPassword);
+
+    if (!rawToken || typeof rawToken !== 'string' || rawToken.trim().length === 0) {
+      throw new InvalidPasswordResetTokenError();
+    }
+
+    const tokenHash = hashResetToken(rawToken.trim());
+    const record = await prisma.passwordResetToken.findUnique({
+      where: { tokenHash },
+      include: { user: true },
+    });
+
+    if (!record || record.usedAt || record.expiresAt < new Date() || !record.user.isActive) {
+      throw new InvalidPasswordResetTokenError();
+    }
+
+    const passwordHash = await hashPassword(newPassword);
+
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: record.userId },
+        data: { passwordHash },
+      });
+      await tx.passwordResetToken.update({
+        where: { id: record.id },
+        data: { usedAt: new Date() },
+      });
+      await tx.passwordResetToken.updateMany({
+        where: { userId: record.userId, usedAt: null, id: { not: record.id } },
+        data: { usedAt: new Date() },
+      });
+      await tx.refreshToken.deleteMany({ where: { userId: record.userId } });
+    });
   }
 
   async loginWithGoogle(idToken: string): Promise<{ user: unknown; tokens: AuthTokens }> {
@@ -279,13 +360,101 @@ export class AuthService {
         throw new AccountExistsPasswordError(undefined, { email: identity.email });
       }
 
+      const otherProviders = existingEmailUser.authIdentities
+        .map((i) => i.provider)
+        .filter((p) => p !== AUTH_PROVIDER_GOOGLE);
+      if (otherProviders.length > 0) {
+        throw new AccountExistsOtherProviderError(undefined, {
+          email: identity.email,
+          providers: otherProviders,
+        });
+      }
+
       throw new ConflictError(
         'An account with this email already exists',
         'EMAIL_ALREADY_IN_USE'
       );
     }
 
-    const user = await this.createGoogleUserWithSub(identity.email, identity.sub, identity.name);
+    const user = await this.createOAuthUserWithSub(
+      AUTH_PROVIDER_GOOGLE,
+      identity.email,
+      identity.sub,
+      identity.name
+    );
+    const tokens = await this.issueTokensForUser(user);
+    return { user: this.toAuthUser(user), tokens };
+  }
+
+  async loginWithApple(idToken: string): Promise<{ user: unknown; tokens: AuthTokens }> {
+    const identity = await verifyAppleIdToken(idToken);
+
+    const existingIdentity = await prisma.authIdentity.findUnique({
+      where: {
+        provider_providerUserId: {
+          provider: AUTH_PROVIDER_APPLE,
+          providerUserId: identity.sub,
+        },
+      },
+      include: { user: { include: { role: true, authIdentities: true } } },
+    });
+
+    if (existingIdentity) {
+      if (!existingIdentity.user.isActive) {
+        throw new AccountInactiveError();
+      }
+      const tokens = await this.issueTokensForUser(existingIdentity.user);
+      return { user: this.toAuthUser(existingIdentity.user), tokens };
+    }
+
+    const existingEmailUser = await prisma.user.findUnique({
+      where: { email: identity.email },
+      include: { role: true, authIdentities: true },
+    });
+
+    if (existingEmailUser) {
+      if (!existingEmailUser.isActive) {
+        throw new AccountInactiveError();
+      }
+
+      const hasApple = existingEmailUser.authIdentities.some(
+        (i) => i.provider === AUTH_PROVIDER_APPLE
+      );
+      if (hasApple) {
+        throw new ConflictError(
+          'This email is already linked to a different Apple account',
+          'APPLE_EMAIL_CONFLICT'
+        );
+      }
+
+      if (existingEmailUser.passwordHash) {
+        throw new AccountExistsPasswordError(
+          'An account with this email already exists. Sign in with your password to link Apple.',
+          { email: identity.email }
+        );
+      }
+
+      const otherProviders = existingEmailUser.authIdentities
+        .map((i) => i.provider)
+        .filter((p) => p !== AUTH_PROVIDER_APPLE);
+      if (otherProviders.length > 0) {
+        throw new AccountExistsOtherProviderError(undefined, {
+          email: identity.email,
+          providers: otherProviders,
+        });
+      }
+
+      throw new ConflictError(
+        'An account with this email already exists',
+        'EMAIL_ALREADY_IN_USE'
+      );
+    }
+
+    const user = await this.createOAuthUserWithSub(
+      AUTH_PROVIDER_APPLE,
+      identity.email,
+      identity.sub
+    );
     const tokens = await this.issueTokensForUser(user);
     return { user: this.toAuthUser(user), tokens };
   }
@@ -324,7 +493,7 @@ export class AuthService {
     }
 
     if (!user.passwordHash) {
-      throw new UseGoogleSignInError();
+      throw this.oauthOnlyLoginError(user.authIdentities);
     }
 
     const isValid = await comparePassword(password, user.passwordHash);
@@ -340,6 +509,77 @@ export class AuthService {
       data: {
         userId: user.id,
         provider: AUTH_PROVIDER_GOOGLE,
+        providerUserId: identity.sub,
+      },
+    });
+
+    if (!user.emailVerified) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { emailVerified: true },
+      });
+      user.emailVerified = true;
+    }
+
+    const refreshed = await prisma.user.findUniqueOrThrow({
+      where: { id: user.id },
+      include: { role: true, authIdentities: true },
+    });
+
+    const tokens = await this.issueTokensForUser(refreshed);
+    return { user: this.toAuthUser(refreshed), tokens };
+  }
+
+  async linkAppleWithPassword(
+    idToken: string,
+    email: string,
+    password: string
+  ): Promise<{ user: unknown; tokens: AuthTokens }> {
+    const identity = await verifyAppleIdToken(idToken);
+    const normalizedEmail = normalizeEmail(email);
+
+    if (identity.email !== normalizedEmail) {
+      throw new ValidationError('Email does not match the Apple account');
+    }
+
+    const existingIdentity = await prisma.authIdentity.findUnique({
+      where: {
+        provider_providerUserId: {
+          provider: AUTH_PROVIDER_APPLE,
+          providerUserId: identity.sub,
+        },
+      },
+    });
+    if (existingIdentity) {
+      throw new AppleAlreadyLinkedError();
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: normalizedEmail },
+      include: { role: true, authIdentities: true },
+    });
+
+    if (!user || !user.isActive) {
+      throw new InvalidCredentialsError();
+    }
+
+    if (!user.passwordHash) {
+      throw this.oauthOnlyLoginError(user.authIdentities);
+    }
+
+    const isValid = await comparePassword(password, user.passwordHash);
+    if (!isValid) {
+      throw new InvalidCredentialsError();
+    }
+
+    if (user.authIdentities.some((i) => i.provider === AUTH_PROVIDER_APPLE)) {
+      throw new AppleAlreadyLinkedError('Apple is already linked to this account');
+    }
+
+    await prisma.authIdentity.create({
+      data: {
+        userId: user.id,
+        provider: AUTH_PROVIDER_APPLE,
         providerUserId: identity.sub,
       },
     });
@@ -415,6 +655,60 @@ export class AuthService {
     return this.getCurrentUser(userId);
   }
 
+  async linkApple(userId: string, idToken: string): Promise<unknown> {
+    const identity = await verifyAppleIdToken(idToken);
+
+    const existingIdentity = await prisma.authIdentity.findUnique({
+      where: {
+        provider_providerUserId: {
+          provider: AUTH_PROVIDER_APPLE,
+          providerUserId: identity.sub,
+        },
+      },
+    });
+    if (existingIdentity) {
+      if (existingIdentity.userId !== userId) {
+        throw new AppleAlreadyLinkedError();
+      }
+      return this.getCurrentUser(userId);
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { role: true, authIdentities: true },
+    });
+    if (!user || !user.isActive) {
+      throw new UnauthorizedError('User not found');
+    }
+
+    if (user.authIdentities.some((i) => i.provider === AUTH_PROVIDER_APPLE)) {
+      throw new AppleAlreadyLinkedError('Apple is already linked to this account');
+    }
+
+    if (normalizeEmail(user.email) !== identity.email) {
+      throw new ValidationError(
+        'Apple account email must match your Setiker account email'
+      );
+    }
+
+    await prisma.authIdentity.create({
+      data: {
+        userId: user.id,
+        provider: AUTH_PROVIDER_APPLE,
+        providerUserId: identity.sub,
+      },
+    });
+
+    if (!user.emailVerified) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { emailVerified: true },
+      });
+    }
+
+    return this.getCurrentUser(userId);
+  }
+
   async unlinkGoogle(userId: string): Promise<unknown> {
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -429,12 +723,33 @@ export class AuthService {
       throw new ValidationError('Google is not linked to this account');
     }
 
-    if (!user.passwordHash) {
-      throw new CannotUnlinkSoleAuthError();
-    }
+    this.assertCanUnlinkProvider(user.passwordHash, user.authIdentities, AUTH_PROVIDER_GOOGLE);
 
     await prisma.authIdentity.delete({
       where: { id: googleIdentity.id },
+    });
+
+    return this.getCurrentUser(userId);
+  }
+
+  async unlinkApple(userId: string): Promise<unknown> {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { authIdentities: true },
+    });
+    if (!user) {
+      throw new UnauthorizedError('User not found');
+    }
+
+    const appleIdentity = user.authIdentities.find((i) => i.provider === AUTH_PROVIDER_APPLE);
+    if (!appleIdentity) {
+      throw new ValidationError('Apple is not linked to this account');
+    }
+
+    this.assertCanUnlinkProvider(user.passwordHash, user.authIdentities, AUTH_PROVIDER_APPLE);
+
+    await prisma.authIdentity.delete({
+      where: { id: appleIdentity.id },
     });
 
     return this.getCurrentUser(userId);
@@ -752,11 +1067,12 @@ export class AuthService {
     await accountPurgeService.enqueuePaths(storagePaths);
   }
 
-  private async createGoogleUserWithSub(
+  private async createOAuthUserWithSub(
+    provider: typeof AUTH_PROVIDER_GOOGLE | typeof AUTH_PROVIDER_APPLE,
     email: string,
-    googleSub: string,
+    providerUserId: string,
     displayName?: string
-  ): Promise<UserWithRole & { authIdentities: { provider: string; providerUserId: string }[] }> {
+  ): Promise<UserWithRole & { authIdentities: AuthIdentityRow[] }> {
     const userRole = await prisma.role.findUnique({
       where: { name: 'user' },
     });
@@ -777,8 +1093,8 @@ export class AuthService {
           emailVerified: true,
           authIdentities: {
             create: {
-              provider: AUTH_PROVIDER_GOOGLE,
-              providerUserId: googleSub,
+              provider,
+              providerUserId,
             },
           },
         },
@@ -786,6 +1102,24 @@ export class AuthService {
       });
       return created;
     });
+  }
+
+  private oauthOnlyLoginError(identities: AuthIdentityRow[]): UseOauthOrSetPasswordError {
+    const providers = identities
+      .map((i) => i.provider)
+      .filter((p) => p === AUTH_PROVIDER_GOOGLE || p === AUTH_PROVIDER_APPLE);
+    return new UseOauthOrSetPasswordError(undefined, { providers });
+  }
+
+  private assertCanUnlinkProvider(
+    passwordHash: string | null,
+    identities: AuthIdentityRow[],
+    providerToRemove: string
+  ): void {
+    const remaining = identities.filter((i) => i.provider !== providerToRemove);
+    if (!passwordHash && remaining.length === 0) {
+      throw new CannotUnlinkSoleAuthError();
+    }
   }
 
   private async allocateUsername(email: string): Promise<string> {
@@ -881,4 +1215,8 @@ function extractOutputFilePaths(outputFiles: unknown): string[] {
     }
   }
   return paths;
+}
+
+function hashResetToken(rawToken: string): string {
+  return crypto.createHash('sha256').update(rawToken).digest('hex');
 }

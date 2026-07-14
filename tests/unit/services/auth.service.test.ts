@@ -7,7 +7,7 @@ import {
   ValidationError,
   UnauthorizedError,
   ConflictError,
-  UseGoogleSignInError,
+  UseOauthOrSetPasswordError,
   NoPasswordSetError,
   AccountExistsPasswordError,
   CannotUnlinkSoleAuthError,
@@ -201,7 +201,7 @@ describe('AuthService', () => {
       });
     });
 
-    it('should throw UseGoogleSignInError for Google-only accounts', async () => {
+    it('should throw UseOauthOrSetPasswordError for Google-only accounts', async () => {
       vi.mocked(mockedPrisma.user.findUnique).mockResolvedValue({
         id: 'user-1',
         email: 'test@example.com',
@@ -216,7 +216,7 @@ describe('AuthService', () => {
           email: 'test@example.com',
           password: 'StrongPass1!',
         })
-      ).rejects.toThrow(UseGoogleSignInError);
+      ).rejects.toThrow(UseOauthOrSetPasswordError);
     });
 
     it('should throw UnauthorizedError for invalid credentials (user not found)', async () => {

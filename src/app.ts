@@ -183,6 +183,14 @@ app.post('/api/v1/auth/google', asyncHandler((req, res, next) => authController.
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.post('/api/v1/auth/google/link-with-password', asyncHandler((req, res, next) => authController.linkGoogleWithPassword(req, res, next)));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/auth/apple', asyncHandler((req, res, next) => authController.loginWithApple(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/auth/apple/link-with-password', asyncHandler((req, res, next) => authController.linkAppleWithPassword(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/auth/forgot-password', asyncHandler((req, res, next) => authController.forgotPassword(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/auth/reset-password', asyncHandler((req, res, next) => authController.resetPassword(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.post('/api/v1/auth/refresh', asyncHandler((req, res, next) => authController.refresh(req, res, next)));
 
 // Auth routes (protected)
@@ -200,6 +208,10 @@ app.post('/api/v1/auth/set-password', authenticateToken, asyncHandler((req, res,
 app.post('/api/v1/auth/google/link', authenticateToken, asyncHandler((req, res, next) => authController.linkGoogle(req, res, next)));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.delete('/api/v1/auth/google', authenticateToken, asyncHandler((req, res, next) => authController.unlinkGoogle(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/auth/apple/link', authenticateToken, asyncHandler((req, res, next) => authController.linkApple(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.delete('/api/v1/auth/apple', authenticateToken, asyncHandler((req, res, next) => authController.unlinkApple(req, res, next)));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.delete('/api/v1/auth/me', authenticateToken, asyncHandler((req, res, next) => authController.deleteMe(req, res, next)));
 

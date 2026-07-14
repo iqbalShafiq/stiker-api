@@ -39,6 +39,46 @@ On Windows the debug keystore is typically `%USERPROFILE%\.android\debug.keystor
 |----------|-------------|
 | `GOOGLE_CLIENT_IDS` | Comma-separated OAuth client IDs accepted as ID token `aud` |
 
+## Sign in with Apple
+
+Clients send an Apple **identity token** to `POST /api/v1/auth/apple`. The API verifies the JWT against Apple JWKS (`iss` = `https://appleid.apple.com`, `aud` ∈ `APPLE_CLIENT_IDS`). Stable key is Apple **`sub`** in `AuthIdentity` with provider `APPLE`.
+
+### Auth endpoints (Apple) — mirror Google
+
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| `POST` | `/api/v1/auth/apple` | Public | Login or register |
+| `POST` | `/api/v1/auth/apple/link-with-password` | Public | Link Apple when email has a password |
+| `POST` | `/api/v1/auth/apple/link` | Bearer | Link while signed in |
+| `DELETE` | `/api/v1/auth/apple` | Bearer | Unlink (blocked if sole method) |
+
+### Password reset / set-password via email (Resend)
+
+| Method | Path | Behavior |
+|--------|------|----------|
+| `POST` | `/api/v1/auth/forgot-password` | Body `{ email }`. Always **200**. Sends magic link if active user exists (including OAuth-only / no password). |
+| `POST` | `/api/v1/auth/reset-password` | Body `{ token, newPassword }`. Sets password, invalidates token + refresh tokens. |
+
+Email deep link: `{APP_DEEP_LINK_SCHEME}://auth/reset-password?token=…` plus `PASSWORD_RESET_URL_BASE` web fallback.
+
+### Continuity rules
+
+- Never auto-link Google ↔ Apple by email.
+- Password login without `passwordHash` → `USE_OAUTH_OR_SET_PASSWORD` + `providers`.
+- OAuth sign-in when email exists with another OAuth and no password → `ACCOUNT_EXISTS_OTHER_PROVIDER`.
+
+### Environment (auth)
+
+| Variable | Description |
+|----------|-------------|
+| `GOOGLE_CLIENT_IDS` | Accepted Google ID token audiences |
+| `APPLE_CLIENT_IDS` | Accepted Apple identity token audiences |
+| `RESEND_API_KEY` | Resend API key (empty = log-only in tests/dev) |
+| `RESEND_FROM` | From address |
+| `PASSWORD_RESET_URL_BASE` | HTTPS fallback URL for reset |
+| `PASSWORD_RESET_TOKEN_TTL_MINUTES` | Token lifetime (default 60) |
+| `APP_DEEP_LINK_SCHEME` | Default `setiker` |
+
 ## AI quota (daily points)
 
 Each authenticated user has a **daily point pool** (default **100**). Each AI operation consumes configurable points. Outstanding reservations count toward the limit so concurrent requests from multiple devices cannot overshoot quota.

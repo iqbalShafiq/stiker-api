@@ -130,7 +130,7 @@ describe('Google Auth Routes Integration', () => {
     expect(identity).toBeTruthy();
   });
 
-  it('POST /auth/login returns USE_GOOGLE_SIGN_IN for Google-only users', async () => {
+  it('POST /auth/login returns USE_OAUTH_OR_SET_PASSWORD for Google-only users', async () => {
     const email = `google-oauth-only-${Date.now()}@example.com`;
     const role = await prisma.role.findUnique({ where: { name: 'user' } });
     const user = await prisma.user.create({
@@ -155,7 +155,7 @@ describe('Google Auth Routes Integration', () => {
       .send({ email, password });
 
     expect(response.status).toBe(401);
-    expect(JSON.stringify(response.body)).toContain('USE_GOOGLE_SIGN_IN');
+    expect(JSON.stringify(response.body)).toContain('USE_OAUTH_OR_SET_PASSWORD');
   });
 
   it('DELETE /auth/me works without password for Google-only users', async () => {
