@@ -292,7 +292,7 @@ export class AuthService {
       include: { user: true },
     });
 
-    if (!record || record.usedAt || record.expiresAt < new Date() || !record.user.isActive) {
+    if (!record || record.usedAt !== null || record.expiresAt < new Date() || !record.user.isActive) {
       throw new InvalidPasswordResetTokenError();
     }
 

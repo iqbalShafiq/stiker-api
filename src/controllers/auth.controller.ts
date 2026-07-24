@@ -207,7 +207,7 @@ export class AuthController {
     try {
       const body = req.body as Record<string, unknown> | undefined;
       const bodyToken = typeof body?.refreshToken === 'string' ? body.refreshToken : undefined;
-      const cookieToken = req.cookies?.refresh_token;
+      const cookieToken: unknown = req.cookies?.refresh_token;
       const refreshToken =
         bodyToken ?? (typeof cookieToken === 'string' ? cookieToken : undefined);
 
