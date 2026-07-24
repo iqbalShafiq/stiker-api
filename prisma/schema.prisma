@@ -48,7 +48,7 @@ model RolePermission {
 model User {
   id            String    @id @default(uuid())
   email         String    @unique
-  passwordHash  String
+  passwordHash  String?
   username      String    @unique
   displayName   String?
   roleId        String
@@ -58,6 +58,8 @@ model User {
   updatedAt     DateTime  @updatedAt
 
   role           Role            @relation(fields: [roleId], references: [id])
+  authIdentities AuthIdentity[]
+  passwordResetTokens PasswordResetToken[]
   stickers       Sticker[]
   sharedStickers StickerShare[]  @relation("SharedWith")
   grantedShares  StickerShare[]  @relation("GrantedBy")
@@ -79,10 +81,45 @@ model User {
   followingCount     Int @default(0)
   subscriptionTier   String @default("free")
   notifications      UserNotification[]
+  purchases          Purchase[]
+  creditBalance      UserCreditBalance?
+  tokenLedgerEntries TokenLedgerEntry[]
+  subscriptions      UserSubscription[]
+  blockedUsers       UserBlock[] @relation("UserBlocks")
+  blockedByUsers     UserBlock[] @relation("UserBlockedBy")
+  contentReports     ContentReport[] @relation("ContentReporter")
+  accountDeletionRequests AccountDeletionRequest[]
 
   @@index([email])
   @@index([username])
   @@index([roleId])
+}
+
+model AuthIdentity {
+  id             String   @id @default(uuid())
+  userId         String
+  provider       String
+  providerUserId String
+  createdAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerUserId])
+  @@index([userId])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 enum StickerVisibility {
@@ -389,4 +426,256 @@ model ProcessingHistory {
   @@index([type])
   @@index([expiresAt])
   @@index([createdAt])
+}
+
+enum BillingProvider {
+  GOOGLE_PLAY
+  APPLE_APP_STORE
+  XENDIT
+  ADMIN
+  PROMO
+}
+
+enum PurchaseType {
+  CONSUMABLE_TOKEN_PACK
+  SUBSCRIPTION
+  NON_CONSUMABLE
+}
+
+enum PurchaseStatus {
+  PENDING
+  VERIFIED
+  FULFILLED
+  FAILED
+  REFUNDED
+  REVOKED
+  EXPIRED
+  CANCELLED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  GRACE_PERIOD
+  ON_HOLD
+  PAUSED
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+  REVOKED
+}
+
+model BillingProduct {
+  id                  String       @id @default(uuid())
+  code                String       @unique
+  type                PurchaseType
+  name                String
+  description         String?
+  tokenAmount         Int?
+  tierCode            String?
+  dailyPointLimit     Int?
+  isActive            Boolean      @default(true)
+  sortOrder           Int          @default(0)
+  googlePlayProductId String?
+  appleProductId      String?
+  xenditProductCode   String?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+}
+
+model Purchase {
+  id                            String          @id @default(uuid())
+  userId                        String
+  provider                      BillingProvider
+  type                          PurchaseType
+  status                        PurchaseStatus  @default(PENDING)
+  productCode                   String
+  productName                   String
+  tokenAmount                   Int?
+  tierCode                      String?
+  dailyPointLimit               Int?
+  providerProductId             String?
+  providerPurchaseToken         String?
+  providerTransactionId         String?
+  providerOriginalTransactionId String?
+  providerOrderId               String?
+  providerStatus                String?
+  providerPayload               Json?
+  verifiedAt                    DateTime?
+  fulfilledAt                   DateTime?
+  refundedAt                    DateTime?
+  revokedAt                     DateTime?
+  expiresAt                     DateTime?
+  idempotencyKey                String          @unique
+  metadata                      Json?
+  createdAt                     DateTime        @default(now())
+  updatedAt                     DateTime        @updatedAt
+  user                          User            @relation(fields: [userId], references: [id])
+
+  @@index([userId, status])
+  @@index([provider, providerTransactionId])
+  @@index([provider, providerPurchaseToken])
+  @@index([productCode])
+}
+
+model UserCreditBalance {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  balance   Int      @default(0)
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model TokenLedgerEntry {
+  id             String   @id @default(uuid())
+  userId         String
+  purchaseId     String?
+  delta          Int
+  balanceAfter   Int
+  reason         String
+  source         String
+  idempotencyKey String   @unique
+  metadata       Json?
+  createdAt      DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([purchaseId])
+}
+
+model UserSubscription {
+  id                            String             @id @default(uuid())
+  userId                        String
+  provider                      BillingProvider
+  productCode                   String
+  tierCode                      String
+  status                        SubscriptionStatus @default(ACTIVE)
+  providerSubscriptionId        String?
+  providerOriginalTransactionId String?
+  providerPurchaseToken         String?
+  currentPeriodStart            DateTime?
+  currentPeriodEnd              DateTime?
+  autoRenewing                  Boolean            @default(false)
+  cancelAtPeriodEnd             Boolean            @default(false)
+  lastVerifiedAt                DateTime?
+  metadata                      Json?
+  createdAt                     DateTime           @default(now())
+  updatedAt                     DateTime           @updatedAt
+  user                          User               @relation(fields: [userId], references: [id])
+
+  @@index([userId, status])
+  @@index([provider, providerSubscriptionId])
+  @@index([provider, providerPurchaseToken])
+}
+
+model StoreNotificationEvent {
+  id          String          @id @default(uuid())
+  provider    BillingProvider
+  eventId     String          @unique
+  eventType   String
+  purchaseId  String?
+  payload     Json
+  processedAt DateTime?
+  createdAt   DateTime        @default(now())
+
+  @@index([provider, eventType, createdAt])
+}
+
+enum ContentReportReason {
+  ILLEGAL
+  SEXUAL
+  VIOLENCE
+  CHILD_SAFETY
+  HATE_HARASSMENT
+  DECEPTIVE
+  IP_INFRINGEMENT
+  SPAM
+  OTHER
+}
+
+enum ContentReportStatus {
+  OPEN
+  REVIEWED
+  ACTION_TAKEN
+  DISMISSED
+}
+
+enum ContentReportTarget {
+  STICKER_PACK
+  AI_OUTPUT
+}
+
+model ContentReport {
+  id                  String              @id @default(uuid())
+  targetType          ContentReportTarget
+  packId              String?
+  processingHistoryId String?
+  aiJobId             String?
+  reporterId          String
+  reason              ContentReportReason
+  details             String?
+  status              ContentReportStatus @default(OPEN)
+  createdAt           DateTime            @default(now())
+  reviewedAt          DateTime?
+
+  reporter User @relation("ContentReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@unique([reporterId, targetType, packId])
+  @@unique([reporterId, targetType, processingHistoryId])
+  @@index([status, createdAt])
+  @@index([packId])
+  @@index([processingHistoryId])
+}
+
+model UserBlock {
+  id        String   @id @default(uuid())
+  blockerId String
+  blockedId String
+  createdAt DateTime @default(now())
+
+  blocker User @relation("UserBlocks", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked User @relation("UserBlockedBy", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+  @@index([blockerId])
+  @@index([blockedId])
+}
+
+enum AccountDeletionRequestStatus {
+  PENDING
+  PROCESSED
+  REJECTED
+}
+
+enum AccountDeletionRequestSource {
+  WEB
+  ADMIN
+}
+
+model AccountDeletionRequest {
+  id          String                       @id @default(uuid())
+  emailHash   String
+  reason      String?
+  status      AccountDeletionRequestStatus @default(PENDING)
+  source      AccountDeletionRequestSource @default(WEB)
+  ipHash      String?
+  userId      String?
+  createdAt   DateTime                     @default(now())
+  processedAt DateTime?
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([emailHash, status])
+  @@index([status, createdAt])
+}
+
+model PendingStoragePurge {
+  id          String   @id @default(uuid())
+  filePath    String
+  scheduledAt DateTime @default(now())
+  attempts    Int      @default(0)
+  lastError   String?
+  createdAt   DateTime @default(now())
+
+  @@index([scheduledAt])
+  @@index([attempts])
 }

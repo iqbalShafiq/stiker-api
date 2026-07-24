@@ -1,23 +1,13 @@
 import type { Request, Response, NextFunction } from 'express';
-import { config } from '../config';
+import { legalContentService } from '../services/legal-content.service';
 import { buildSuccessResponse } from '../utils/response-builder';
-
-const legalVersion = '2026-05-31';
-const webBase = (): string => config.publicWebBaseUrl.replace(/\/$/, '');
+import { LEGAL_VERSION } from '../content/legal';
+import { renderAccountDeletionPageHtml, renderLegalDocumentHtml } from '../utils/legal-html';
 
 export class LegalController {
   getSummary(_req: Request, res: Response, next: NextFunction): void {
     try {
-      const base = webBase();
-      res.status(200).json(
-        buildSuccessResponse({
-          privacyUrl: `${base}/privacy`,
-          termsUrl: `${base}/terms`,
-          retentionUrl: `${base}/retention`,
-          version: legalVersion,
-          effectiveDate: legalVersion,
-        })
-      );
+      res.status(200).json(buildSuccessResponse(legalContentService.getSummary()));
     } catch (error) {
       next(error);
     }
@@ -25,17 +15,7 @@ export class LegalController {
 
   getPrivacy(_req: Request, res: Response, next: NextFunction): void {
     try {
-      res.status(200).json(
-        buildSuccessResponse({
-          title: 'Privacy Policy',
-          version: legalVersion,
-          effectiveDate: legalVersion,
-          url: `${webBase()}/privacy`,
-          summary:
-            'Setiker processes images you upload for sticker creation, AI generation, and cloud sync. ' +
-            'Account data is stored to provide authentication and pack synchronization.',
-        })
-      );
+      res.status(200).json(buildSuccessResponse(legalContentService.getPrivacy()));
     } catch (error) {
       next(error);
     }
@@ -43,17 +23,15 @@ export class LegalController {
 
   getTerms(_req: Request, res: Response, next: NextFunction): void {
     try {
-      res.status(200).json(
-        buildSuccessResponse({
-          title: 'Terms of Service',
-          version: legalVersion,
-          effectiveDate: legalVersion,
-          url: `${webBase()}/terms`,
-          summary:
-            'By using Setiker you agree to use AI features responsibly and comply with applicable laws ' +
-            'when creating and sharing sticker packs.',
-        })
-      );
+      res.status(200).json(buildSuccessResponse(legalContentService.getTerms()));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  getAccountDeletion(_req: Request, res: Response, next: NextFunction): void {
+    try {
+      res.status(200).json(buildSuccessResponse(legalContentService.getAccountDeletion()));
     } catch (error) {
       next(error);
     }
@@ -61,16 +39,54 @@ export class LegalController {
 
   getRetention(_req: Request, res: Response, next: NextFunction): void {
     try {
-      res.status(200).json(
-        buildSuccessResponse({
-          processingHistoryDays: config.historyExpirationDays,
-          deletedAccountGraceDays: 30,
-          aiInputHandling:
-            'Images sent to AI features are processed to generate stickers and may be retained ' +
-            'according to processing history retention.',
-          description: `Processing outputs expire after ${config.historyExpirationDays} days.`,
-        })
+      res.status(200).json(buildSuccessResponse(legalContentService.getRetention()));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  getPrivacyHtml(_req: Request, res: Response, next: NextFunction): void {
+    try {
+      const doc = legalContentService.getPrivacy();
+      res.type('html').send(renderLegalDocumentHtml(doc, { showNav: true }));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  getTermsHtml(_req: Request, res: Response, next: NextFunction): void {
+    try {
+      const doc = legalContentService.getTerms();
+      res.type('html').send(renderLegalDocumentHtml(doc, { showNav: true }));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  getRetentionHtml(_req: Request, res: Response, next: NextFunction): void {
+    try {
+      const retention = legalContentService.getRetention();
+      res.type('html').send(
+        renderLegalDocumentHtml(
+          {
+            title: 'Data Retention Policy',
+            version: LEGAL_VERSION,
+            effectiveDate: LEGAL_VERSION,
+            summary: retention.description,
+            sections: retention.sections,
+          },
+          { showNav: true },
+        ),
       );
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  getAccountDeletionHtml(_req: Request, res: Response, next: NextFunction): void {
+    try {
+      const doc = legalContentService.getAccountDeletion();
+      res.type('html').send(renderAccountDeletionPageHtml(doc));
     } catch (error) {
       next(error);
     }

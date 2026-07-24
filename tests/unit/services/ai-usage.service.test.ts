@@ -123,12 +123,33 @@ vi.mock('../../../src/config', () => ({
         backgroundRemove: 1,
         videoStickerPack: 1,
         improve: 1,
+        packImport: 1,
       },
+    },
+    billing: {
+      dailyResetTimezone: 'UTC',
+      freeDailyPointLimit: 100,
+      premiumDailyPointLimit: 500,
     },
   },
 }));
 
+vi.mock('../../../src/services/billing/entitlement.service', () => ({
+  entitlementService: {
+    getEffectiveDailyLimit: vi.fn(async () => 100),
+    getSubscriptionTier: vi.fn(async () => 'free'),
+  },
+}));
+
+vi.mock('../../../src/services/billing/token-ledger.service', () => ({
+  tokenLedgerService: {
+    getBalance: vi.fn(async () => 0),
+    debit: vi.fn(async () => ({ balanceAfter: 0, applied: true })),
+  },
+}));
+
 import { getReadyRedis } from '../../../src/utils/redis-client';
+import { dayKeyForBillingDate } from '../../../src/utils/billing-timezone';
 
 describe('AiUsageService', () => {
   const service = new AiUsageService();
@@ -184,7 +205,7 @@ describe('AiUsageService', () => {
   });
 
   it('blocks reserve when limit exhausted', async () => {
-    store.set(`ai:points:used:${userId}:${new Date().toISOString().slice(0, 10)}`, '100');
+    store.set(`ai:points:used:${userId}:${dayKeyForBillingDate(new Date())}`, '100');
     await expect(service.reserve(userId, 'generate')).rejects.toBeInstanceOf(
       AiDailyQuotaExceededError
     );

@@ -152,14 +152,96 @@ export class ConflictError extends AppError {
 }
 
 export class EmailAlreadyInUseError extends ConflictError {
-  constructor(message: string = 'Email already in use') {
-    super(message, 'EMAIL_ALREADY_IN_USE');
+  constructor(message: string = 'Email already in use', details?: ErrorDetails) {
+    super(message, 'EMAIL_ALREADY_IN_USE', details);
   }
 }
 
 export class UsernameAlreadyInUseError extends ConflictError {
   constructor(message: string = 'Username already in use') {
     super(message, 'USERNAME_ALREADY_IN_USE');
+  }
+}
+
+export class AccountExistsPasswordError extends ConflictError {
+  constructor(
+    message: string = 'An account with this email already exists. Sign in with your password to link Google.',
+    details?: ErrorDetails
+  ) {
+    super(message, 'ACCOUNT_EXISTS_PASSWORD', details);
+  }
+}
+
+export class AccountExistsOtherProviderError extends ConflictError {
+  constructor(
+    message: string = 'An account with this email already exists with another sign-in method. Set a password via email to continue.',
+    details?: ErrorDetails
+  ) {
+    super(message, 'ACCOUNT_EXISTS_OTHER_PROVIDER', details);
+  }
+}
+
+export class GoogleAlreadyLinkedError extends ConflictError {
+  constructor(message: string = 'This Google account is already linked to another user') {
+    super(message, 'GOOGLE_ALREADY_LINKED');
+  }
+}
+
+export class AppleAlreadyLinkedError extends ConflictError {
+  constructor(message: string = 'This Apple account is already linked to another user') {
+    super(message, 'APPLE_ALREADY_LINKED');
+  }
+}
+
+export class InvalidGoogleTokenError extends UnauthorizedError {
+  constructor(message: string = 'Invalid Google ID token') {
+    super(message, 'INVALID_GOOGLE_TOKEN');
+  }
+}
+
+export class InvalidAppleTokenError extends UnauthorizedError {
+  constructor(message: string = 'Invalid Apple identity token') {
+    super(message, 'INVALID_APPLE_TOKEN');
+  }
+}
+
+export class EmailNotVerifiedError extends UnauthorizedError {
+  constructor(message: string = 'Email is not verified') {
+    super(message, 'EMAIL_NOT_VERIFIED');
+  }
+}
+
+/** @deprecated Prefer UseOauthOrSetPasswordError */
+export class UseGoogleSignInError extends UnauthorizedError {
+  constructor(message: string = 'This account uses Google Sign-In. Continue with Google.') {
+    super(message, 'USE_GOOGLE_SIGN_IN');
+  }
+}
+
+export class UseOauthOrSetPasswordError extends UnauthorizedError {
+  constructor(
+    message: string = 'This account uses social sign-in. Continue with that provider, or set a password via email.',
+    details?: ErrorDetails
+  ) {
+    super(message, 'USE_OAUTH_OR_SET_PASSWORD', details);
+  }
+}
+
+export class InvalidPasswordResetTokenError extends AppError {
+  constructor(message: string = 'Invalid or expired password reset token') {
+    super(message, 400, 'VALIDATION_ERROR', 'INVALID_PASSWORD_RESET_TOKEN');
+  }
+}
+
+export class NoPasswordSetError extends AppError {
+  constructor(message: string = 'No password is set for this account') {
+    super(message, 400, 'VALIDATION_ERROR', 'NO_PASSWORD_SET');
+  }
+}
+
+export class CannotUnlinkSoleAuthError extends AppError {
+  constructor(message: string = 'Cannot unlink the only sign-in method. Set a password first.') {
+    super(message, 400, 'VALIDATION_ERROR', 'CANNOT_UNLINK_SOLE_AUTH');
   }
 }
 

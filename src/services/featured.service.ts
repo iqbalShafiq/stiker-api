@@ -1,6 +1,6 @@
 import { prisma } from '../prisma/client';
 import { StickerVisibility } from '@prisma/client';
-import { PUBLIC_PACK_INCLUDE } from '../utils/pack-query';
+import { PUBLIC_PACK_INCLUDE, type PackWithPublicInclude } from '../utils/pack-query';
 
 const FEATURED_WINDOW_HOURS = Math.max(1, parseInt(process.env.FEATURED_WINDOW_HOURS ?? '6', 10));
 
@@ -77,7 +77,13 @@ export class FeaturedService {
     });
   }
 
-  async getTodayFeatured() {
+  async getTodayFeatured(): Promise<{
+    featured: Awaited<ReturnType<typeof prisma.featuredStickerPack.findFirst>>;
+    pack: PackWithPublicInclude;
+    score: number;
+    windowStart: Date;
+    windowEnd: Date;
+  } | null> {
     const now = new Date();
     const featured = await prisma.featuredStickerPack.findFirst({
       where: {

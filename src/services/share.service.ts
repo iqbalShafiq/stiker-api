@@ -52,6 +52,10 @@ export class ShareService {
       throw new NotFoundError('User not found');
     }
 
+    if (sharedWithId === ownerId) {
+      throw new ValidationError('Cannot share with yourself');
+    }
+
     if (!Object.values(SharePermission).includes(permission)) {
       throw new ValidationError('Invalid permission value');
     }
@@ -104,6 +108,36 @@ export class ShareService {
           sharedWithId,
         },
       },
+    });
+  }
+
+  async listCollaborators(
+    stickerId: string,
+    ownerId: string
+  ): Promise<
+    Prisma.StickerShareGetPayload<{
+      include: {
+        sharedWith: { select: { id: true; username: true; displayName: true } };
+      };
+    }>[]
+  > {
+    const hasOwnership = await this.checkOwnership(stickerId, ownerId);
+    if (!hasOwnership) {
+      throw new ForbiddenError('You do not have permission to list collaborators for this sticker');
+    }
+
+    return prisma.stickerShare.findMany({
+      where: { stickerId },
+      include: {
+        sharedWith: {
+          select: {
+            id: true,
+            username: true,
+            displayName: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
     });
   }
 

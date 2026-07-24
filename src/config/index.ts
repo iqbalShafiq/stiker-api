@@ -118,9 +118,38 @@ export const config = {
   jwtRefreshSecret: process.env.JWT_REFRESH_SECRET ?? 'your-jwt-refresh-secret-key-change-in-production',
   jwtAccessExpiration: process.env.JWT_ACCESS_EXPIRATION ?? '15m',
   jwtRefreshExpiration: process.env.JWT_REFRESH_EXPIRATION ?? '7d',
+  /** OAuth client IDs accepted as Google ID token `aud` (Web serverClientId + optional Android/iOS). */
+  googleClientIds: (process.env.GOOGLE_CLIENT_IDS ?? '')
+    .split(',')
+    .map((id) => id.trim())
+    .filter((id) => id.length > 0),
+  /** Apple Sign-In audiences (iOS bundle id and/or Services ID). */
+  appleClientIds: (process.env.APPLE_CLIENT_IDS ?? '')
+    .split(',')
+    .map((id) => id.trim())
+    .filter((id) => id.length > 0),
+  resend: {
+    apiKey: process.env.RESEND_API_KEY ?? '',
+    from: process.env.RESEND_FROM ?? process.env.SUPPORT_EMAIL ?? 'support@setiker.app',
+  },
+  passwordReset: {
+    tokenTtlMinutes: Math.max(5, parseInt(process.env.PASSWORD_RESET_TOKEN_TTL_MINUTES ?? '60', 10)),
+    urlBase:
+      process.env.PASSWORD_RESET_URL_BASE ??
+      `${process.env.PUBLIC_WEB_BASE_URL ?? process.env.APP_URL ?? 'http://localhost:3000'}/reset-password`,
+  },
   storageProvider: process.env.STORAGE_PROVIDER ?? 'local',
   appDeepLinkScheme: process.env.APP_DEEP_LINK_SCHEME ?? 'setiker',
   publicWebBaseUrl: process.env.PUBLIC_WEB_BASE_URL ?? process.env.APP_URL ?? 'http://localhost:3000',
+  legal: {
+    appName: process.env.APP_NAME ?? 'Setiker',
+    developerName: process.env.DEVELOPER_NAME ?? 'Setiker',
+    supportEmail: process.env.SUPPORT_EMAIL ?? 'support@setiker.app',
+    privacyEmail: process.env.PRIVACY_EMAIL ?? process.env.SUPPORT_EMAIL ?? 'privacy@setiker.app',
+    privacyNotificationWebhookUrl: process.env.PRIVACY_NOTIFICATION_WEBHOOK_URL ?? '',
+    deletedAccountGraceDays: Math.max(1, parseInt(process.env.DELETED_ACCOUNT_GRACE_DAYS ?? '30', 10)),
+    contentSafetyEnabled: process.env.CONTENT_SAFETY_ENABLED !== 'false',
+  },
   historyExpirationDays: Math.max(1, parseInt(process.env.HISTORY_EXPIRATION_DAYS ?? '7', 10)),
   cleanupIntervalHours: Math.max(1, parseInt(process.env.CLEANUP_INTERVAL_HOURS ?? '24', 10)),
   redisEnabled: process.env.REDIS_ENABLED !== 'false',
@@ -188,6 +217,48 @@ export const config = {
         ),
       };
     })(),
+  },
+  billing: {
+    dailyResetTimezone: process.env.BILLING_DAILY_RESET_TIMEZONE ?? 'Asia/Jakarta',
+    freeDailyPointLimit: Math.max(1, parseInt(process.env.BILLING_FREE_DAILY_POINT_LIMIT ?? '100', 10)),
+    premiumDailyPointLimit: Math.max(1, parseInt(process.env.BILLING_PREMIUM_DAILY_POINT_LIMIT ?? '500', 10)),
+    googlePlay: {
+      packageName: process.env.GOOGLE_PLAY_PACKAGE_NAME ?? 'com.setiker.app',
+      serviceAccountJsonPath: process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_PATH ?? '',
+      rtdnVerificationToken: process.env.GOOGLE_PLAY_RTDN_VERIFICATION_TOKEN ?? '',
+      mockMode: process.env.GOOGLE_PLAY_MOCK_MODE === 'true' || process.env.NODE_ENV === 'test',
+    },
+    apple: {
+      bundleId: process.env.APPLE_BUNDLE_ID ?? 'com.setiker.app',
+      issuerId: process.env.APPLE_APP_STORE_ISSUER_ID ?? '',
+      keyId: process.env.APPLE_APP_STORE_KEY_ID ?? '',
+      privateKeyPath: process.env.APPLE_APP_STORE_PRIVATE_KEY_PATH ?? '',
+      appAppleId: process.env.APPLE_APP_STORE_APP_ID ?? '',
+      environment: (process.env.APPLE_APP_STORE_ENVIRONMENT ?? 'Sandbox') as 'Sandbox' | 'Production',
+      mockMode: process.env.APPLE_MOCK_MODE === 'true' || process.env.NODE_ENV === 'test',
+    },
+    xendit: {
+      enabled: process.env.XENDIT_ENABLED === 'true',
+      secretKey: process.env.XENDIT_SECRET_KEY ?? '',
+      webhookToken: process.env.XENDIT_WEBHOOK_TOKEN ?? '',
+      productPricesIdr: ((): Record<string, number> => {
+        const defaults: Record<string, number> = {
+          token_pack_s: 29000,
+          token_pack_m: 79000,
+          token_pack_l: 199000,
+          premium_monthly: 49000,
+          premium_yearly: 449000,
+        };
+        const raw = process.env.XENDIT_PRODUCT_PRICES_JSON;
+        if (!raw) return defaults;
+        try {
+          const parsed = JSON.parse(raw) as Record<string, number>;
+          return { ...defaults, ...parsed };
+        } catch {
+          return defaults;
+        }
+      })(),
+    },
   },
 } as const;
 

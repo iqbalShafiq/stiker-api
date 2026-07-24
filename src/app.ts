@@ -29,12 +29,14 @@ import { ProcessingHistoryController } from './controllers/processing-history.co
 import { ShareController } from './controllers/share.controller';
 import { SocialController } from './controllers/social.controller';
 import { LegalController } from './controllers/legal.controller';
+import { moderationController } from './controllers/moderation.controller';
 import { AiUsageController } from './controllers/ai-usage.controller';
 import { AiQuotaController } from './controllers/ai-quota.controller';
 import { UserProfileController } from './controllers/user-profile.controller';
 import { NotificationController } from './controllers/notification.controller';
 import { FeaturedController } from './controllers/featured.controller';
 import { PromptPresetController } from './controllers/prompt-preset.controller';
+import { billingController } from './controllers/billing.controller';
 import { requireAiQuota } from './middleware/ai-quota.middleware';
 import { asyncHandler } from './utils/async-handler';
 
@@ -131,19 +133,63 @@ const promptPresetController = new PromptPresetController();
 
 // Legal routes (public)
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/privacy', (req, res, next) => legalController.getPrivacyHtml(req, res, next));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/terms', (req, res, next) => legalController.getTermsHtml(req, res, next));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/retention', (req, res, next) => legalController.getRetentionHtml(req, res, next));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/account-deletion', (req, res, next) => legalController.getAccountDeletionHtml(req, res, next));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.get('/api/v1/legal', (req, res, next) => legalController.getSummary(req, res, next));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.get('/api/v1/legal/privacy', (req, res, next) => legalController.getPrivacy(req, res, next));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.get('/api/v1/legal/terms', (req, res, next) => legalController.getTerms(req, res, next));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/legal/account-deletion', (req, res, next) => legalController.getAccountDeletion(req, res, next));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.get('/api/v1/legal/retention', (req, res, next) => legalController.getRetention(req, res, next));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/legal/account-deletion/request', asyncHandler((req, res, next) => moderationController.submitAccountDeletionRequest(req, res, next)));
+
+// Moderation & safety routes
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/sticker-packs/:id/report', authenticateToken, asyncHandler((req, res, next) => moderationController.reportPack(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/processing-history/:id/report', authenticateToken, asyncHandler((req, res, next) => moderationController.reportProcessingHistory(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/users/:id/block', authenticateToken, asyncHandler((req, res, next) => moderationController.blockUser(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.delete('/api/v1/users/:id/block', authenticateToken, asyncHandler((req, res, next) => moderationController.unblockUser(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/users/blocked', authenticateToken, asyncHandler((req, res, next) => moderationController.listBlockedUsers(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/admin/content-reports', authenticateToken, requireRole('admin'), asyncHandler((req, res, next) => moderationController.listContentReports(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.patch('/api/v1/admin/content-reports/:id', authenticateToken, requireRole('admin'), asyncHandler((req, res, next) => moderationController.reviewContentReport(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/admin/account-deletion-requests', authenticateToken, requireRole('admin'), asyncHandler((req, res, next) => moderationController.listAccountDeletionRequests(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.patch('/api/v1/admin/account-deletion-requests/:id', authenticateToken, requireRole('admin'), asyncHandler((req, res, next) => moderationController.processAccountDeletionRequest(req, res, next)));
 
 // Auth routes (public)
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.post('/api/v1/auth/register', asyncHandler((req, res, next) => authController.register(req, res, next)));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.post('/api/v1/auth/login', asyncHandler((req, res, next) => authController.login(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/auth/google', asyncHandler((req, res, next) => authController.loginWithGoogle(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/auth/google/link-with-password', asyncHandler((req, res, next) => authController.linkGoogleWithPassword(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/auth/apple', asyncHandler((req, res, next) => authController.loginWithApple(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/auth/apple/link-with-password', asyncHandler((req, res, next) => authController.linkAppleWithPassword(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/auth/forgot-password', asyncHandler((req, res, next) => authController.forgotPassword(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/auth/reset-password', asyncHandler((req, res, next) => authController.resetPassword(req, res, next)));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.post('/api/v1/auth/refresh', asyncHandler((req, res, next) => authController.refresh(req, res, next)));
 
@@ -153,11 +199,19 @@ app.post('/api/v1/auth/logout', authenticateToken, asyncHandler((req, res, next)
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.get('/api/v1/auth/me', authenticateToken, asyncHandler((req, res, next) => authController.getMe(req, res, next)));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
-app.put('/api/v1/auth/me', authenticateToken, (req, res, next) => {
-  authController.updateMe(req, res, next);
-});
+app.put('/api/v1/auth/me', authenticateToken, asyncHandler((req, res, next) => authController.updateMe(req, res, next)));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.post('/api/v1/auth/change-password', authenticateToken, asyncHandler((req, res, next) => authController.changePassword(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/auth/set-password', authenticateToken, asyncHandler((req, res, next) => authController.setPassword(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/auth/google/link', authenticateToken, asyncHandler((req, res, next) => authController.linkGoogle(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.delete('/api/v1/auth/google', authenticateToken, asyncHandler((req, res, next) => authController.unlinkGoogle(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/auth/apple/link', authenticateToken, asyncHandler((req, res, next) => authController.linkApple(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.delete('/api/v1/auth/apple', authenticateToken, asyncHandler((req, res, next) => authController.unlinkApple(req, res, next)));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.delete('/api/v1/auth/me', authenticateToken, asyncHandler((req, res, next) => authController.deleteMe(req, res, next)));
 
@@ -168,6 +222,28 @@ app.get('/api/v1/ai/usage', authenticateToken, asyncHandler((req, res, next) => 
 app.post('/api/v1/ai/quota/reserve', authenticateToken, asyncHandler((req, res, next) => aiQuotaController.reserve(req, res, next)));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.post('/api/v1/ai/quota/finalize', authenticateToken, asyncHandler((req, res, next) => aiQuotaController.finalize(req, res, next)));
+
+// Billing (store-compliant IAP)
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/billing/products', optionalAuthenticateToken, asyncHandler((req, res, next) => billingController.listProducts(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/billing/google-play/verify', authenticateToken, asyncHandler((req, res, next) => billingController.verifyGooglePlay(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/billing/apple/verify', authenticateToken, asyncHandler((req, res, next) => billingController.verifyApple(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/billing/purchases', authenticateToken, asyncHandler((req, res, next) => billingController.listPurchases(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/billing/subscription/me', authenticateToken, asyncHandler((req, res, next) => billingController.getSubscription(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/billing/restore', authenticateToken, asyncHandler((req, res, next) => billingController.restore(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/billing/google-play/rtdn', asyncHandler((req, res, next) => billingController.googlePlayRtdn(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/billing/apple/notifications', asyncHandler((req, res, next) => billingController.appleNotifications(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/billing/xendit/checkout', authenticateToken, asyncHandler((req, res, next) => billingController.xenditCheckout(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.post('/api/v1/billing/xendit/webhook', asyncHandler((req, res, next) => billingController.xenditWebhook(req, res, next)));
 
 // Sticker routes (public)
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
@@ -184,6 +260,8 @@ app.put('/api/v1/stickers/:id', authenticateToken, asyncHandler((req, res, next)
 app.delete('/api/v1/stickers/:id', authenticateToken, asyncHandler((req, res, next) => stickerController.deleteSticker(req, res, next)));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.post('/api/v1/stickers/:id/share', authenticateToken, asyncHandler((req, res, next) => stickerController.shareWithUser(req, res, next)));
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+app.get('/api/v1/stickers/:id/collaborators', authenticateToken, asyncHandler((req, res, next) => stickerController.listCollaborators(req, res, next)));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 app.delete('/api/v1/stickers/:id/share', authenticateToken, asyncHandler((req, res, next) => stickerController.removeUserShare(req, res, next)));
 // eslint-disable-next-line @typescript-eslint/no-misused-promises

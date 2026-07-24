@@ -3,6 +3,10 @@ import { AiDailyQuotaExceededError, AppError, ValidationError } from '../errors'
 import { config } from '../config';
 import { getReadyRedis } from '../utils/redis-client';
 import { logger } from '../utils/logger';
+import { dayKeyForBillingDate, periodBoundsForBilling, billingResetTimezoneLabel } from '../utils/billing-timezone';
+import { entitlementService } from './billing/entitlement.service';
+import { tokenLedgerService } from './billing/token-ledger.service';
+import type { QuotaSource } from '../types/billing';
 
 export type AiOperation =
   | 'generate'
@@ -28,9 +32,14 @@ export interface AiUsageSnapshot {
   periodStart: string;
   periodEnd: string;
   pointLimit: number;
+  effectiveDailyLimit: number;
   pointsUsed: number;
   pointsOutstanding: number;
   pointsRemaining: number;
+  purchasedTokenBalance: number;
+  subscriptionTier: string;
+  resetTimezone: string;
+  quotaSource: QuotaSource;
   operationCosts: AiUsageCounts;
   resetsAt: string;
   serverNow: string;
@@ -85,20 +94,11 @@ return {1, fromUsed + amount, credited}
 `;
 
 function dayKeyForDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
-function nextUtcMidnight(from: Date): Date {
-  const next = new Date(from);
-  next.setUTCHours(24, 0, 0, 0);
-  return next;
+  return dayKeyForBillingDate(date);
 }
 
 function periodBounds(date: Date): { periodStart: Date; periodEnd: Date } {
-  const periodStart = new Date(date);
-  periodStart.setUTCHours(0, 0, 0, 0);
-  const periodEnd = nextUtcMidnight(periodStart);
-  return { periodStart, periodEnd };
+  return periodBoundsForBilling(date);
 }
 
 function usedPointsKey(userId: string, dayKey: string): string {
@@ -125,8 +125,8 @@ function getOperationCosts(): AiUsageCounts {
   return { ...config.aiQuota.operationCosts };
 }
 
-function getPointLimit(): number {
-  return config.aiQuota.dailyPointLimit;
+async function getPointLimitForUser(userId: string): Promise<number> {
+  return entitlementService.getEffectiveDailyLimit(userId);
 }
 
 function getReservationTtlSeconds(): number {
@@ -362,19 +362,27 @@ export class AiUsageService {
   async getUsage(userId: string): Promise<AiUsageSnapshot> {
     const now = new Date();
     const dayKey = dayKeyForDate(now);
-    const pointLimit = getPointLimit();
+    const pointLimit = await getPointLimitForUser(userId);
     const operationCosts = getOperationCosts();
     const { pointsUsed, pointsOutstanding } = await this.readPointTotals(userId, dayKey);
-    const pointsRemaining = Math.max(0, pointLimit - pointsUsed - pointsOutstanding);
+    const dailyRemaining = Math.max(0, pointLimit - pointsUsed - pointsOutstanding);
+    const purchasedTokenBalance = await tokenLedgerService.getBalance(userId);
+    const subscriptionTier = await entitlementService.getSubscriptionTier(userId);
     const { periodStart, periodEnd } = periodBounds(now);
+    const quotaSource: QuotaSource = dailyRemaining > 0 ? 'daily_allowance' : 'purchased_tokens';
     return {
       period: 'daily',
       periodStart: periodStart.toISOString(),
       periodEnd: periodEnd.toISOString(),
       pointLimit,
+      effectiveDailyLimit: pointLimit,
       pointsUsed,
       pointsOutstanding,
-      pointsRemaining,
+      pointsRemaining: dailyRemaining,
+      purchasedTokenBalance,
+      subscriptionTier,
+      resetTimezone: billingResetTimezoneLabel(),
+      quotaSource,
       operationCosts,
       resetsAt: periodEnd.toISOString(),
       serverNow: now.toISOString(),
@@ -399,9 +407,13 @@ export class AiUsageService {
       return;
     }
     const snapshot = await this.getUsage(userId);
-    if (snapshot.pointsRemaining < cost) {
-      this.throwQuotaExceeded(operation, snapshot);
+    if (snapshot.pointsRemaining >= cost) {
+      return;
     }
+    if (snapshot.purchasedTokenBalance >= cost) {
+      return;
+    }
+    this.throwQuotaExceeded(operation, snapshot);
   }
 
   async reserve(userId: string, operation: AiOperation): Promise<AiReservationResult> {
@@ -410,7 +422,7 @@ export class AiUsageService {
     const dayKey = dayKeyForDate(now);
     const { periodEnd } = periodBounds(now);
     const resetsAt = periodEnd.toISOString();
-    const pointLimit = getPointLimit();
+    const pointLimit = await getPointLimitForUser(userId);
     const reservationId = randomUUID();
     const reservationExpiresAt = new Date(now.getTime() + getReservationTtlSeconds() * 1000);
     const ttl = usageTtlSeconds(now);
@@ -430,6 +442,24 @@ export class AiUsageService {
         serverNow: now.toISOString(),
         usage: snapshot,
       };
+    }
+
+    const usageBefore = await this.getUsage(userId);
+    if (usageBefore.pointsRemaining < cost) {
+      if (usageBefore.purchasedTokenBalance >= cost) {
+        return this.reserveWithPurchasedTokens(
+          userId,
+          operation,
+          cost,
+          reservationId,
+          reservationExpiresAt,
+          usageBefore,
+          pointLimit,
+          resetsAt,
+          now
+        );
+      }
+      this.throwQuotaExceeded(operation, usageBefore);
     }
 
     const redis = await getReadyRedis();
@@ -481,15 +511,15 @@ export class AiUsageService {
       const pointsUsed = parseNumber(raw[1]);
       const pointsOutstanding = Math.max(0, parseNumber(raw[2]));
       const pointsRemaining = Math.max(0, parseNumber(raw[3]));
+      const baseUsage = await this.getUsage(userId);
       const snapshot: AiUsageSnapshot = {
-        period: 'daily',
-        periodStart: periodBounds(now).periodStart.toISOString(),
-        periodEnd: periodEnd.toISOString(),
+        ...baseUsage,
         pointLimit,
+        effectiveDailyLimit: pointLimit,
         pointsUsed,
         pointsOutstanding,
         pointsRemaining,
-        operationCosts: getOperationCosts(),
+        quotaSource: 'daily_allowance',
         resetsAt,
         serverNow: now.toISOString(),
       };
@@ -533,6 +563,65 @@ export class AiUsageService {
       }
       throw error;
     }
+  }
+
+  private async reserveWithPurchasedTokens(
+    userId: string,
+    operation: AiOperation,
+    cost: number,
+    reservationId: string,
+    reservationExpiresAt: Date,
+    usage: AiUsageSnapshot,
+    pointLimit: number,
+    resetsAt: string,
+    now: Date
+  ): Promise<AiReservationResult> {
+    const redis = await getReadyRedis();
+    if (!redis) {
+      if (!failOpenOnRedisError()) {
+        throw redisRequiredError();
+      }
+      return {
+        reservationId,
+        operation,
+        pointCost: cost,
+        pointLimit,
+        pointsUsed: usage.pointsUsed,
+        pointsOutstanding: usage.pointsOutstanding,
+        pointsRemaining: usage.pointsRemaining,
+        resetsAt,
+        reservationExpiresAt: reservationExpiresAt.toISOString(),
+        serverNow: now.toISOString(),
+        usage: { ...usage, quotaSource: 'purchased_tokens' },
+      };
+    }
+
+    const resKey = reservationKey(reservationId);
+    const ttl = usageTtlSeconds(now);
+    await redis.hset(resKey, {
+      userId,
+      operation,
+      cost: String(cost),
+      status: 'pending',
+      quotaSource: 'purchased_tokens',
+      createdAt: String(now.getTime()),
+      expiresAt: String(reservationExpiresAt.getTime()),
+    });
+    await redis.expire(resKey, ttl);
+
+    return {
+      reservationId,
+      operation,
+      pointCost: cost,
+      pointLimit,
+      pointsUsed: usage.pointsUsed,
+      pointsOutstanding: usage.pointsOutstanding,
+      pointsRemaining: usage.pointsRemaining,
+      resetsAt,
+      reservationExpiresAt: reservationExpiresAt.toISOString(),
+      serverNow: now.toISOString(),
+      usage: { ...usage, quotaSource: 'purchased_tokens' },
+    };
   }
 
   async validateReservation(
@@ -593,6 +682,7 @@ export class AiUsageService {
     try {
       const key = reservationKey(reservationId);
       const data = await redis.hgetall(key);
+      const now = new Date();
       if (!data.userId) {
         return 'not_found';
       }
@@ -604,8 +694,28 @@ export class AiUsageService {
       }
 
       const userId = data.userId;
-      const dayKey = data.dayKey ?? dayKeyForDate(new Date());
-      const now = new Date();
+      const quotaSource = data.quotaSource ?? 'daily_allowance';
+      const cost = parseNumber(data.cost);
+
+      if (quotaSource === 'purchased_tokens') {
+        if (outcome === 'committed' && cost > 0) {
+          const debit = await tokenLedgerService.debit({
+            userId,
+            amount: cost,
+            reason: `ai_${data.operation ?? 'generate'}`,
+            source: 'purchased_tokens',
+            idempotencyKey: `ai:debit:${reservationId}`,
+            metadata: { reservationId, operation: data.operation },
+          });
+          if (!debit.applied) {
+            throw new ValidationError('Insufficient purchased token balance');
+          }
+        }
+        await redis.hset(key, 'status', outcome, 'finalizedAt', String(now.getTime()));
+        return 'applied';
+      }
+
+      const dayKey = data.dayKey ?? dayKeyForDate(now);
       const ttl = usageTtlSeconds(now);
       const usedKey = usedPointsKey(userId, dayKey);
       const outstandingKey = outstandingPointsKey(userId, dayKey);
@@ -672,7 +782,7 @@ export class AiUsageService {
     const now = new Date();
     const dayKey = dayKeyForDate(now);
     const ttl = usageTtlSeconds(now);
-    const pointLimit = getPointLimit();
+    const pointLimit = await getPointLimitForUser(fromUserId);
     const redis = await getReadyRedis();
 
     if (!redis) {

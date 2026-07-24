@@ -2,6 +2,83 @@
 
 Express API for Setiker sticker generation and cloud sync.
 
+## Sign in with Google
+
+Mobile clients send a Google **ID token** to `POST /api/v1/auth/google`. The API verifies the token with `google-auth-library` (never trust client-only identity). Stable user key is Google **`sub`**, stored in `AuthIdentity`.
+
+### Google Cloud Console checklist
+
+1. Use **separate** Cloud projects for development and production.
+2. Configure the **OAuth consent screen** (app name, logo, generic support email, Privacy Policy / ToS URLs).
+3. Create OAuth client IDs in the same brand project:
+   - **Web** application — this client ID is the Android Credential Manager `serverClientId` and the primary `aud` for server verification.
+   - **Android** — package name `com.setiker.app` plus SHA-1 fingerprints for **debug** keystore and **Play App Signing**.
+4. Set API env `GOOGLE_CLIENT_IDS` to a comma-separated list of accepted audiences (at minimum the Web client ID).
+
+### Debug SHA-1 (local Android)
+
+```bash
+keytool -list -v -alias androiddebugkey -keystore ~/.android/debug.keystore -storepass android -keypass android
+```
+
+On Windows the debug keystore is typically `%USERPROFILE%\.android\debug.keystore`.
+
+### Auth endpoints (Google)
+
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| `POST` | `/api/v1/auth/google` | Public | Login or register with ID token |
+| `POST` | `/api/v1/auth/google/link-with-password` | Public | Link Google when email already has a password |
+| `POST` | `/api/v1/auth/google/link` | Bearer | Link Google while signed in |
+| `DELETE` | `/api/v1/auth/google` | Bearer | Unlink Google (blocked if sole login method) |
+| `POST` | `/api/v1/auth/set-password` | Bearer | Set a password on a Google-only account |
+
+### Environment
+
+| Variable | Description |
+|----------|-------------|
+| `GOOGLE_CLIENT_IDS` | Comma-separated OAuth client IDs accepted as ID token `aud` |
+
+## Sign in with Apple
+
+Clients send an Apple **identity token** to `POST /api/v1/auth/apple`. The API verifies the JWT against Apple JWKS (`iss` = `https://appleid.apple.com`, `aud` ∈ `APPLE_CLIENT_IDS`). Stable key is Apple **`sub`** in `AuthIdentity` with provider `APPLE`.
+
+### Auth endpoints (Apple) — mirror Google
+
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| `POST` | `/api/v1/auth/apple` | Public | Login or register |
+| `POST` | `/api/v1/auth/apple/link-with-password` | Public | Link Apple when email has a password |
+| `POST` | `/api/v1/auth/apple/link` | Bearer | Link while signed in |
+| `DELETE` | `/api/v1/auth/apple` | Bearer | Unlink (blocked if sole method) |
+
+### Password reset / set-password via email (Resend)
+
+| Method | Path | Behavior |
+|--------|------|----------|
+| `POST` | `/api/v1/auth/forgot-password` | Body `{ email }`. Always **200**. Sends magic link if active user exists (including OAuth-only / no password). |
+| `POST` | `/api/v1/auth/reset-password` | Body `{ token, newPassword }`. Sets password, invalidates token + refresh tokens. |
+
+Email deep link: `{APP_DEEP_LINK_SCHEME}://auth/reset-password?token=…` plus `PASSWORD_RESET_URL_BASE` web fallback.
+
+### Continuity rules
+
+- Never auto-link Google ↔ Apple by email.
+- Password login without `passwordHash` → `USE_OAUTH_OR_SET_PASSWORD` + `providers`.
+- OAuth sign-in when email exists with another OAuth and no password → `ACCOUNT_EXISTS_OTHER_PROVIDER`.
+
+### Environment (auth)
+
+| Variable | Description |
+|----------|-------------|
+| `GOOGLE_CLIENT_IDS` | Accepted Google ID token audiences |
+| `APPLE_CLIENT_IDS` | Accepted Apple identity token audiences |
+| `RESEND_API_KEY` | Resend API key (empty = log-only in tests/dev) |
+| `RESEND_FROM` | From address |
+| `PASSWORD_RESET_URL_BASE` | HTTPS fallback URL for reset |
+| `PASSWORD_RESET_TOKEN_TTL_MINUTES` | Token lifetime (default 60) |
+| `APP_DEEP_LINK_SCHEME` | Default `setiker` |
+
 ## AI quota (daily points)
 
 Each authenticated user has a **daily point pool** (default **100**). Each AI operation consumes configurable points. Outstanding reservations count toward the limit so concurrent requests from multiple devices cannot overshoot quota.
@@ -38,5 +115,40 @@ and production. Use `npm run test:up` for the isolated test stack; it starts Red
 
 - **HTTP 2xx** on an AI route → reservation committed (points used).
 - **HTTP error** → reservation released (no charge).
+
+## Store-compliant billing (Google Play / Apple IAP)
+
+Setiker Play Store and App Store builds must use **Google Play Billing** and **StoreKit** for digital goods (token packs, subscriptions). Xendit is optional for non-store builds only (`XENDIT_ENABLED=true`).
+
+### Compliance
+
+- Do not expose Xendit/QRIS checkout in Google Play or App Store builds for in-app digital goods.
+- Purchases are verified server-side before entitlements are granted.
+- Purchased token balance is stored in Postgres (`UserCreditBalance` + `TokenLedgerEntry`).
+- Daily AI quota resets in `BILLING_DAILY_RESET_TIMEZONE` (default `Asia/Jakarta`).
+- Consumption order: subscription/free daily allowance first, then purchased tokens.
+
+### Billing endpoints
+
+- `GET /api/v1/billing/products` — product catalog (no localized prices)
+- `POST /api/v1/billing/google-play/verify` — verify Play purchase token
+- `POST /api/v1/billing/apple/verify` — verify StoreKit transaction
+- `GET /api/v1/billing/purchases` — purchase history
+- `GET /api/v1/billing/subscription/me` — active subscription
+- `POST /api/v1/billing/restore` — restore entitlements
+- `POST /api/v1/billing/google-play/rtdn` — Play Real-time Developer Notifications
+- `POST /api/v1/billing/apple/notifications` — App Store Server Notifications
+
+### Billing environment
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `BILLING_DAILY_RESET_TIMEZONE` | `Asia/Jakarta` | Daily quota reset timezone |
+| `BILLING_FREE_DAILY_POINT_LIMIT` | `100` | Free tier daily points |
+| `BILLING_PREMIUM_DAILY_POINT_LIMIT` | `500` | Premium tier daily points |
+| `GOOGLE_PLAY_PACKAGE_NAME` | `com.setiker.app` | Android package name |
+| `GOOGLE_PLAY_MOCK_MODE` | `false` | Mock verifier for dev/test |
+| `APPLE_MOCK_MODE` | `false` | Mock Apple verifier for dev/test |
+| `XENDIT_ENABLED` | `false` | Non-store checkout only |
 - **Client finalize `committed`** (e.g. user cancel) → charged even without 2xx.
 - **Client finalize `released`** → not charged.
