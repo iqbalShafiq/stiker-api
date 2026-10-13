@@ -1,6 +1,7 @@
 import type { Response, NextFunction } from 'express';
 import type { AuthRequest } from '../middleware/auth.middleware';
-import { OpenRouterService } from '../services/openrouter.service';
+import { ImageGenerationService } from '../services/image-generation.service';
+import { VisionAnalysisService } from '../services/vision-analysis.service';
 import { ImageService } from '../services/image.service';
 import { StorageService } from '../services/storage.service';
 import { GridSplitService } from '../services/grid-split.service';
@@ -14,11 +15,13 @@ export class GridController {
   private processingHistoryService: ProcessingHistoryService;
 
   constructor() {
-    const openRouterService = new OpenRouterService();
+    const imageGenerationService = new ImageGenerationService();
+    const visionAnalysisService = new VisionAnalysisService();
     const imageService = new ImageService();
     const storageService = new StorageService();
     this.gridSplitService = new GridSplitService(
-      openRouterService,
+      imageGenerationService,
+      visionAnalysisService,
       imageService,
       storageService
     );

@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ProviderError } from '../../../src/errors';
-import { OpenRouterService } from '../../../src/services/openrouter.service';
+import { ImageGenerationService } from '../../../src/services/image-generation.service';
 
 const generateImageMock = vi.hoisted(() => vi.fn());
 const loadAiModelMock = vi.hoisted(() =>
@@ -20,36 +19,42 @@ vi.mock('../../../src/ai/core', () => ({
 
 vi.mock('../../../src/ai/models/catalog', () => ({ loadAiModel: loadAiModelMock }));
 
-function imageResult(overrides: { id?: string; cost?: number } = {}) {
+function imageResult() {
   return {
-    images: [{ data: Buffer.from('rendered-image'), mediaType: 'image/png' }],
+    images: [{ data: Buffer.from('rendered-image'), mediaType: 'image/jpeg' }],
     rawResponse: {
-      id: overrides.id ?? 'gen-1',
-      usage: { prompt_tokens: 10, completion_tokens: 20, cost: overrides.cost ?? 0.01 },
+      usage: { prompt_tokens: 10, completion_tokens: 20, cost: 0.018 },
     },
   };
 }
 
-describe('OpenRouterService image generation on the Anvia path', () => {
+describe('ImageGenerationService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    loadAiModelMock.mockResolvedValue({
+      role: 'image',
+      modelId: 'bytedance-seed/seedream-5-0-flash',
+      reasoningEfforts: [],
+      defaultReasoningEffort: null,
+      temperature: null,
+      maxTokens: null,
+    });
   });
 
   it('forwards reference images via providerOptions and maps usage metadata', async () => {
     generateImageMock.mockResolvedValueOnce(imageResult());
 
-    const service = new OpenRouterService();
+    const service = new ImageGenerationService();
     const result = await service.generateImageWithInputs('make a sticker', [
       { base64: 'abc', mimeType: 'image/png' },
     ]);
 
     expect(result.imageBuffer.toString()).toBe('rendered-image');
-    expect(result.generationId).toBe('gen-1');
     expect(result.metadata).toEqual({
       model: 'bytedance-seed/seedream-5-0-flash',
       tokensPrompt: 10,
       tokensCompletion: 20,
-      cost: 0.01,
+      cost: 0.018,
       latencyMs: expect.any(Number),
     });
 
@@ -61,29 +66,15 @@ describe('OpenRouterService image generation on the Anvia path', () => {
     expect(request.abortSignal).toBeInstanceOf(AbortSignal);
   });
 
-  it('falls back to text-only when the provider rejects image input', async () => {
-    generateImageMock
-      .mockRejectedValueOnce(new ProviderError('Provider returned error'))
-      .mockResolvedValueOnce(imageResult({ id: 'gen-2' }));
+  it('does not retry when the provider rejects image input', async () => {
+    const providerError = new Error('Provider returned error');
+    generateImageMock.mockRejectedValueOnce(providerError);
 
-    const service = new OpenRouterService();
-    const result = await service.generateImageWithInputs('prompt', [
-      { base64: 'abc', mimeType: 'image/png' },
-    ]);
-
-    expect(generateImageMock).toHaveBeenCalledTimes(2);
-    expect(generateImageMock.mock.calls[1][0].providerOptions).toBeUndefined();
-    expect(result.generationId).toBe('gen-2');
-  });
-
-  it('wraps unexpected failures as AIGenerationError without retrying', async () => {
-    generateImageMock.mockRejectedValueOnce(new Error('boom'));
-
-    const service = new OpenRouterService();
+    const service = new ImageGenerationService();
 
     await expect(
       service.generateImageWithInputs('prompt', [{ base64: 'abc', mimeType: 'image/png' }])
-    ).rejects.toMatchObject({ code: 'AI_GENERATION_FAILED', statusCode: 502 });
+    ).rejects.toMatchObject({ code: 'AI_GENERATION_FAILED' });
     expect(generateImageMock).toHaveBeenCalledTimes(1);
   });
 });

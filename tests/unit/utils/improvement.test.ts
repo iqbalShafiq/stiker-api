@@ -11,10 +11,12 @@ describe('improvement utils', () => {
   it.each([
     { count: 1, chunks: [1] },
     { count: 2, chunks: [2] },
-    { count: 16, chunks: [16] },
-    { count: 17, chunks: [16, 1] },
-    { count: 32, chunks: [16, 16] },
-  ])('chunks $count image(s) by 16', ({ count, chunks }) => {
+    { count: 14, chunks: [14] },
+    { count: 15, chunks: [14, 1] },
+    { count: 17, chunks: [14, 3] },
+    { count: 28, chunks: [14, 14] },
+    { count: 32, chunks: [14, 14, 4] },
+  ])('chunks $count image(s) by 14', ({ count, chunks }) => {
     const items = Array.from({ length: count }, (_, index) => index);
     expect(chunkImageInputs(items).map(chunk => chunk.length)).toEqual(chunks);
   });

@@ -11,9 +11,9 @@ import {
   buildVideoStickerPackAgentUserMessage,
   createVideoStickerPackAgent,
   type VideoStickerPackAgentInput,
-} from '../ai/video-sticker-pack-agent';
+} from '../ai/agents/video-sticker-pack/agent';
 
-export type { VideoStickerPackAgentInput } from '../ai/video-sticker-pack-agent';
+export type { VideoStickerPackAgentInput } from '../ai/agents/video-sticker-pack/agent';
 
 export interface VideoStickerPackAgentResult {
   plan: VideoStickerPackPlan;

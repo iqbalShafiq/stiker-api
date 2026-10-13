@@ -1,13 +1,11 @@
-import sharp from 'sharp';
-import type { ImageGenerationResult } from '@anvia/core';
 import logger from '../utils/logger';
-import {
-  AIGenerationError,
-  GridDetectionError,
-  ProviderError,
-  TimeoutError,
-} from '../errors';
+import { GridDetectionError } from '../errors';
 import type { GridBoundary, GridDetectionResult } from '../types';
+import { gridDetectionOutputSchema } from '../utils/grid-detection';
+import {
+  cellTextAnalysisOutputSchema,
+  type CellTextAnalysisResult,
+} from '../utils/text-asset-decoration';
 import {
   improvementGridPlanOutputSchema,
   improvementPlanOutputSchema,
@@ -15,131 +13,9 @@ import {
   type ImageGenerationInput,
   type ImprovementPromptPlan,
 } from '../utils/improvement';
-import { gridDetectionOutputSchema } from '../utils/grid-detection';
-import {
-  cellTextAnalysisOutputSchema,
-  type CellTextAnalysisResult,
-} from '../utils/text-asset-decoration';
 import { generateStructuredCompletion } from '../ai/completion';
-import { anviaCore } from '../ai/core';
-import { loadAiModel } from '../ai/models/catalog';
-import {
-  buildReferenceImagesProviderOptions,
-  getOpenRouterImageModel,
-} from '../ai/openrouter-image';
-import { isProviderError } from '../ai/errors';
 
-export type {
-  TextStyleMetadata,
-  OutsideForegroundTextDetection,
-  CellTextAnalysisResult,
-} from '../utils/text-asset-decoration';
-
-interface GenerationResult {
-  imageBuffer: Buffer;
-  generationId: string;
-  metadata: {
-    model: string;
-    tokensPrompt?: number;
-    tokensCompletion?: number;
-    cost?: number;
-    latencyMs?: number;
-  };
-}
-
-export class OpenRouterService {
-  private defaultTimeout: number;
-
-  constructor(timeoutMs: number = 60000) {
-    this.defaultTimeout = timeoutMs;
-  }
-
-  /**
-   * Generate image dengan prompt text (dan opsional image input)
-   * Direct API call untuk bisa akses message.images[]
-   */
-  async generateImage(
-    prompt: string,
-    base64Image?: string,
-    imageMimeType: string = 'image/png',
-    allowTextOnlyFallback: boolean = true
-  ): Promise<GenerationResult> {
-    const images = base64Image
-      ? [{ base64: base64Image, mimeType: imageMimeType }]
-      : [];
-
-    return this.generateImageWithInputs(prompt, images, allowTextOnlyFallback);
-  }
-
-  async generateImageWithInputs(
-    prompt: string,
-    images: Array<{ base64: string; mimeType: string }> = [],
-    allowTextOnlyFallback: boolean = true
-  ): Promise<GenerationResult> {
-    const startedAt = Date.now();
-    const { modelId } = await loadAiModel('image');
-
-    const run = async (
-      referenceImages: Array<{ base64: string; mimeType: string }>
-    ): Promise<ImageGenerationResult<unknown>> => {
-      const { generateImage } = await anviaCore();
-      return generateImage({
-        model: getOpenRouterImageModel(modelId),
-        prompt,
-        width: 1024,
-        height: 1024,
-        ...(referenceImages.length > 0
-          ? { providerOptions: buildReferenceImagesProviderOptions(referenceImages) }
-          : {}),
-        abortSignal: AbortSignal.timeout(this.defaultTimeout),
-      });
-    };
-
-    try {
-      const result = await run(images);
-      return this.toGenerationResult(modelId, result.rawResponse, result.images[0], startedAt);
-    } catch (error) {
-      if (allowTextOnlyFallback && images.length > 0 && isProviderError(error)) {
-        // Fallback: jika image input tidak didukung, coba text-only
-        logger.warn('Image input not supported, falling back to text-only');
-        const result = await run([]);
-        return this.toGenerationResult(modelId, result.rawResponse, result.images[0], startedAt);
-      }
-      if (error instanceof TimeoutError || error instanceof AIGenerationError) {
-        throw error;
-      }
-      if (isProviderError(error)) {
-        throw new ProviderError(error instanceof Error ? error.message : 'Provider error');
-      }
-      throw new AIGenerationError(
-        error instanceof Error ? error.message : 'Unknown error'
-      );
-    }
-  }
-
-  private toGenerationResult(
-    model: string,
-    rawResponse: unknown,
-    image: { data: Uint8Array; mediaType?: string | undefined },
-    startedAt: number
-  ): GenerationResult {
-    const response = rawResponse as {
-      id?: string;
-      usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number };
-    };
-    return {
-      imageBuffer: Buffer.from(image.data),
-      generationId: response.id ?? '',
-      metadata: {
-        model,
-        tokensPrompt: response.usage?.prompt_tokens,
-        tokensCompletion: response.usage?.completion_tokens,
-        cost: response.usage?.cost,
-        latencyMs: Date.now() - startedAt,
-      },
-    };
-  }
-
+export class VisionAnalysisService {
   async buildImprovementPrompt(
     images: ImageGenerationInput[],
     mode: 'single' | 'grid'
@@ -227,36 +103,6 @@ Rules:
 - Do not output textAssetDecoration for grid mode.`;
   }
 
-  async normalizeGridImage(
-    imageBase64: string,
-    gridLayout: string,
-    targetWidth: number,
-    targetHeight: number
-  ): Promise<Buffer> {
-    const prompt = `You are normalizing a sticker grid image for precise automated splitting.
-
-Task:
-- Recreate this grid image as a clean, normalized grid while preserving every original sticker and text.
-- Keep the SAME layout: ${gridLayout}.
-- Preserve all text labels fully, with complete ascenders/descenders and no clipped edges.
-- Make each cell fully visible with safe inner padding so text and faces are never cut.
-- Keep each sticker in its own cell only; no overlap between cells.
-- Preserve overall style and visual content from the input image.
-- Keep clear and consistent gutters between cells.
-- Do not crop, zoom-in, or trim any part of any sticker or text.
-- Output exactly one complete grid image.
-`;
-
-    const { imageBuffer } = await this.generateImage(prompt, imageBase64);
-
-    return sharp(imageBuffer)
-      .resize(targetWidth, targetHeight, {
-        fit: 'fill',
-      })
-      .png()
-      .toBuffer();
-  }
-
   private static readonly CELL_TEXT_INSTRUCTIONS =
     'You are a visual text extraction assistant for sticker cells. Return ONLY JSON. Do not include markdown.';
 
@@ -317,8 +163,8 @@ Return exact JSON only:
 
     const primary = await generateStructuredCompletion({
       role: 'vision',
-      instructions: OpenRouterService.CELL_TEXT_INSTRUCTIONS,
-      prompt: OpenRouterService.CELL_TEXT_PRIMARY_PROMPT,
+      instructions: VisionAnalysisService.CELL_TEXT_INSTRUCTIONS,
+      prompt: VisionAnalysisService.CELL_TEXT_PRIMARY_PROMPT,
       images,
       outputSchema: cellTextAnalysisOutputSchema,
       timeoutMs: 20000,
@@ -331,8 +177,8 @@ Return exact JSON only:
 
     const fallback = await generateStructuredCompletion({
       role: 'vision',
-      instructions: OpenRouterService.CELL_TEXT_INSTRUCTIONS,
-      prompt: OpenRouterService.CELL_TEXT_FALLBACK_PROMPT,
+      instructions: VisionAnalysisService.CELL_TEXT_INSTRUCTIONS,
+      prompt: VisionAnalysisService.CELL_TEXT_FALLBACK_PROMPT,
       images,
       outputSchema: cellTextAnalysisOutputSchema,
       timeoutMs: 20000,

@@ -1,12 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
 import { GridSplitService } from '../../../src/services/grid-split.service';
-import type { OpenRouterService } from '../../../src/services/openrouter.service';
+import type { ImageGenerationService } from '../../../src/services/image-generation.service';
+import type { VisionAnalysisService } from '../../../src/services/vision-analysis.service';
 import type { ImageService } from '../../../src/services/image.service';
 import type { IStorageProvider } from '../../../src/storage/interface';
 
 describe('GridSplitService extractTextAssets', () => {
   it('returns text assets with merged outside-foreground text and metadata', async () => {
-    const openRouterServiceMock = {
+    const visionAnalysisServiceMock = {
       analyzeCellTextOutsideForeground: vi
         .fn()
         .mockResolvedValueOnce({
@@ -26,11 +27,17 @@ describe('GridSplitService extractTextAssets', () => {
           hasTextOutsideForeground: false,
           textOutsideForeground: [],
         }),
-    } as unknown as OpenRouterService;
+    } as unknown as VisionAnalysisService;
 
+    const imageGenerationServiceMock = {} as ImageGenerationService;
     const imageServiceMock = {} as ImageService;
     const storageServiceMock = {} as IStorageProvider;
-    const service = new GridSplitService(openRouterServiceMock, imageServiceMock, storageServiceMock);
+    const service = new GridSplitService(
+      imageGenerationServiceMock,
+      visionAnalysisServiceMock,
+      imageServiceMock,
+      storageServiceMock
+    );
 
     const result = await service.extractTextAssets([Buffer.from('a'), Buffer.from('b')]);
 

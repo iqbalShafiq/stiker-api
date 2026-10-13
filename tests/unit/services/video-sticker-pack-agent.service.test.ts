@@ -8,7 +8,7 @@ const buildUserMessageMock = vi.hoisted(() =>
   vi.fn(() => ({ role: 'user', content: [{ type: 'text', text: 'built-message' }] }))
 );
 
-vi.mock('../../../src/ai/video-sticker-pack-agent', () => ({
+vi.mock('../../../src/ai/agents/video-sticker-pack/agent', () => ({
   VIDEO_STICKER_PACK_AGENT_ID: 'video-sticker-pack',
   createVideoStickerPackAgent: createAgentMock,
   buildVideoStickerPackAgentUserMessage: buildUserMessageMock,

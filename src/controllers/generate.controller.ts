@@ -1,6 +1,7 @@
 import type { Response, NextFunction } from 'express';
 import { randomUUID } from 'crypto';
-import { OpenRouterService } from '../services/openrouter.service';
+import { ImageGenerationService } from '../services/image-generation.service';
+import { VisionAnalysisService } from '../services/vision-analysis.service';
 import { ImageService } from '../services/image.service';
 import { LocalStorageProvider } from '../storage/local.provider';
 import { ProcessingHistoryService } from '../services/processing-history.service';
@@ -123,14 +124,16 @@ function sumOptional(left: number | undefined, right: number | undefined): numbe
 }
 
 export class GenerateController {
-  private openRouterService: OpenRouterService;
+  private imageGenerationService: ImageGenerationService;
+  private visionAnalysisService: VisionAnalysisService;
   private imageService: ImageService;
   private storageProvider: LocalStorageProvider;
   private processingHistoryService: ProcessingHistoryService;
   private videoStickerPackAgentService: VideoStickerPackAgentService;
 
   constructor() {
-    this.openRouterService = new OpenRouterService();
+    this.imageGenerationService = new ImageGenerationService();
+    this.visionAnalysisService = new VisionAnalysisService();
     this.imageService = new ImageService();
     this.storageProvider = new LocalStorageProvider();
     this.processingHistoryService = new ProcessingHistoryService();
@@ -150,7 +153,7 @@ export class GenerateController {
 
       const inputImages = file ? [this.fileToImageInput(file)] : [];
       const { imageBuffer, metadata: aiMetadata } =
-        await this.openRouterService.generateImageWithInputs(
+        await this.imageGenerationService.generateImageWithInputs(
           buildPromptSingle(text),
           this.toBase64Inputs(inputImages)
         );
@@ -202,7 +205,7 @@ export class GenerateController {
       }
 
       const { imageBuffer, metadata: aiMetadata } =
-        await this.openRouterService.generateImageWithInputs(
+        await this.imageGenerationService.generateImageWithInputs(
           buildPromptStickerPack(text, gridDims.rows, gridDims.cols),
           this.toBase64Inputs(inputImages)
         );
@@ -257,15 +260,14 @@ export class GenerateController {
       const requestTimestamp = Date.now();
 
       if (inputImages.length === 1) {
-        const agent = await this.openRouterService.buildImprovementPrompt(inputImages, 'single');
+        const agent = await this.visionAnalysisService.buildImprovementPrompt(inputImages, 'single');
         const { imageBuffer, metadata: aiMetadata } =
-          await this.openRouterService.generateImageWithInputs(
+          await this.imageGenerationService.generateImageWithInputs(
             buildSingleImprovementGenerationPrompt(
               agent.plan.improvementPrompt,
               Boolean(agent.plan.textAssetDecoration)
             ),
             this.toBase64Inputs(inputImages),
-            false
           );
         const imageResult = await this.saveGeneratedImage({
           imageBuffer,
@@ -306,15 +308,14 @@ export class GenerateController {
       let improvementModel = '';
 
       for (const [chunkIndex, chunk] of chunks.entries()) {
-        const agent = await this.openRouterService.buildImprovementPrompt(chunk, 'grid');
+        const agent = await this.visionAnalysisService.buildImprovementPrompt(chunk, 'grid');
         metadataParts.push(agent.metadata);
         improvementModel = agent.metadata.model;
 
         const { imageBuffer, metadata: aiMetadata } =
-          await this.openRouterService.generateImageWithInputs(
+          await this.imageGenerationService.generateImageWithInputs(
             buildGridImprovementGenerationPrompt(agent.plan.improvementPrompt, chunk.length),
             this.toBase64Inputs(chunk),
-            false
           );
         metadataParts.push(aiMetadata);
         imageModel = aiMetadata.model;

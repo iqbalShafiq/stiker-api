@@ -3,7 +3,8 @@ import type { TextAssetDecoration } from '../types';
 import { buildTextAssetDecoration } from './text-asset-decoration';
 
 export const IMPROVEMENT_GRID_LAYOUT = '4x4';
-export const IMPROVEMENT_GRID_MAX_CELLS = 16;
+// Seedream accepts at most 14 input references per request.
+export const IMPROVEMENT_GRID_MAX_CELLS = 14;
 
 export interface ImageGenerationInput {
   buffer: Buffer;

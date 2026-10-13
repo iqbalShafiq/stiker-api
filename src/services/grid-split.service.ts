@@ -1,9 +1,8 @@
 import type { ImageResult, TextAssetResult } from '../types';
 import logger from '../utils/logger';
-import {
-  OpenRouterService,
-  type OutsideForegroundTextDetection,
-} from './openrouter.service';
+import type { OutsideForegroundTextDetection } from '../utils/text-asset-decoration';
+import { ImageGenerationService } from './image-generation.service';
+import { VisionAnalysisService } from './vision-analysis.service';
 import { ImageService } from './image.service';
 import { IStorageProvider } from '../storage/interface';
 import { removeBackgroundWithFallback } from './background-removal.service';
@@ -34,7 +33,8 @@ export interface GridSplitMetadata {
  */
 export class GridSplitService {
   constructor(
-    private readonly openRouterService: OpenRouterService,
+    private readonly imageGenerationService: ImageGenerationService,
+    private readonly visionAnalysisService: VisionAnalysisService,
     private readonly imageService: ImageService,
     private readonly storageService: IStorageProvider
   ) {}
@@ -49,21 +49,13 @@ export class GridSplitService {
     const rows = options.rows;
     const cols = options.cols;
 
-    const initialGridResult =
-      rows && cols
-        ? await this.openRouterService.detectGridBoundaries(
-            imageBuffer.toString('base64'),
-            dimensions.width,
-            dimensions.height,
-            rows,
-            cols
-          )
-        : (await this.imageService.detectGridBoundaries(imageBuffer)) ??
-          (await this.openRouterService.detectGridBoundaries(
-            imageBuffer.toString('base64'),
-            dimensions.width,
-            dimensions.height
-          ));
+    const initialGridResult = await this.visionAnalysisService.detectGridBoundaries(
+      imageBuffer.toString('base64'),
+      dimensions.width,
+      dimensions.height,
+      rows,
+      cols
+    );
 
     let splitSourceBuffer = imageBuffer;
     let splitBoundaries = initialGridResult.boundaries;
@@ -73,22 +65,20 @@ export class GridSplitService {
 
     if (shouldNormalize) {
       try {
-        const normalizedBuffer = await this.openRouterService.normalizeGridImage(
+        const normalizedBuffer = await this.imageGenerationService.normalizeGridImage(
           imageBuffer.toString('base64'),
           initialGridResult.gridLayout,
           dimensions.width,
           dimensions.height
         );
 
-        const normalizedGridResult =
-          (await this.imageService.detectGridBoundaries(normalizedBuffer)) ??
-          (await this.openRouterService.detectGridBoundaries(
-            normalizedBuffer.toString('base64'),
-            dimensions.width,
-            dimensions.height,
-            rows,
-            cols
-          ));
+        const normalizedGridResult = await this.visionAnalysisService.detectGridBoundaries(
+          normalizedBuffer.toString('base64'),
+          dimensions.width,
+          dimensions.height,
+          rows,
+          cols
+        );
 
         const normalizedFilename = await this.storageService.saveFile(normalizedBuffer, {
           extension: 'png',
@@ -227,15 +217,15 @@ export class GridSplitService {
   private async analyzeCellTextWithRetry(
     buffer: Buffer,
     cellId: string
-  ): Promise<ReturnType<OpenRouterService['analyzeCellTextOutsideForeground']>> {
+  ): Promise<ReturnType<VisionAnalysisService['analyzeCellTextOutsideForeground']>> {
     try {
-      return await this.openRouterService.analyzeCellTextOutsideForeground(buffer);
+      return await this.visionAnalysisService.analyzeCellTextOutsideForeground(buffer);
     } catch (firstError) {
       logger.warn(
         { error: firstError },
         `Grid cell text analysis retry for ${cellId} after first failure`
       );
-      return this.openRouterService.analyzeCellTextOutsideForeground(buffer);
+      return this.visionAnalysisService.analyzeCellTextOutsideForeground(buffer);
     }
   }
 
