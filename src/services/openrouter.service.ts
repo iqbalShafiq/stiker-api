@@ -1,5 +1,5 @@
-import OpenAI from 'openai';
 import sharp from 'sharp';
+import type { ImageGenerationResult } from '@anvia/core';
 import { config } from '../config';
 import logger from '../utils/logger';
 import {
@@ -21,6 +21,12 @@ import {
   type CellTextAnalysisResult,
 } from '../utils/text-asset-decoration';
 import { generateStructuredCompletion } from '../ai/completion';
+import { anviaCore } from '../ai/core';
+import {
+  buildReferenceImagesProviderOptions,
+  getOpenRouterImageModel,
+} from '../ai/openrouter-image';
+import { isProviderError } from '../ai/errors';
 
 export type {
   TextStyleMetadata,
@@ -39,33 +45,10 @@ interface GenerationResult {
   };
 }
 
-interface ExtractedImage {
-  imageBuffer: Buffer;
-}
-
-interface ProviderErrorResponse {
-  status?: number;
-  error?: {
-    metadata?: {
-      raw?: string;
-    };
-  };
-}
-
 export class OpenRouterService {
-  private client: OpenAI;
   private defaultTimeout: number;
 
   constructor(timeoutMs: number = 60000) {
-    this.client = new OpenAI({
-      baseURL: 'https://openrouter.ai/api/v1',
-      apiKey: config.openRouterApiKey,
-      defaultHeaders: {
-        'HTTP-Referer': config.appUrl,
-        'X-Title': 'WhatsApp Sticker API',
-      },
-      timeout: timeoutMs,
-    });
     this.defaultTimeout = timeoutMs;
   }
 
@@ -98,67 +81,65 @@ export class OpenRouterService {
     model: string = config.models.imageGeneration,
     allowTextOnlyFallback: boolean = true
   ): Promise<GenerationResult> {
-    const content: Array<{ type: string; text?: string; image_url?: { url: string } }> =
-      [{ type: 'text', text: prompt }];
+    const startedAt = Date.now();
 
-    for (const image of images) {
-      const mime =
-        image.mimeType && /^image\/[a-z0-9.+-]+$/i.test(image.mimeType)
-          ? image.mimeType
-          : 'image/png';
-      content.push({
-        type: 'image_url',
-        image_url: { url: `data:${mime};base64,${image.base64}` },
+    const run = async (
+      referenceImages: Array<{ base64: string; mimeType: string }>
+    ): Promise<ImageGenerationResult<unknown>> => {
+      const { generateImage } = await anviaCore();
+      return generateImage({
+        model: getOpenRouterImageModel(model),
+        prompt,
+        width: 1024,
+        height: 1024,
+        ...(referenceImages.length > 0
+          ? { providerOptions: buildReferenceImagesProviderOptions(referenceImages) }
+          : {}),
+        abortSignal: AbortSignal.timeout(this.defaultTimeout),
       });
-    }
-
-    const startTime = Date.now();
+    };
 
     try {
-      const response = await Promise.race([
-        this.client.chat.completions.create({
-          model,
-          messages: [{ role: 'user', content: content as unknown as OpenAI.Chat.Completions.ChatCompletionContentPart[] }],
-        }),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new TimeoutError()), this.defaultTimeout)
-        ),
-      ]);
-
-      const latencyMs = Date.now() - startTime;
-      const generationId = response.id;
-      const message = response.choices[0]?.message;
-
-      if (!message) {
-        throw new AIGenerationError('No message in response');
-      }
-
-      const extractedImage = await this.extractImageFromMessage(message);
-
-      const metadata = {
-        tokensPrompt: response.usage?.prompt_tokens,
-        tokensCompletion: response.usage?.completion_tokens,
-        cost: this.extractCost(response),
-        latencyMs,
-      };
-
-      return { imageBuffer: extractedImage.imageBuffer, generationId, metadata };
+      const result = await run(images);
+      return this.toGenerationResult(result.rawResponse, result.images[0], startedAt);
     } catch (error) {
+      if (allowTextOnlyFallback && images.length > 0 && isProviderError(error)) {
+        // Fallback: jika image input tidak didukung, coba text-only
+        logger.warn('Image input not supported, falling back to text-only');
+        const result = await run([]);
+        return this.toGenerationResult(result.rawResponse, result.images[0], startedAt);
+      }
       if (error instanceof TimeoutError || error instanceof AIGenerationError) {
         throw error;
       }
-      if (allowTextOnlyFallback && this.isProviderError(error) && images.length > 0) {
-        // Fallback: jika image input tidak didukung, coba text-only
-        logger.warn('Image input not supported, falling back to text-only');
-        return this.generateImageWithInputs(prompt, [], model, allowTextOnlyFallback);
-      }
-      if (this.isProviderError(error)) {
-        throw new ProviderError(this.extractProviderErrorMessage(error));
+      if (isProviderError(error)) {
+        throw new ProviderError(error instanceof Error ? error.message : 'Provider error');
       }
       throw new AIGenerationError(
         error instanceof Error ? error.message : 'Unknown error'
       );
     }
+  }
+
+  private toGenerationResult(
+    rawResponse: unknown,
+    image: { data: Uint8Array; mediaType?: string | undefined },
+    startedAt: number
+  ): GenerationResult {
+    const response = rawResponse as {
+      id?: string;
+      usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number };
+    };
+    return {
+      imageBuffer: Buffer.from(image.data),
+      generationId: response.id ?? '',
+      metadata: {
+        tokensPrompt: response.usage?.prompt_tokens,
+        tokensCompletion: response.usage?.completion_tokens,
+        cost: response.usage?.cost,
+        latencyMs: Date.now() - startedAt,
+      },
+    };
   }
 
   async buildImprovementPrompt(
@@ -607,164 +588,6 @@ Make sure boundaries cover the ENTIRE image without gaps or overlaps.`,
     }
 
     return true;
-  }
-
-  /**
-   * Decode image dari data URL atau remote URL
-   */
-  private async extractImageFromMessage(message: unknown): Promise<ExtractedImage> {
-    const assistantMsg = message as {
-      images?: Array<
-        { image_url?: { url?: string } | string; b64_json?: string; image_base64?: string }
-      >;
-      content?: unknown;
-    };
-
-    const decodeCandidates = async (value: unknown): Promise<Buffer | null> => {
-      if (!value) {
-        return null;
-      }
-
-      if (typeof value === 'string') {
-        return this.tryDecodeFromString(value);
-      }
-
-      if (Array.isArray(value)) {
-        for (const item of value) {
-          const fromItem = await decodeCandidates(item);
-          if (fromItem) {
-            return fromItem;
-          }
-        }
-        return null;
-      }
-
-      if (typeof value === 'object') {
-        const obj = value as Record<string, unknown>;
-        const directFields = [
-          obj.image_url,
-          obj.url,
-          obj.b64_json,
-          obj.image_base64,
-          obj.base64,
-          obj.data,
-        ];
-
-        for (const field of directFields) {
-          const fromField = await decodeCandidates(field);
-          if (fromField) {
-            return fromField;
-          }
-        }
-      }
-
-      return null;
-    };
-
-    const fromImages = await decodeCandidates(assistantMsg.images);
-    if (fromImages) {
-      return { imageBuffer: fromImages };
-    }
-
-    const fromContent = await decodeCandidates(assistantMsg.content);
-    if (fromContent) {
-      return { imageBuffer: fromContent };
-    }
-
-    throw new AIGenerationError('No image data in response');
-  }
-
-  private async tryDecodeFromString(value: string): Promise<Buffer | null> {
-    const trimmed = value.trim();
-    if (!trimmed) {
-      return null;
-    }
-
-    if (trimmed.startsWith('data:image')) {
-      return this.decodeImageUrl(trimmed);
-    }
-
-    if (/^https?:\/\//i.test(trimmed)) {
-      return this.decodeImageUrl(trimmed);
-    }
-
-    const dataUriMatch = trimmed.match(/data:image\/[^;]+;base64,([^"\s)]+)/i);
-    if (dataUriMatch?.[1]) {
-      return Buffer.from(dataUriMatch[1], 'base64');
-    }
-
-    const markdownUrlMatch = trimmed.match(/!\[[^\]]*]\((https?:\/\/[^)\s]+)\)/i);
-    if (markdownUrlMatch?.[1]) {
-      return this.decodeImageUrl(markdownUrlMatch[1]);
-    }
-
-    if (/^[A-Za-z0-9+/=\r\n]+$/.test(trimmed) && trimmed.length > 128) {
-      try {
-        return Buffer.from(trimmed, 'base64');
-      } catch {
-        return null;
-      }
-    }
-
-    return null;
-  }
-
-  private async decodeImageUrl(url: string): Promise<Buffer> {
-    if (url.startsWith('data:image')) {
-      const match = url.match(/data:image\/[^;]+;base64,([^"\s]+)/);
-      if (match?.[1]) {
-        return Buffer.from(match[1], 'base64');
-      }
-      throw new AIGenerationError('Invalid base64 image data');
-    }
-
-    if (/^https?:\/\//i.test(url)) {
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new AIGenerationError(`Failed to fetch generated image URL: ${response.status}`);
-      }
-      const bytes = await response.arrayBuffer();
-      return Buffer.from(bytes);
-    }
-
-    throw new AIGenerationError('Unsupported image URL format');
-  }
-
-  /**
-   * Cek apakah error berasal dari provider
-   */
-  private isProviderError(error: unknown): boolean {
-    if (error instanceof Error) {
-      const providerError = error as ProviderErrorResponse;
-      return (
-        error.message.includes('Provider returned error') ||
-        error.message.includes('502') ||
-        providerError.status === 502
-      );
-    }
-    return false;
-  }
-
-  /**
-   * Extract error message dari provider error
-   */
-  private extractProviderErrorMessage(error: unknown): string {
-    if (error instanceof Error) {
-      const providerError = error as ProviderErrorResponse;
-      if (providerError.error?.metadata?.raw) {
-        return `${error.message}: ${providerError.error.metadata.raw}`;
-      }
-      return error.message;
-    }
-    return 'Provider error';
-  }
-
-  /**
-   * Extract cost dari response
-   */
-  private extractCost(response: unknown): number | undefined {
-    const r = response as { usage?: { cost?: number }; cost?: number };
-    return r.usage?.cost ?? r.cost ?? undefined;
   }
 
   /**

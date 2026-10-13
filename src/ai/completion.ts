@@ -4,17 +4,8 @@ import {
   getImprovementCompletionModel,
   getVisionCompletionModel,
 } from './openrouter';
-import { importEsm } from './esm';
+import { anviaCore } from './core';
 import { toAiError } from './errors';
-
-type AnviaCoreModule = typeof import('@anvia/core');
-
-let corePromise: Promise<AnviaCoreModule> | undefined;
-
-function anviaCore(): Promise<AnviaCoreModule> {
-  corePromise ??= importEsm<AnviaCoreModule>('@anvia/core');
-  return corePromise;
-}
 
 export type CompletionRole = 'agent' | 'vision' | 'improvement';
 
