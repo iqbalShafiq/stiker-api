@@ -2,6 +2,20 @@
 
 Express API for Setiker sticker generation and cloud sync.
 
+## Local development
+
+```bash
+cp .env.example .env          # fill JWT secrets, DATABASE_URL, AGENT_API_KEY
+docker compose --profile dev up -d postgres redis
+npx prisma migrate deploy
+npx prisma db seed            # roles, billing products, AI model catalog
+npm run dev
+```
+
+Architecture, the AI model catalog, and tracing are documented in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). One compose file drives every environment via
+profiles: `dev`, `test`, `prod` (`docker compose --profile <name> ...`).
+
 ## Sign in with Google
 
 Mobile clients send a Google **ID token** to `POST /api/v1/auth/google`. The API verifies the token with `google-auth-library` (never trust client-only identity). Stable user key is Google **`sub`**, stored in `AuthIdentity`.
@@ -107,9 +121,10 @@ Each authenticated user has a **daily point pool** (default **100**). Each AI op
 
 Protected AI routes accept optional header `X-AI-Reservation-Id` from the app after a prior reserve.
 
-Redis is required for real quota enforcement. The Docker Compose files include Redis for dev, test,
-and production. Use `npm run test:up` for the isolated test stack; it starts Redis on
-`redis://localhost:6380` and Postgres on `localhost:5433`.
+Redis is required for real quota enforcement. `docker-compose.yml` uses profiles: `dev` runs the
+api with Postgres and Redis, `test` starts the isolated stack (Postgres on `localhost:5433`,
+Redis on `localhost:6380`), and `prod` runs the published image with migrations, seeding, and
+nginx. Use `npm run test:up && npm run test:migrate` before integration tests.
 
 ### Billing rules
 
@@ -118,18 +133,23 @@ and production. Use `npm run test:up` for the isolated test stack; it starts Red
 
 ## AI engine (Anvia + Langfuse)
 
-AI flows run on [Anvia](https://docs.anvia.dev) with OpenRouter as an OpenAI-compatible provider:
+AI flows run on [Anvia](https://docs.anvia.dev) with an OpenAI-compatible gateway
+(`AGENT_BASE_URL`, defaults to OpenRouter):
 
 - **Video sticker pack agent** — Anvia `Agent` with typed tools and schema-validated structured output.
 - **Vision analyses** (improvement prompt, grid detection, cell text) — Anvia parsed completions with zod schemas.
-- **Image generation** — Anvia `ImageGenerationModel` contract backed by OpenRouter chat-image models.
+- **Image generation** — Anvia `ImageGenerationModel` contract backed by the OpenRouter Images API.
+
+Models live in the `AiModel` table (one row per role with reasoning efforts, temperature and token
+limits) and are seeded by `npx prisma db seed`; change a model by updating the row or the seeder
+(`prisma/ai-models.seed.js`) — no deploy needed. Agent runs are traced to Langfuse when
+`LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY` are set. See
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full picture.
 
 | Env var | Default | Purpose |
 | --- | --- | --- |
-| `VIDEO_STICKER_PACK_AGENT_MODEL` | `openai/gpt-4.1-mini` | Agent model (OpenRouter id) |
-| `IMPROVEMENT_AGENT_MODEL` | `google/gemini-2.5-pro` | Improvement prompt model |
-| `AGENT_MODEL` | `google/gemini-2.5-flash-lite` | Vision analysis model |
-| `IMAGE_GENERATION_MODEL` | `google/gemini-2.5-flash-image` | Sticker image model |
+| `AGENT_API_KEY` | _(empty)_ | Gateway API key (required for AI features) |
+| `AGENT_BASE_URL` | `https://openrouter.ai/api/v1` | OpenAI-compatible gateway root |
 | `LANGFUSE_BASE_URL` | `https://cloud.langfuse.com` | Langfuse host |
 | `LANGFUSE_PUBLIC_KEY` | _(empty)_ | Enables agent-run tracing when set with the secret key |
 | `LANGFUSE_SECRET_KEY` | _(empty)_ | Enables agent-run tracing when set with the public key |

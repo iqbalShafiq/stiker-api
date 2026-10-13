@@ -1,27 +1,8 @@
 import type { Request, Response, NextFunction } from 'express';
 import multer from 'multer';
-import { config } from '../config';
 import logger from '../utils/logger';
 import { buildErrorResponse } from '../utils/response-builder';
-import { AppError, InvalidFileTypeError } from '../errors';
-
-const ALLOWED_MIME_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif'];
-
-const storage = multer.memoryStorage();
-
-export const upload = multer({
-  storage,
-  limits: {
-    fileSize: config.maxFileSize,
-  },
-  fileFilter: (_req, file, cb) => {
-    if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new InvalidFileTypeError());
-    }
-  },
-});
+import { AppError } from '../errors';
 
 export function errorHandler(
   err: Error,

@@ -86,7 +86,7 @@ export async function generateStructuredCompletion<Output>(
       abortSignal,
     });
 
-    const cost = extractOpenRouterCost(result.rawResponse);
+    const cost = extractCompletionCost(result.rawResponse);
 
     return {
       output: result.output,
@@ -103,7 +103,7 @@ export async function generateStructuredCompletion<Output>(
   }
 }
 
-function extractOpenRouterCost(rawResponse: unknown): number | undefined {
+function extractCompletionCost(rawResponse: unknown): number | undefined {
   const response = rawResponse as
     | { usage?: { cost?: number }; cost?: number }
     | null
