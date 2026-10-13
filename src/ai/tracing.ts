@@ -1,5 +1,6 @@
 import type { AgentOptions } from '@anvia/core';
 import { config } from '../config';
+import logger from '../utils/logger';
 import { importEsm } from './esm';
 
 type AnviaLangfuseModule = typeof import('@anvia/langfuse');
@@ -24,15 +25,21 @@ function getClient(): Promise<LangfuseClientHandle | null> {
   if (!tracingEnabled()) {
     return Promise.resolve(null);
   }
-  clientPromise ??= importEsm<AnviaLangfuseModule>('@anvia/langfuse').then(
-    ({ LangfuseClient }) =>
-      new LangfuseClient({
-        publicKey: config.langfuse.publicKey,
-        secretKey: config.langfuse.secretKey,
-        ...(config.langfuse.baseUrl.length > 0 ? { baseUrl: config.langfuse.baseUrl } : {}),
-        environment: config.nodeEnv,
-      })
-  );
+  clientPromise ??= importEsm<AnviaLangfuseModule>('@anvia/langfuse')
+    .then(
+      ({ LangfuseClient }) =>
+        new LangfuseClient({
+          publicKey: config.langfuse.publicKey,
+          secretKey: config.langfuse.secretKey,
+          ...(config.langfuse.baseUrl.length > 0 ? { baseUrl: config.langfuse.baseUrl } : {}),
+          environment: config.nodeEnv,
+        })
+    )
+    .catch((error: unknown) => {
+      // Tracing is optional: a broken integration must never fail agent runs.
+      logger.warn({ error }, 'Langfuse tracing initialization failed; continuing without tracing');
+      return null;
+    });
   return clientPromise;
 }
 

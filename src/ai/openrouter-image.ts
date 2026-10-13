@@ -100,16 +100,26 @@ export function getOpenRouterImageModel(modelId: string): ImageGenerationModel<u
       }
 
       try {
+        const request: Omit<
+          OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming,
+          'modalities'
+        > & {
+          /** OpenRouter extension: request image output alongside text. */
+          modalities?: readonly string[];
+        } = {
+          model: modelId,
+          messages: [
+            {
+              role: 'user',
+              content: content as unknown as OpenAI.Chat.Completions.ChatCompletionContentPart[],
+            },
+          ],
+          modalities: ['image', 'text'],
+        };
+
         const response = await getImageClient().chat.completions.create(
-          {
-            model: modelId,
-            messages: [
-              {
-                role: 'user',
-                content: content as unknown as OpenAI.Chat.Completions.ChatCompletionContentPart[],
-              },
-            ],
-          },
+          // The OpenAI v6 typings don't know OpenRouter's `image` modality.
+          request as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming,
           { signal: options?.abortSignal, maxRetries: 0 }
         );
 

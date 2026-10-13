@@ -1,5 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { extractImagesFromAssistantMessage } from '../../../src/ai/openrouter-image';
+
+const chatCreateMock = vi.hoisted(() => vi.fn());
+
+vi.mock('openai', () => ({
+  default: vi.fn(function OpenAIMock() {
+    return { chat: { completions: { create: chatCreateMock } } };
+  }),
+}));
+
+import {
+  extractImagesFromAssistantMessage,
+  getOpenRouterImageModel,
+} from '../../../src/ai/openrouter-image';
 
 const PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
@@ -60,5 +72,34 @@ describe('extractImagesFromAssistantMessage', () => {
       code: 'AI_GENERATION_FAILED',
       statusCode: 502,
     });
+  });
+
+  it('requests image output alongside text and forwards reference images', async () => {
+    chatCreateMock.mockResolvedValueOnce({
+      id: 'gen-1',
+      choices: [{ message: { images: [{ b64_json: LONG_BASE64 }] } }],
+      usage: {},
+    });
+
+    const model = getOpenRouterImageModel('test-image-model');
+    const result = await model.imageGeneration({
+      prompt: 'make a sticker',
+      width: 1024,
+      height: 1024,
+      providerOptions: { referenceImages: [{ base64: 'abc', mimeType: 'image/png' }] },
+    });
+
+    const request = chatCreateMock.mock.calls[0][0] as {
+      modalities?: string[];
+      model: string;
+      messages: Array<{ content: unknown[] }>;
+    };
+    expect(request.model).toBe('test-image-model');
+    expect(request.modalities).toEqual(['image', 'text']);
+    expect(request.messages[0].content).toEqual([
+      { type: 'text', text: 'make a sticker' },
+      { type: 'image_url', image_url: { url: 'data:image/png;base64,abc' } },
+    ]);
+    expect(result.images).toHaveLength(1);
   });
 });

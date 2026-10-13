@@ -40,8 +40,10 @@ export async function getOpenRouterCompletionModel(modelId: string): Promise<Com
   }
   const client = await getClient();
   // @typescript-eslint v7 cannot evaluate the `const` type parameter on
-  // OpenAIClient.completionModel (call result and Parameters<> degrade to an
-  // error type); tsc validates this assignment with full type checking.
+  // OpenAIClient.completionModel; both the call result and Parameters<> degrade
+  // to an error type here, so this assignment is NOT type-checked by tsc either
+  // (final review proved it — see ledger). The runtime contract is owned by
+  // @anvia/openai and covered by the migration plan's live smoke checklist.
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- see note above
   const model: CompletionModel = client.completionModel({ modelId, api: 'chat' });
   modelCache.set(modelId, model);
