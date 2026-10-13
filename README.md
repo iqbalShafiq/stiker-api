@@ -116,6 +116,26 @@ and production. Use `npm run test:up` for the isolated test stack; it starts Red
 - **HTTP 2xx** on an AI route → reservation committed (points used).
 - **HTTP error** → reservation released (no charge).
 
+## AI engine (Anvia + Langfuse)
+
+AI flows run on [Anvia](https://docs.anvia.dev) with OpenRouter as an OpenAI-compatible provider:
+
+- **Video sticker pack agent** — Anvia `Agent` with typed tools and schema-validated structured output.
+- **Vision analyses** (improvement prompt, grid detection, cell text) — Anvia parsed completions with zod schemas.
+- **Image generation** — Anvia `ImageGenerationModel` contract backed by OpenRouter chat-image models.
+
+| Env var | Default | Purpose |
+| --- | --- | --- |
+| `VIDEO_STICKER_PACK_AGENT_MODEL` | `openai/gpt-4.1-mini` | Agent model (OpenRouter id) |
+| `IMPROVEMENT_AGENT_MODEL` | `google/gemini-2.5-pro` | Improvement prompt model |
+| `AGENT_MODEL` | `google/gemini-2.5-flash-lite` | Vision analysis model |
+| `IMAGE_GENERATION_MODEL` | `google/gemini-2.5-flash-image` | Sticker image model |
+| `LANGFUSE_BASE_URL` | `https://cloud.langfuse.com` | Langfuse host |
+| `LANGFUSE_PUBLIC_KEY` | _(empty)_ | Enables agent-run tracing when set with the secret key |
+| `LANGFUSE_SECRET_KEY` | _(empty)_ | Enables agent-run tracing when set with the public key |
+
+Agent runs are traced to Langfuse when both keys are set; without them tracing is a no-op.
+
 ## Store-compliant billing (Google Play / Apple IAP)
 
 Setiker Play Store and App Store builds must use **Google Play Billing** and **StoreKit** for digital goods (token packs, subscriptions). Xendit is optional for non-store builds only (`XENDIT_ENABLED=true`).
