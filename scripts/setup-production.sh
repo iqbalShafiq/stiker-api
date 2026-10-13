@@ -18,32 +18,32 @@ mkdir -p certbot/conf
 mkdir -p certbot/www
 mkdir -p nginx/conf.d
 
-# Copy example env if .env.production doesn't exist
-if [ ! -f .env.production ]; then
-    echo "📝 Creating .env.production from template..."
-    cp .env.production.example .env.production
-    echo "⚠️  Please edit .env.production with your actual values!"
+# Copy example env if .env doesn't exist
+if [ ! -f .env ]; then
+    echo "📝 Creating .env from template..."
+    cp .env.example .env
+    echo "⚠️  Please edit .env with your actual values!"
 fi
 
 # Generate secure JWT secrets if not set
-if grep -q "your-super-secret-jwt-key" .env.production; then
+if grep -q "^JWT_SECRET=$" .env; then
     echo "🔑 Generating secure JWT secrets..."
     JWT_SECRET=$(openssl rand -base64 48)
     JWT_REFRESH_SECRET=$(openssl rand -base64 48)
     
-    sed -i "s/your-super-secret-jwt-key-min-32-chars/${JWT_SECRET}/g" .env.production
-    sed -i "s/your-super-secret-refresh-key-min-32-chars/${JWT_REFRESH_SECRET}/g" .env.production
+    sed -i "s|^JWT_SECRET=$|JWT_SECRET=${JWT_SECRET}|" .env
+    sed -i "s|^JWT_REFRESH_SECRET=$|JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}|" .env
     
     echo "✅ JWT secrets generated automatically"
 fi
 
 # Pull latest images
 echo "🐳 Pulling Docker images..."
-docker-compose -f docker-compose.prod.yml pull
+docker compose --profile prod pull
 
 # Start database services first
 echo "🗄️  Starting database services..."
-docker-compose -f docker-compose.prod.yml up -d postgres redis
+docker compose --profile prod up -d postgres redis
 
 # Wait for databases to be ready
 echo "⏳ Waiting for databases to be ready..."
@@ -51,11 +51,15 @@ sleep 10
 
 # Run migrations
 echo "🔄 Running database migrations..."
-docker-compose -f docker-compose.prod.yml run --rm api npx prisma migrate deploy
+docker compose --profile prod run --rm migrate
+
+# Seed the database (roles, billing products, AI model catalog)
+echo "🌱 Seeding database..."
+docker compose --profile prod run --rm seed
 
 # Start all services
 echo "🚀 Starting all services..."
-docker-compose -f docker-compose.prod.yml up -d
+docker compose --profile prod up -d
 
 # Check health
 echo "🏥 Checking health..."
@@ -68,6 +72,6 @@ echo ""
 echo "Next steps:"
 echo "1. Update nginx/conf.d/ssl.conf with your domain"
 echo "2. Configure SSL certificates with: ./scripts/init-ssl.sh your-domain.com your-email@example.com"
-echo "3. Update .env.production with your actual API keys"
+echo "3. Update .env with your actual API keys"
 echo "4. Configure GitHub Actions secrets for CI/CD"
 echo ""

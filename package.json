@@ -14,8 +14,9 @@
     "test": "VITE_CJS_IGNORE_WARNING=true vitest run",
     "test:watch": "VITE_CJS_IGNORE_WARNING=true vitest",
     "test:coverage": "VITE_CJS_IGNORE_WARNING=true vitest run --coverage",
-    "test:up": "COMPOSE_IGNORE_ORPHANS=true docker-compose -f docker-compose.test.yml up -d && sleep 3 && DATABASE_URL=postgresql://postgres:postgres@localhost:5433/sticker_api_test REDIS_URL=redis://localhost:6380 npx prisma migrate deploy",
-    "test:down": "COMPOSE_IGNORE_ORPHANS=true docker-compose -f docker-compose.test.yml down -v"
+    "test:up": "docker compose --profile test up -d --wait postgres-test redis-test",
+    "test:migrate": "tsx scripts/test-migrate.ts",
+    "test:down": "docker compose --profile test down -v"
   },
   "keywords": [
     "express",

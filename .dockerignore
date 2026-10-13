@@ -23,3 +23,7 @@ contoh_*
 docs/*.gif
 docs/*.jpeg
 docs/*.webp
+.superpowers
+certbot
+backups
+scripts/tmp-*

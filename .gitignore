@@ -4,52 +4,36 @@ node_modules/
 # Build output
 dist/
 build/
+*.tsbuildinfo
 
-# Environment files
-.env
-.env.local
-.env.*.local
+# Environment files (keep the example)
+.env*
+!.env.example
 
-# IDE
+# IDE / OS
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
-
-# OS
 .DS_Store
 Thumbs.db
 Desktop.ini
 
-# Logs
+# Logs & runtime dirs
 *.log
-.err
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+logs/
+backups/
+certbot/
+uploads/*
+!uploads/.gitkeep
+
+# Local ML / ONNX model cache (e.g. @imgly/background-removal-node)
+.cache/
 
 # Test coverage
 coverage/
 .nyc_output/
 
-# Local ML / ONNX model cache (e.g. @imgly/background-removal-node)
-.cache/
-
-# Uploads (runtime generated)
-uploads/*
-!uploads/.gitkeep
-
-# TypeScript
-*.tsbuildinfo
-
-# Temp
-tmp/
-temp/
-
-# Trial files
-*.png
-*.jpg
-*.jpeg
-*.webp
-*.gif
+# Agent scratch (superpowers workspaces self-ignore too)
+.superpowers/

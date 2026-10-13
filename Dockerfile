@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y \
 
 # Copy package files
 COPY package*.json ./
+COPY patches ./patches
 COPY prisma ./prisma/
 
 # Install all dependencies (including devDependencies for build)
@@ -47,6 +48,7 @@ RUN groupadd -g 1001 nodejs && \
 
 # Copy package files
 COPY package*.json ./
+COPY patches ./patches
 COPY prisma ./prisma/
 
 # Install only production dependencies
