@@ -106,4 +106,22 @@ describe('images-api-model', () => {
       model.imageGeneration({ prompt: 'p', width: 1, height: 1 })
     ).rejects.toMatchObject({ code: 'TIMEOUT_ERROR', statusCode: 504 });
   });
+
+  it('rejects more than 14 reference images before calling the provider', async () => {
+    const references = Array.from({ length: 15 }, () => ({ base64: 'x', mimeType: 'image/png' }));
+    const model = getImagesApiModel('bytedance-seed/seedream-5-0-flash');
+
+    await expect(
+      model.imageGeneration({
+        prompt: 'p',
+        width: 1024,
+        height: 1024,
+        providerOptions: buildReferenceImagesProviderOptions(references),
+      })
+    ).rejects.toMatchObject({
+      code: 'AI_GENERATION_FAILED',
+      message: expect.stringContaining('14'),
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });

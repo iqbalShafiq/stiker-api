@@ -111,7 +111,8 @@ Each authenticated user has a **daily point pool** (default **100**). Each AI op
 | `AI_RESERVATION_TTL_SECONDS` | `3600` | Auto-release stale reservations |
 | `AI_QUOTA_FAIL_CLOSED` | `true` outside development | When `true`, Redis errors block quota instead of fail-open. Keep `true` in production and CI. |
 | `REDIS_ENABLED` | `true` | Disable only for local dev without Redis. Keep enabled in production. |
-| `IMGLY_BG_ENABLED` | `true` | Enables IMG.LY ONNX background removal. Tests set this to `false` and use the local fallback. |
+| `IMGLY_BG_MODEL` | `medium` | IMG.LY ONNX model size (`small`/`medium`/`large`) |
+| `IMGLY_BG_MAX_CONCURRENCY` | `2` | Parallel IMG.LY segmentations |
 
 ### Endpoints
 
@@ -125,6 +126,10 @@ Redis is required for real quota enforcement. `docker-compose.yml` uses profiles
 api with Postgres and Redis, `test` starts the isolated stack (Postgres on `localhost:5433`,
 Redis on `localhost:6380`), and `prod` runs the published image with migrations, seeding, and
 nginx. Use `npm run test:up && npm run test:migrate` before integration tests.
+
+> Deployment posture: in the `prod` profile Postgres and Redis bind to `127.0.0.1` only, and the
+> api is exposed through nginx on host ports `8080`/`8443` (see `nginx/conf.d`); adjust the port
+> mappings for your TLS terminator.
 
 ### Billing rules
 

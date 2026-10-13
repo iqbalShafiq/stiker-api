@@ -47,7 +47,7 @@ describe('errorHandler', () => {
     );
   });
 
-  it('keeps AppError-only mapping (custom subclass without instanceof shortcut degrades to 500)', () => {
+  it('maps AppError subclasses through their own status codes', () => {
     const { res, status } = mockResponse();
     class PlainError extends AppError {
       constructor() {

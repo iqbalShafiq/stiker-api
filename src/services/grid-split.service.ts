@@ -93,7 +93,7 @@ export class GridSplitService {
       } catch (normalizationError) {
         logger.warn(
           { error: normalizationError },
-          'Grid normalization failed, fallback to original image split'
+          'Grid normalization failed; splitting the original image (metadata.normalized=false)'
         );
       }
     }
@@ -102,6 +102,7 @@ export class GridSplitService {
 
     const images: ImageResult[] = [];
     const methodsUsed = new Set<string>();
+    let cellTextAnalysisFailures = 0;
     for (const [index, buffer] of splitBuffers.entries()) {
       const cellId = `cell-${String(index + 1).padStart(2, '0')}`;
       let processedCellBuffer = buffer;
@@ -116,6 +117,7 @@ export class GridSplitService {
           };
         }
       } catch (cellTextAnalysisError) {
+        cellTextAnalysisFailures += 1;
         logger.warn(
           { error: cellTextAnalysisError },
           `Grid cell text analysis failed for ${cellId}`
@@ -153,6 +155,12 @@ export class GridSplitService {
       });
     }
 
+    if (splitBuffers.length > 0 && cellTextAnalysisFailures === splitBuffers.length) {
+      logger.warn(
+        'All grid cell text analyses failed — text assets are omitted for this split'
+      );
+    }
+
     return {
       images,
       metadata: {
@@ -173,6 +181,7 @@ export class GridSplitService {
     metadata: GridSplitMetadata;
   }> {
     const assets: TextAssetResult[] = [];
+    let cellTextAnalysisFailures = 0;
     for (const [index, buffer] of cellBuffers.entries()) {
       const cellId = `cell-${String(index + 1).padStart(2, '0')}`;
       let textOutsideForeground: TextAssetResult['textOutsideForeground'];
@@ -186,6 +195,7 @@ export class GridSplitService {
           };
         }
       } catch (cellTextAnalysisError) {
+        cellTextAnalysisFailures += 1;
         logger.warn(
           { error: cellTextAnalysisError },
           `Grid cell text analysis failed for ${cellId}`
@@ -199,6 +209,12 @@ export class GridSplitService {
           : {}),
         ...(textOutsideForeground ? { textOutsideForeground } : {}),
       });
+    }
+
+    if (cellBuffers.length > 0 && cellTextAnalysisFailures === cellBuffers.length) {
+      logger.warn(
+        'All grid cell text analyses failed — returning cells without text assets'
+      );
     }
 
     return {

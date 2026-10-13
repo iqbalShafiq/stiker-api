@@ -1,4 +1,5 @@
 import { prisma } from '../../prisma/client';
+import { AppError } from '../../errors';
 
 export type AiModelRole = 'agent' | 'vision' | 'improvement' | 'image';
 
@@ -11,10 +12,17 @@ export interface AiModelRow {
   maxTokens: number | null;
 }
 
-export class MissingAiModelError extends Error {
+/**
+ * AppError so the actionable seed hint survives the error handler on every call
+ * path instead of degrading into a generic 500.
+ */
+export class MissingAiModelError extends AppError {
   constructor(role: AiModelRole) {
-    super(`AiModel row for role '${role}' is missing — run \`npx prisma db seed\` first.`);
-    this.name = 'MissingAiModelError';
+    super(
+      `AiModel row for role '${role}' is missing — run \`npx prisma db seed\` first.`,
+      500,
+      'AI_MODEL_NOT_CONFIGURED'
+    );
   }
 }
 

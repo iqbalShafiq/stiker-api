@@ -49,4 +49,20 @@ describe('getCompletionModelForRole', () => {
     expect(binding.reasoningEffort).toBeNull();
     expect(getCompletionModelMock).toHaveBeenCalledWith('bytedance-seed/seedream-5-0-flash', {});
   });
+
+  it('drops a rejected binding so a later call can retry', async () => {
+    loadAiModelMock.mockRejectedValueOnce(new Error('db down')).mockResolvedValueOnce({
+      role: 'vision',
+      modelId: 'meta/muse-spark-1.3-contributor',
+      reasoningEfforts: ['low'],
+      defaultReasoningEffort: 'low',
+      temperature: null,
+      maxTokens: null,
+    });
+
+    await expect(getCompletionModelForRole('vision')).rejects.toThrow('db down');
+
+    const binding = await getCompletionModelForRole('vision');
+    expect(binding.modelId).toBe('meta/muse-spark-1.3-contributor');
+  });
 });

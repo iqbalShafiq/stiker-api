@@ -8,24 +8,34 @@ type AnviaOpenAIModule = typeof import('@anvia/openai');
 let openaiModulePromise: Promise<AnviaOpenAIModule> | undefined;
 
 function anviaOpenAI(): Promise<AnviaOpenAIModule> {
-  openaiModulePromise ??= importEsm<AnviaOpenAIModule>('@anvia/openai');
+  openaiModulePromise ??= importEsm<AnviaOpenAIModule>('@anvia/openai').catch((error: unknown) => {
+    // A transient module-load failure must not disable the gateway for the process lifetime.
+    openaiModulePromise = undefined;
+    throw error;
+  });
   return openaiModulePromise;
 }
 
 let clientPromise: Promise<InstanceType<AnviaOpenAIModule['OpenAIClient']>> | undefined;
 
 function getClient(): Promise<InstanceType<AnviaOpenAIModule['OpenAIClient']>> {
-  clientPromise ??= anviaOpenAI().then(({ OpenAIClient }) => {
-    const { apiKey, baseUrl } = requireAgentCredentials();
-    return new OpenAIClient({
-      apiKey,
-      baseUrl,
-      headers: {
-        'HTTP-Referer': config.appUrl,
-        'X-Title': config.legal.appName,
-      },
+  clientPromise ??= anviaOpenAI()
+    .then(({ OpenAIClient }) => {
+      const { apiKey, baseUrl } = requireAgentCredentials();
+      return new OpenAIClient({
+        apiKey,
+        baseUrl,
+        headers: {
+          'HTTP-Referer': config.appUrl,
+          'X-Title': config.legal.appName,
+        },
+      });
+    })
+    .catch((error: unknown) => {
+      // A transient failure must not disable the gateway client for the process lifetime.
+      clientPromise = undefined;
+      throw error;
     });
-  });
   return clientPromise;
 }
 
@@ -43,7 +53,7 @@ export async function getCompletionModel(
   modelId: string,
   options?: { controls?: CompletionModelControls }
 ): Promise<CompletionModel> {
-  const cacheKey = `${modelId}::${options?.controls ? 'controls' : 'plain'}`;
+  const cacheKey = `${modelId}::${options?.controls ? JSON.stringify(options.controls) : 'plain'}`;
   const cached = modelCache.get(cacheKey);
   if (cached !== undefined) {
     return cached;

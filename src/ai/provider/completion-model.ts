@@ -29,7 +29,11 @@ export function getCompletionModelForRole(role: AiModelRole): Promise<Completion
       temperature: row.temperature,
       maxTokens: row.maxTokens,
     };
-  })();
+  })().catch((error: unknown) => {
+    // A transient failure must not disable the role for the process lifetime.
+    bindings.delete(role);
+    throw error;
+  });
   bindings.set(role, binding);
   return binding;
 }

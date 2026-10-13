@@ -17,6 +17,9 @@ export interface ReferenceImageInput {
 
 const REFERENCE_IMAGES_KEY = 'referenceImages';
 
+/** Provider cap for `input_references` on the Images API. */
+export const IMAGE_API_MAX_INPUT_REFERENCES = 14;
+
 export const IMAGE_API_SUPPORTED_ASPECT_RATIOS = [
   '1:1',
   '1:2',
@@ -98,6 +101,11 @@ export function getImagesApiModel(modelId: string): ImageGenerationModel<unknown
     ): Promise<ImageGenerationResult<unknown>> {
       const { apiKey, baseUrl } = requireAgentCredentials();
       const referenceImages = readReferenceImages(request.providerOptions);
+      if (referenceImages.length > IMAGE_API_MAX_INPUT_REFERENCES) {
+        throw new AIGenerationError(
+          `Images API accepts at most ${IMAGE_API_MAX_INPUT_REFERENCES} input references (got ${referenceImages.length})`
+        );
+      }
       const body: Record<string, unknown> = {
         model: modelId,
         prompt: request.prompt,

@@ -4,6 +4,7 @@ import {
   MissingAiModelError,
   resetAiModelCache,
 } from '../../../../src/ai/models/catalog';
+import { AppError } from '../../../../src/errors';
 
 const findUniqueMock = vi.hoisted(() => vi.fn());
 
@@ -41,5 +42,13 @@ describe('loadAiModel', () => {
     await expect(loadAiModel('vision')).rejects.toBeInstanceOf(MissingAiModelError);
     expect(findUniqueMock).toHaveBeenCalledTimes(1);
     await expect(loadAiModel('vision')).rejects.toThrow(/prisma db seed/);
+  });
+
+  it('surfaces as an AppError so the seed hint reaches HTTP responses (not a generic 500)', () => {
+    const error = new MissingAiModelError('vision');
+    expect(error).toBeInstanceOf(AppError);
+    expect(error.statusCode).toBe(500);
+    expect(error.code).toBe('AI_MODEL_NOT_CONFIGURED');
+    expect(error.message).toContain('prisma db seed');
   });
 });
