@@ -153,6 +153,11 @@ export const config = {
   historyExpirationDays: Math.max(1, parseInt(process.env.HISTORY_EXPIRATION_DAYS ?? '7', 10)),
   cleanupIntervalHours: Math.max(1, parseInt(process.env.CLEANUP_INTERVAL_HOURS ?? '24', 10)),
   redisEnabled: process.env.REDIS_ENABLED !== 'false',
+  langfuse: {
+    baseUrl: process.env.LANGFUSE_BASE_URL ?? '',
+    publicKey: process.env.LANGFUSE_PUBLIC_KEY ?? '',
+    secretKey: process.env.LANGFUSE_SECRET_KEY ?? '',
+  },
   aiQuotaFailClosed: process.env.AI_QUOTA_FAIL_CLOSED === undefined
     ? (process.env.NODE_ENV ?? 'development') !== 'development'
     : process.env.AI_QUOTA_FAIL_CLOSED === 'true',
