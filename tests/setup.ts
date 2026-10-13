@@ -8,6 +8,7 @@ process.env.JWT_SECRET = 'test-jwt-secret';
 process.env.JWT_REFRESH_SECRET = 'test-jwt-refresh-secret';
 process.env.REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6380';
 process.env.IMGLY_BG_ENABLED = 'false';
-delete process.env.LANGFUSE_PUBLIC_KEY;
-delete process.env.LANGFUSE_SECRET_KEY;
-delete process.env.LANGFUSE_BASE_URL;
+// Empty (not deleted) so dotenv does not repopulate from a developer .env file.
+process.env.LANGFUSE_PUBLIC_KEY = '';
+process.env.LANGFUSE_SECRET_KEY = '';
+process.env.LANGFUSE_BASE_URL = '';

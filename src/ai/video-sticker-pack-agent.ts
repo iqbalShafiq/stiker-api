@@ -10,9 +10,10 @@ import {
   proposeAnimatedLoops,
   rankStaticCandidates,
   validatePlanForRequest,
+  videoStickerPackAgentPlanSchema,
   videoStickerPackPlanSchema,
   type VideoStickerCandidate,
-  type VideoStickerPackPlan,
+  type VideoStickerPackAgentPlan,
 } from '../utils/video-sticker-pack';
 
 export const VIDEO_STICKER_PACK_AGENT_ID = 'video-sticker-pack';
@@ -33,7 +34,7 @@ export interface VideoStickerPackAgentInput {
 
 export async function createVideoStickerPackAgent(
   input: VideoStickerPackAgentInput
-): Promise<AnviaAgent<VideoStickerPackPlan>> {
+): Promise<AnviaAgent<VideoStickerPackAgentPlan>> {
   const { Agent, createTool } = await anviaCore();
   const model = await getAgentCompletionModel();
   const observer = await getLangfuseObserver();
@@ -109,7 +110,7 @@ export async function createVideoStickerPackAgent(
     model,
     instructions: buildSystemPrompt(input),
     tools,
-    outputSchema: videoStickerPackPlanSchema,
+    outputSchema: videoStickerPackAgentPlanSchema,
     temperature: 0.2,
     maxTokens: 3500,
     maxTurns: 8,
@@ -160,11 +161,13 @@ Goal:
 Rules:
 - Prefer clear, expressive, non-blurry, non-duplicate frames.
 - Use candidateId references from metadata exactly.
+- Always include every field of the JSON manifest, even when empty: use empty strings or empty arrays rather than omitting keys.
 - Static sticker count target: up to ${maxStatic}.
 - Animated sticker count target: up to ${maxAnimated}; use zero animated stickers if no good motion exists.
 - Total stickers must be at most 16.
 - Animated timelines should be 2-24 frames, ordered by timestamp, and <= 10 seconds total.
 - Keep text decorations short and readable. Use bottom-caption placement unless there is a strong reason not to.
+- Decoration entries are exactly {"type":"emoji","emoji":"..."} or {"type":"text","text":"...","style":{"fontFamily":"...","color":"...","weight":"..."}}; never add placement or extra fields.
 - Keep backend work cheap: use the provided tools and visual reasoning; do not ask for image generation.
 - Before final answer, call validate_sticker_pack_plan and fix any validation errors.`;
 }

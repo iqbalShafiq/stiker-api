@@ -1,0 +1,13 @@
+diff --git a/node_modules/@anvia/langfuse/dist/index.js b/node_modules/@anvia/langfuse/dist/index.js
+index e70d130..3826629 100644
+--- a/node_modules/@anvia/langfuse/dist/index.js
++++ b/node_modules/@anvia/langfuse/dist/index.js
+@@ -1237,7 +1237,7 @@ var LangfuseClient = class {
+         processor,
+         provider,
+         observations: new LangfuseObservationFactory(
+-          provider.getTracer("@anvia/langfuse", "1.0.0")
++          provider.getTracer("langfuse-sdk", "1.0.0")
+         ),
+         queue
+       };

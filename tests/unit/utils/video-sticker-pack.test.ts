@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import {
   VIDEO_STICKER_PACK_INPUT_LAYOUT,
   VIDEO_STICKER_PACK_MAX_CANDIDATES,
@@ -10,6 +11,7 @@ import {
   rankStaticCandidates,
   validatePlanForRequest,
   validateVideoStickerPackRequestShape,
+  videoStickerPackAgentPlanSchema,
   type VideoStickerCandidate,
 } from '../../../src/utils/video-sticker-pack';
 
@@ -180,5 +182,42 @@ describe('video sticker pack utils', () => {
   it('ranks static candidates and proposes lightweight loops', () => {
     expect(rankStaticCandidates(candidates, 2).map(candidate => candidate.candidateId)).toEqual(['f_003', 'f_001']);
     expect(proposeAnimatedLoops(candidates, 1)[0].timeline).toHaveLength(3);
+  });
+});
+
+describe('videoStickerPackAgentPlanSchema (strict-provider variant)', () => {
+  const fullPlan = {
+    packTitle: 'Strict Plan',
+    summary: '',
+    staticStickers: [
+      {
+        candidateId: 'f_001',
+        frameIndex: 1,
+        timestampMs: 1_000,
+        cellId: 'A1',
+        emojis: ['⭐'],
+        accessibilityText: '',
+        decorations: [],
+        rationale: '',
+      },
+    ],
+    animatedStickers: [],
+    rejectedCandidates: [],
+  };
+
+  it('requires every declared property in the generated JSON schema', () => {
+    const jsonSchema = z.toJSONSchema(videoStickerPackAgentPlanSchema);
+    const required = jsonSchema.required ?? [];
+    expect(required.sort()).toEqual(Object.keys(jsonSchema.properties ?? {}).sort());
+    expect(JSON.stringify(jsonSchema)).not.toContain('"default"');
+  });
+
+  it('accepts a plan where optional runtime fields are provided as empty values', () => {
+    expect(videoStickerPackAgentPlanSchema.safeParse(fullPlan).success).toBe(true);
+  });
+
+  it('rejects plans that omit a declared property', () => {
+    const { summary: _summary, ...missingSummary } = fullPlan;
+    expect(videoStickerPackAgentPlanSchema.safeParse(missingSummary).success).toBe(false);
   });
 });
