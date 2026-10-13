@@ -388,6 +388,7 @@ export class GenerateController {
         prompt: typeof body.prompt === 'string' ? body.prompt : undefined,
         maxStaticStickers: Number(body.maxStaticStickers),
         maxAnimatedStickers: Number(body.maxAnimatedStickers),
+        userId,
       });
 
       await this.processingHistoryService.create({
