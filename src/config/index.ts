@@ -3,6 +3,33 @@ import path from 'path';
 
 dotenv.config();
 
+export class MissingEnvError extends Error {
+  constructor(names: string[]) {
+    super(`Missing required environment variables: ${names.join(', ')}`);
+    this.name = 'MissingEnvError';
+  }
+}
+
+/** Throws when any requested variable is missing or blank. Pure for testability. */
+export function requiredEnvFrom(
+  source: Record<string, string | undefined>,
+  ...names: string[]
+): string {
+  const missing = names.filter((name) => {
+    const value = source[name];
+    return value === undefined || value.trim().length === 0;
+  });
+  if (missing.length > 0) {
+    throw new MissingEnvError(missing);
+  }
+  return source[names[0]] as string;
+}
+
+// Fail fast at boot: no placeholder defaults for secrets or the datasource.
+const jwtSecret = requiredEnvFrom(process.env, 'JWT_SECRET');
+const jwtRefreshSecret = requiredEnvFrom(process.env, 'JWT_REFRESH_SECRET');
+const databaseUrl = requiredEnvFrom(process.env, 'DATABASE_URL');
+
 const imglyBgModelRaw = process.env.IMGLY_BG_MODEL;
 const imglyBgModel: 'small' | 'medium' | 'large' =
   imglyBgModelRaw === 'small' || imglyBgModelRaw === 'large' ? imglyBgModelRaw : 'medium';
@@ -80,7 +107,8 @@ export const config = {
   port: parseInt(process.env.PORT ?? '3000', 10),
   host: process.env.HOST ?? '0.0.0.0',
   nodeEnv: process.env.NODE_ENV ?? 'development',
-  openRouterApiKey: process.env.OPENROUTER_API_KEY ?? '',
+  /** @deprecated bridge — reads AGENT_API_KEY until the DB model catalog lands (cleanup plan Task 3). */
+  openRouterApiKey: process.env.AGENT_API_KEY ?? '',
   appUrl: process.env.APP_URL ?? 'http://localhost:3000',
   maxFileSize: parseInt(process.env.MAX_FILE_SIZE ?? '10485760', 10),
   uploadDir: process.env.UPLOAD_DIR ?? 'uploads',
@@ -106,16 +134,20 @@ export const config = {
     temporalAlphaPasses: temporalAlphaPasses,
     temporalDilateAlphaKernel: temporalDilateAlphaKernel,
   },
+  agent: {
+    apiKey: process.env.AGENT_API_KEY ?? '',
+    baseUrl: process.env.AGENT_BASE_URL ?? 'https://openrouter.ai/api/v1',
+  },
   models: {
     imageGeneration: process.env.IMAGE_GENERATION_MODEL ?? 'google/gemini-2.5-flash-image',
     agent: process.env.AGENT_MODEL ?? 'google/gemini-2.5-flash-lite',
     videoStickerPackAgent: process.env.VIDEO_STICKER_PACK_AGENT_MODEL ?? 'openai/gpt-4.1-mini',
     improvementAgent: process.env.IMPROVEMENT_AGENT_MODEL ?? 'google/gemini-2.5-pro',
   },
-  databaseUrl: process.env.DATABASE_URL ?? 'postgresql://localhost:5432/sticker_api',
+  databaseUrl,
   redisUrl: process.env.REDIS_URL ?? 'redis://localhost:6379',
-  jwtSecret: process.env.JWT_SECRET ?? 'your-jwt-secret-key-change-in-production',
-  jwtRefreshSecret: process.env.JWT_REFRESH_SECRET ?? 'your-jwt-refresh-secret-key-change-in-production',
+  jwtSecret,
+  jwtRefreshSecret,
   jwtAccessExpiration: process.env.JWT_ACCESS_EXPIRATION ?? '15m',
   jwtRefreshExpiration: process.env.JWT_REFRESH_EXPIRATION ?? '7d',
   /** OAuth client IDs accepted as Google ID token `aud` (Web serverClientId + optional Android/iOS). */
