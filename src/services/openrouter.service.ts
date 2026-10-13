@@ -1,6 +1,5 @@
 import sharp from 'sharp';
 import type { ImageGenerationResult } from '@anvia/core';
-import { config } from '../config';
 import logger from '../utils/logger';
 import {
   AIGenerationError,
@@ -10,6 +9,7 @@ import {
 } from '../errors';
 import type { GridBoundary, GridDetectionResult } from '../types';
 import {
+  improvementGridPlanOutputSchema,
   improvementPlanOutputSchema,
   normalizeImprovementPromptPlan,
   type ImageGenerationInput,
@@ -22,6 +22,7 @@ import {
 } from '../utils/text-asset-decoration';
 import { generateStructuredCompletion } from '../ai/completion';
 import { anviaCore } from '../ai/core';
+import { loadAiModel } from '../ai/models/catalog';
 import {
   buildReferenceImagesProviderOptions,
   getOpenRouterImageModel,
@@ -38,6 +39,7 @@ interface GenerationResult {
   imageBuffer: Buffer;
   generationId: string;
   metadata: {
+    model: string;
     tokensPrompt?: number;
     tokensCompletion?: number;
     cost?: number;
@@ -60,35 +62,29 @@ export class OpenRouterService {
     prompt: string,
     base64Image?: string,
     imageMimeType: string = 'image/png',
-    model: string = config.models.imageGeneration,
     allowTextOnlyFallback: boolean = true
   ): Promise<GenerationResult> {
     const images = base64Image
       ? [{ base64: base64Image, mimeType: imageMimeType }]
       : [];
 
-    return this.generateImageWithInputs(
-      prompt,
-      images,
-      model,
-      allowTextOnlyFallback
-    );
+    return this.generateImageWithInputs(prompt, images, allowTextOnlyFallback);
   }
 
   async generateImageWithInputs(
     prompt: string,
     images: Array<{ base64: string; mimeType: string }> = [],
-    model: string = config.models.imageGeneration,
     allowTextOnlyFallback: boolean = true
   ): Promise<GenerationResult> {
     const startedAt = Date.now();
+    const { modelId } = await loadAiModel('image');
 
     const run = async (
       referenceImages: Array<{ base64: string; mimeType: string }>
     ): Promise<ImageGenerationResult<unknown>> => {
       const { generateImage } = await anviaCore();
       return generateImage({
-        model: getOpenRouterImageModel(model),
+        model: getOpenRouterImageModel(modelId),
         prompt,
         width: 1024,
         height: 1024,
@@ -101,13 +97,13 @@ export class OpenRouterService {
 
     try {
       const result = await run(images);
-      return this.toGenerationResult(result.rawResponse, result.images[0], startedAt);
+      return this.toGenerationResult(modelId, result.rawResponse, result.images[0], startedAt);
     } catch (error) {
       if (allowTextOnlyFallback && images.length > 0 && isProviderError(error)) {
         // Fallback: jika image input tidak didukung, coba text-only
         logger.warn('Image input not supported, falling back to text-only');
         const result = await run([]);
-        return this.toGenerationResult(result.rawResponse, result.images[0], startedAt);
+        return this.toGenerationResult(modelId, result.rawResponse, result.images[0], startedAt);
       }
       if (error instanceof TimeoutError || error instanceof AIGenerationError) {
         throw error;
@@ -122,6 +118,7 @@ export class OpenRouterService {
   }
 
   private toGenerationResult(
+    model: string,
     rawResponse: unknown,
     image: { data: Uint8Array; mediaType?: string | undefined },
     startedAt: number
@@ -134,6 +131,7 @@ export class OpenRouterService {
       imageBuffer: Buffer.from(image.data),
       generationId: response.id ?? '',
       metadata: {
+        model,
         tokensPrompt: response.usage?.prompt_tokens,
         tokensCompletion: response.usage?.completion_tokens,
         cost: response.usage?.cost,
@@ -148,13 +146,14 @@ export class OpenRouterService {
   ): Promise<{
     plan: ImprovementPromptPlan;
     metadata: {
+      model: string;
       tokensPrompt?: number;
       tokensCompletion?: number;
       cost?: number;
       latencyMs?: number;
     };
   }> {
-    const { output, usage, cost, latencyMs } = await generateStructuredCompletion({
+    const { output, usage, cost, latencyMs, model } = await generateStructuredCompletion({
       role: 'improvement',
       instructions:
         'You are a senior sticker art director and prompt engineer. Return ONLY JSON. Do not include markdown.',
@@ -163,7 +162,7 @@ export class OpenRouterService {
           ? this.buildSingleImprovementAgentPrompt()
           : this.buildGridImprovementAgentPrompt(images.length),
       images,
-      outputSchema: improvementPlanOutputSchema,
+      outputSchema: mode === 'single' ? improvementPlanOutputSchema : improvementGridPlanOutputSchema,
       timeoutMs: 45000,
     });
 
@@ -172,6 +171,7 @@ export class OpenRouterService {
         allowTextAssetDecoration: mode === 'single',
       }),
       metadata: {
+        model,
         tokensPrompt: usage.inputTokens,
         tokensCompletion: usage.outputTokens,
         cost,

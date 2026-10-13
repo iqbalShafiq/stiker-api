@@ -107,8 +107,6 @@ export const config = {
   port: parseInt(process.env.PORT ?? '3000', 10),
   host: process.env.HOST ?? '0.0.0.0',
   nodeEnv: process.env.NODE_ENV ?? 'development',
-  /** @deprecated bridge — reads AGENT_API_KEY until the DB model catalog lands (cleanup plan Task 3). */
-  openRouterApiKey: process.env.AGENT_API_KEY ?? '',
   appUrl: process.env.APP_URL ?? 'http://localhost:3000',
   maxFileSize: parseInt(process.env.MAX_FILE_SIZE ?? '10485760', 10),
   uploadDir: process.env.UPLOAD_DIR ?? 'uploads',
@@ -137,12 +135,6 @@ export const config = {
   agent: {
     apiKey: process.env.AGENT_API_KEY ?? '',
     baseUrl: process.env.AGENT_BASE_URL ?? 'https://openrouter.ai/api/v1',
-  },
-  models: {
-    imageGeneration: process.env.IMAGE_GENERATION_MODEL ?? 'google/gemini-2.5-flash-image',
-    agent: process.env.AGENT_MODEL ?? 'google/gemini-2.5-flash-lite',
-    videoStickerPackAgent: process.env.VIDEO_STICKER_PACK_AGENT_MODEL ?? 'openai/gpt-4.1-mini',
-    improvementAgent: process.env.IMPROVEMENT_AGENT_MODEL ?? 'google/gemini-2.5-pro',
   },
   databaseUrl,
   redisUrl: process.env.REDIS_URL ?? 'redis://localhost:6379',

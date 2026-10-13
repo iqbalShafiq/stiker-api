@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { Agent as AnviaAgent, AnyTool, UserMessage } from '@anvia/core';
 import { anviaCore } from './core';
 import { buildUserContent } from './completion';
-import { getAgentCompletionModel } from './openrouter';
+import { getCompletionModelForRole } from './provider/completion-model';
 import { getLangfuseObserver } from './tracing';
 import {
   VIDEO_STICKER_PACK_DEFAULT_ANIMATED_COUNT,
@@ -35,8 +35,10 @@ export interface VideoStickerPackAgentInput {
 export async function createVideoStickerPackAgent(
   input: VideoStickerPackAgentInput
 ): Promise<AnviaAgent<VideoStickerPackAgentPlan>> {
-  const { Agent, createTool } = await anviaCore();
-  const model = await getAgentCompletionModel();
+  const [{ Agent, createTool }, binding] = await Promise.all([
+    anviaCore(),
+    getCompletionModelForRole('agent'),
+  ]);
   const observer = await getLangfuseObserver();
 
   const candidateInventory = createTool({
@@ -107,12 +109,15 @@ export async function createVideoStickerPackAgent(
 
   return new Agent({
     id: VIDEO_STICKER_PACK_AGENT_ID,
-    model,
+    model: binding.model,
     instructions: buildSystemPrompt(input),
     tools,
     outputSchema: videoStickerPackAgentPlanSchema,
-    temperature: 0.2,
-    maxTokens: 3500,
+    ...(binding.temperature !== null ? { temperature: binding.temperature } : {}),
+    ...(binding.maxTokens !== null ? { maxTokens: binding.maxTokens } : {}),
+    ...(binding.reasoningEffort
+      ? { controls: { reasoningEffort: binding.reasoningEffort } }
+      : {}),
     maxTurns: 8,
     retries: { maxAttempts: 2 },
     ...(observer

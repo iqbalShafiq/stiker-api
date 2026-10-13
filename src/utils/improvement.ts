@@ -23,19 +23,26 @@ export function chunkImageInputs<T>(items: T[], chunkSize = IMPROVEMENT_GRID_MAX
   return chunks;
 }
 
-/** Model-facing schema for the improvement prompt planner (validated by Anvia before returning). */
+/**
+ * Model-facing schemas for the improvement planner. Strict providers require
+ * every property in `required` and reject `default`/`optional`, so single mode
+ * always asks for `textAssetDecoration` (empty strings allowed; the normalizer
+ * drops empties) and grid mode omits the field entirely.
+ */
 export const improvementPlanOutputSchema = z.object({
   improvementPrompt: z.string().trim().min(1).max(4000),
-  textAssetDecoration: z
-    .object({
-      text: z.string().trim().min(1).max(64),
-      style: z.object({
-        fontFamily: z.string().trim().min(1).max(80),
-        color: z.string().trim().min(1).max(40),
-        weight: z.string().trim().min(1).max(40),
-      }),
-    })
-    .optional(),
+  textAssetDecoration: z.object({
+    text: z.string().trim().max(64),
+    style: z.object({
+      fontFamily: z.string().trim().max(80),
+      color: z.string().trim().max(40),
+      weight: z.string().trim().max(40),
+    }),
+  }),
+});
+
+export const improvementGridPlanOutputSchema = z.object({
+  improvementPrompt: z.string().trim().min(1).max(4000),
 });
 
 export function normalizeImprovementPromptPlan(

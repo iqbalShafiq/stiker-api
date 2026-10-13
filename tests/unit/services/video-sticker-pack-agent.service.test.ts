@@ -14,6 +14,18 @@ vi.mock('../../../src/ai/video-sticker-pack-agent', () => ({
   buildVideoStickerPackAgentUserMessage: buildUserMessageMock,
 }));
 
+vi.mock('../../../src/ai/models/catalog', () => ({
+  loadAiModel: vi.fn(async () => ({
+    role: 'agent',
+    modelId: 'meta/muse-spark-1.3-contributor',
+    reasoningEfforts: ['low', 'medium', 'high', 'max'],
+    defaultReasoningEffort: 'high',
+    temperature: 0.2,
+    maxTokens: 4000,
+  })),
+  MissingAiModelError: class MissingAiModelError extends Error {},
+}));
+
 const usage = {
   inputTokens: 123,
   outputTokens: 45,
@@ -107,7 +119,7 @@ describe('VideoStickerPackAgentService', () => {
       'f_002',
     ]);
     expect(result.metadata).toMatchObject({
-      model: 'openai/gpt-4.1-mini',
+      model: 'meta/muse-spark-1.3-contributor',
       mode: 'video-sticker-pack',
       candidateGridCount: 1,
       candidateCount: 2,

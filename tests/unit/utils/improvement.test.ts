@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
+import { z } from 'zod';
 import {
   chunkImageInputs,
+  improvementGridPlanOutputSchema,
+  improvementPlanOutputSchema,
   normalizeImprovementPromptPlan,
 } from '../../../src/utils/improvement';
 
@@ -81,5 +84,18 @@ describe('improvement utils', () => {
     expect(() => normalizeImprovementPromptPlan({}, { allowTextAssetDecoration: false })).toThrow(
       'Improvement agent did not return improvementPrompt'
     );
+  });
+
+  it('emits strict-provider schemas: every property required, no default keywords', () => {
+    for (const schema of [improvementPlanOutputSchema, improvementGridPlanOutputSchema]) {
+      const jsonSchema = z.toJSONSchema(schema) as {
+        required?: string[];
+        properties?: Record<string, unknown>;
+      };
+      expect((jsonSchema.required ?? []).sort()).toEqual(
+        Object.keys(jsonSchema.properties ?? {}).sort()
+      );
+      expect(JSON.stringify(jsonSchema)).not.toContain('"default"');
+    }
   });
 });

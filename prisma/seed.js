@@ -2,6 +2,7 @@ require('dotenv').config();
 const { PrismaClient } = require('@prisma/client');
 const { PrismaPg } = require('@prisma/adapter-pg');
 const bcrypt = require('bcrypt');
+const { AI_MODEL_SEED } = require('./ai-models.seed');
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
@@ -165,6 +166,20 @@ async function main() {
   }
 
   console.log('Billing products seeded');
+
+  for (const model of AI_MODEL_SEED) {
+    await prisma.aiModel.upsert({
+      where: { role: model.role },
+      update: model,
+      create: model,
+    });
+  }
+
+  await prisma.aiModel.deleteMany({
+    where: { role: { notIn: AI_MODEL_SEED.map((model) => model.role) } },
+  });
+
+  console.log('AI model catalog seeded');
 }
 
 main()

@@ -1,5 +1,5 @@
-import { config } from '../config';
-import { AIGenerationError, ValidationError } from '../errors';
+import { AIGenerationError } from '../errors';
+import { loadAiModel } from '../ai/models/catalog';
 import {
   VIDEO_STICKER_PACK_INPUT_LAYOUT,
   VIDEO_STICKER_PACK_OUTPUT_LAYOUT,
@@ -37,13 +37,10 @@ export class VideoStickerPackAgentService {
   async generatePlan(
     input: VideoStickerPackAgentInput & { userId?: string }
   ): Promise<VideoStickerPackAgentResult> {
-    if (!config.openRouterApiKey) {
-      throw new ValidationError('OPENROUTER_API_KEY is required for video sticker pack generation');
-    }
-
     const startedAt = Date.now();
 
     try {
+      const agentRow = await loadAiModel('agent');
       const agent = await createVideoStickerPackAgent(input);
       const outcome = await agent.generate({
         messages: [buildVideoStickerPackAgentUserMessage(input)],
@@ -76,7 +73,7 @@ export class VideoStickerPackAgentService {
       return {
         plan,
         metadata: {
-          model: config.models.videoStickerPackAgent,
+          model: agentRow.modelId,
           mode: 'video-sticker-pack',
           candidateGridCount: input.candidateGrids.length,
           candidateCount: input.candidates.length,

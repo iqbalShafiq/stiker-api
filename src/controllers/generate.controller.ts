@@ -170,7 +170,6 @@ export class GenerateController {
       });
 
       const metadata: GenerationMetadata = {
-        model: config.models.imageGeneration,
         ...aiMetadata,
         mode: 'single',
         inputCount: inputImages.length,
@@ -232,7 +231,6 @@ export class GenerateController {
       }, 'sticker-pack');
 
       const metadata: GenerationMetadata = {
-        model: config.models.imageGeneration,
         ...aiMetadata,
         gridLayout: `${gridDims.rows}x${gridDims.cols}`,
         cellCount: gridDims.rows * gridDims.cols,
@@ -267,7 +265,6 @@ export class GenerateController {
               Boolean(agent.plan.textAssetDecoration)
             ),
             this.toBase64Inputs(inputImages),
-            config.models.imageGeneration,
             false
           );
         const imageResult = await this.saveGeneratedImage({
@@ -287,8 +284,8 @@ export class GenerateController {
         }, 'improve');
 
         const metadata: GenerationMetadata = {
-          model: config.models.imageGeneration,
-          improvementAgentModel: config.models.improvementAgent,
+          model: aiMetadata.model,
+          improvementAgentModel: agent.metadata.model,
           ...mergeAiMetadata([agent.metadata, aiMetadata]),
           mode: 'single',
           inputCount: 1,
@@ -305,19 +302,22 @@ export class GenerateController {
       const chunks = chunkImageInputs(inputImages, IMPROVEMENT_GRID_MAX_CELLS);
       const images: ImageResult[] = [];
       const metadataParts: AiMetadata[] = [];
+      let imageModel = '';
+      let improvementModel = '';
 
       for (const [chunkIndex, chunk] of chunks.entries()) {
         const agent = await this.openRouterService.buildImprovementPrompt(chunk, 'grid');
         metadataParts.push(agent.metadata);
+        improvementModel = agent.metadata.model;
 
         const { imageBuffer, metadata: aiMetadata } =
           await this.openRouterService.generateImageWithInputs(
             buildGridImprovementGenerationPrompt(agent.plan.improvementPrompt, chunk.length),
             this.toBase64Inputs(chunk),
-            config.models.imageGeneration,
             false
           );
         metadataParts.push(aiMetadata);
+        imageModel = aiMetadata.model;
 
         const imageResult = await this.saveGeneratedImage({
           imageBuffer,
@@ -343,8 +343,8 @@ export class GenerateController {
       }, 'improve');
 
       const metadata: GenerationMetadata = {
-        model: config.models.imageGeneration,
-        improvementAgentModel: config.models.improvementAgent,
+        model: imageModel,
+        improvementAgentModel: improvementModel,
         ...mergeAiMetadata(metadataParts),
         mode: 'grid',
         inputCount: inputImages.length,

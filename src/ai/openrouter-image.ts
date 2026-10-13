@@ -10,7 +10,6 @@ import type {
 import { config } from '../config';
 import { AIGenerationError } from '../errors';
 import { toAiError } from './errors';
-import { OPENROUTER_BASE_URL } from './openrouter';
 
 export interface ReferenceImageInput {
   base64: string;
@@ -23,11 +22,11 @@ let imageClient: OpenAI | undefined;
 
 function getImageClient(): OpenAI {
   imageClient ??= new OpenAI({
-    baseURL: OPENROUTER_BASE_URL,
-    apiKey: config.openRouterApiKey,
+    baseURL: config.agent.baseUrl,
+    apiKey: config.agent.apiKey,
     defaultHeaders: {
       'HTTP-Referer': config.appUrl,
-      'X-Title': 'Setiker API',
+      'X-Title': config.legal.appName,
     },
     timeout: 60000,
   });

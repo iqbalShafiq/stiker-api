@@ -3,10 +3,22 @@ import { ProviderError } from '../../../src/errors';
 import { OpenRouterService } from '../../../src/services/openrouter.service';
 
 const generateImageMock = vi.hoisted(() => vi.fn());
+const loadAiModelMock = vi.hoisted(() =>
+  vi.fn(async () => ({
+    role: 'image',
+    modelId: 'bytedance-seed/seedream-5-0-flash',
+    reasoningEfforts: [],
+    defaultReasoningEffort: null,
+    temperature: null,
+    maxTokens: null,
+  }))
+);
 
 vi.mock('../../../src/ai/core', () => ({
   anviaCore: vi.fn(async () => ({ generateImage: generateImageMock })),
 }));
+
+vi.mock('../../../src/ai/models/catalog', () => ({ loadAiModel: loadAiModelMock }));
 
 function imageResult(overrides: { id?: string; cost?: number } = {}) {
   return {
@@ -34,6 +46,7 @@ describe('OpenRouterService image generation on the Anvia path', () => {
     expect(result.imageBuffer.toString()).toBe('rendered-image');
     expect(result.generationId).toBe('gen-1');
     expect(result.metadata).toEqual({
+      model: 'bytedance-seed/seedream-5-0-flash',
       tokensPrompt: 10,
       tokensCompletion: 20,
       cost: 0.01,

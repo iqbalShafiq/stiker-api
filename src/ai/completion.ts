@@ -1,9 +1,5 @@
-import type { CompletionModel, StandardSchemaV1, UserMessage } from '@anvia/core';
-import {
-  getAgentCompletionModel,
-  getImprovementCompletionModel,
-  getVisionCompletionModel,
-} from './openrouter';
+import type { StandardSchemaV1, UserMessage } from '@anvia/core';
+import { getCompletionModelForRole } from './provider/completion-model';
 import { anviaCore } from './core';
 import { toAiError } from './errors';
 
@@ -21,7 +17,6 @@ export interface StructuredCompletionInput<Output> {
   images?: ReadonlyArray<UserContentImage>;
   outputSchema: StandardSchemaV1<unknown, Output>;
   timeoutMs: number;
-  temperature?: number;
 }
 
 export interface StructuredCompletionUsage {
@@ -34,13 +29,8 @@ export interface StructuredCompletionResult<Output> {
   usage: StructuredCompletionUsage;
   cost?: number;
   latencyMs: number;
+  model: string;
 }
-
-const MODEL_BY_ROLE: Record<CompletionRole, () => Promise<CompletionModel>> = {
-  agent: getAgentCompletionModel,
-  vision: getVisionCompletionModel,
-  improvement: getImprovementCompletionModel,
-};
 
 export function normalizeImageMediaType(mimeType: string): string {
   return /^image\/[a-z0-9.+-]+$/i.test(mimeType) ? mimeType : 'image/png';
@@ -69,9 +59,9 @@ export function buildUserContent(input: {
 export async function generateStructuredCompletion<Output>(
   input: StructuredCompletionInput<Output>
 ): Promise<StructuredCompletionResult<Output>> {
-  const [{ generateCompletion }, model] = await Promise.all([
+  const [{ generateCompletion }, binding] = await Promise.all([
     anviaCore(),
-    MODEL_BY_ROLE[input.role](),
+    getCompletionModelForRole(input.role),
   ]);
 
   const abortSignal = AbortSignal.timeout(input.timeoutMs);
@@ -79,7 +69,7 @@ export async function generateStructuredCompletion<Output>(
 
   try {
     const result = await generateCompletion({
-      model,
+      model: binding.model,
       instructions: input.instructions,
       messages: [
         {
@@ -88,7 +78,11 @@ export async function generateStructuredCompletion<Output>(
         },
       ],
       outputSchema: input.outputSchema,
-      ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
+      ...(binding.temperature !== null ? { temperature: binding.temperature } : {}),
+      ...(binding.maxTokens !== null ? { maxTokens: binding.maxTokens } : {}),
+      ...(binding.reasoningEffort
+        ? { controls: { reasoningEffort: binding.reasoningEffort } }
+        : {}),
       abortSignal,
     });
 
@@ -102,6 +96,7 @@ export async function generateStructuredCompletion<Output>(
       },
       ...(cost !== undefined ? { cost } : {}),
       latencyMs: Date.now() - startedAt,
+      model: binding.modelId,
     };
   } catch (error) {
     throw toAiError(error, { abortSignal });
