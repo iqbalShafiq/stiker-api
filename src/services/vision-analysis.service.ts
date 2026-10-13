@@ -212,8 +212,8 @@ Return exact JSON only:
   }
 
   /**
-   * Detect grid boundaries dari image
-   * Menggunakan AI vision untuk deteksi, dengan fallback ke auto-detection
+   * Detect grid boundaries dari image menggunakan AI vision.
+   * Tidak ada fallback deterministik: kegagalan = GridDetectionError.
    */
   async detectGridBoundaries(
     imageBase64: string,
@@ -270,13 +270,7 @@ Make sure boundaries cover the ENTIRE image without gaps or overlaps.`,
 
       return output;
     } catch (aiError) {
-      logger.warn({ error: aiError }, 'AI grid detection failed, falling back to auto-detection');
-
-      // Fallback ke auto-detection jika AI gagal atau hasil tidak valid
-      if (imageWidth && imageHeight) {
-        return this.autoDetectGrid(imageWidth, imageHeight);
-      }
-
+      logger.warn({ error: aiError }, 'AI grid detection failed');
       throw new GridDetectionError(
         aiError instanceof Error ? aiError.message : 'Grid detection failed'
       );
@@ -303,96 +297,6 @@ Make sure boundaries cover the ENTIRE image without gaps or overlaps.`,
           y: row * cellHeight,
           width: cellWidth,
           height: cellHeight,
-        });
-      }
-    }
-
-    return {
-      gridLayout: `${rows}x${cols}`,
-      boundaries,
-    };
-  }
-
-  /**
-   * Auto-detect grid dengan equal spacing (fallback)
-   * Mencoba beberapa kemungkinan layout dan memilih yang paling masuk akal
-   */
-  private autoDetectGrid(width: number, height: number): GridDetectionResult {
-    const ratio = width / height;
-    const minCellSize = 120; // Minimum ukuran cell yang masuk akal untuk stiker
-    const maxCellSize = 600; // Maximum ukuran cell
-
-    // Generate kemungkinan layout berdasarkan ukuran gambar
-    const possibleLayouts: Array<{ rows: number; cols: number }> = [];
-    const maxCols = Math.floor(width / minCellSize);
-    const maxRows = Math.floor(height / minCellSize);
-
-    for (let rows = 1; rows <= Math.min(maxRows, 8); rows++) {
-      for (let cols = 1; cols <= Math.min(maxCols, 8); cols++) {
-        const cellW = width / cols;
-        const cellH = height / rows;
-        if (cellW >= minCellSize && cellW <= maxCellSize &&
-            cellH >= minCellSize && cellH <= maxCellSize) {
-          possibleLayouts.push({ rows, cols });
-        }
-      }
-    }
-
-    // Pilih layout terbaik berdasarkan aspect ratio dan jumlah cell
-    let bestLayout = { rows: 2, cols: 2 };
-    let bestScore = -1;
-
-    for (const layout of possibleLayouts) {
-      const cellW = width / layout.cols;
-      const cellH = height / layout.rows;
-      const cellRatio = cellW / cellH;
-      const ratioDiff = Math.abs(cellRatio - 1); // Prefer square cells
-      const cellCount = layout.rows * layout.cols;
-      
-      // Score: prefer square cells, common sticker counts (4,6,8,9,12,16,20,24), dan ukuran yang pas
-      let countScore = 0;
-      if ([4, 6, 8, 9, 12, 16, 20, 24].includes(cellCount)) countScore = 10;
-      else if ([2, 3, 15, 18, 25].includes(cellCount)) countScore = 5;
-      
-      const score = countScore - ratioDiff * 5 + (cellCount > 4 ? 2 : 0);
-      
-      if (score > bestScore) {
-        bestScore = score;
-        bestLayout = layout;
-      }
-    }
-
-    // Override untuk kasus umum berdasarkan ukuran gambar
-    const minDim = Math.min(width, height);
-    if (minDim >= 1000) {
-      // Gambar besar: biasanya 4x4 atau 3x4
-      if (ratio >= 0.9 && ratio <= 1.1) {
-        bestLayout = { rows: 4, cols: 4 };
-      }
-    } else if (minDim >= 700) {
-      // Gambar medium: 3x3 atau 2x3
-      if (ratio >= 0.9 && ratio <= 1.1) {
-        bestLayout = { rows: 3, cols: 3 };
-      }
-    }
-
-    const rows = bestLayout.rows;
-    const cols = bestLayout.cols;
-
-    // Hitung cell size dengan margin (2% dari ukuran gambar)
-    const marginX = Math.round(width * 0.02);
-    const marginY = Math.round(height * 0.02);
-    const cellWidth = Math.floor((width - marginX * (cols - 1)) / cols);
-    const cellHeight = Math.floor((height - marginY * (rows - 1)) / rows);
-
-    const boundaries: GridBoundary[] = [];
-    for (let row = 0; row < rows; row++) {
-      for (let col = 0; col < cols; col++) {
-        boundaries.push({
-          x: col * (cellWidth + marginX),
-          y: row * (cellHeight + marginY),
-          width: Math.min(cellWidth, width - col * (cellWidth + marginX)),
-          height: Math.min(cellHeight, height - row * (cellHeight + marginY)),
         });
       }
     }

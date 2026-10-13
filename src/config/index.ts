@@ -33,10 +33,6 @@ const databaseUrl = requiredEnvFrom(process.env, 'DATABASE_URL');
 const imglyBgModelRaw = process.env.IMGLY_BG_MODEL;
 const imglyBgModel: 'small' | 'medium' | 'large' =
   imglyBgModelRaw === 'small' || imglyBgModelRaw === 'large' ? imglyBgModelRaw : 'medium';
-const imglyBgEnabled =
-  process.env.IMGLY_BG_ENABLED === undefined
-    ? (process.env.NODE_ENV ?? 'development') !== 'test'
-    : process.env.IMGLY_BG_ENABLED !== 'false';
 
 /** Bundled WASM/ONNX live here unless you override IMGLY_BG_PUBLIC_PATH and self-host assets. */
 const defaultImglyAssetsDir = path.join(
@@ -112,7 +108,6 @@ export const config = {
   uploadDir: process.env.UPLOAD_DIR ?? 'uploads',
   corsOrigin: process.env.CORS_ORIGIN ?? '*',
   imglyBackgroundRemoval: {
-    enabled: imglyBgEnabled,
     publicPath: process.env.IMGLY_BG_PUBLIC_PATH ?? defaultImglyAssetsDir,
     model: imglyBgModel,
     maxConcurrency: Math.max(1, parseInt(process.env.IMGLY_BG_MAX_CONCURRENCY ?? '2', 10)),
@@ -185,14 +180,6 @@ export const config = {
   aiQuotaFailClosed: process.env.AI_QUOTA_FAIL_CLOSED === undefined
     ? (process.env.NODE_ENV ?? 'development') !== 'development'
     : process.env.AI_QUOTA_FAIL_CLOSED === 'true',
-  /** @deprecated Use aiQuota.dailyPointLimit — kept for legacy env compatibility */
-  aiDailyLimits: {
-    generate: Math.max(1, parseInt(process.env.AI_DAILY_GENERATE_LIMIT ?? '50', 10)),
-    gridSplit: Math.max(1, parseInt(process.env.AI_DAILY_GRID_SPLIT_LIMIT ?? '100', 10)),
-    backgroundRemove: Math.max(1, parseInt(process.env.AI_DAILY_BACKGROUND_REMOVE_LIMIT ?? '100', 10)),
-    videoStickerPack: Math.max(1, parseInt(process.env.AI_DAILY_VIDEO_PACK_LIMIT ?? '10', 10)),
-    improve: Math.max(1, parseInt(process.env.AI_DAILY_IMPROVE_LIMIT ?? '50', 10)),
-  },
   aiQuota: {
     dailyPointLimit: Math.max(1, parseInt(process.env.AI_DAILY_POINT_LIMIT ?? '100', 10)),
     reservationTtlSeconds: Math.max(60, parseInt(process.env.AI_RESERVATION_TTL_SECONDS ?? '3600', 10)),

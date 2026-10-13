@@ -4,7 +4,7 @@ import sharp from 'sharp';
 import { removeBackgroundFromAnimatedGif } from '../services/animated-gif-background-removal.service';
 import { ImageService } from '../services/image.service';
 import { StorageService } from '../services/storage.service';
-import { removeBackgroundWithFallback } from '../services/background-removal.service';
+import { removeBackground } from '../services/background-removal.service';
 import { ProcessingHistoryService } from '../services/processing-history.service';
 import { classifyRasterInput } from '../utils/image-input-classifier';
 import { buildSuccessResponse } from '../utils/response-builder';
@@ -103,7 +103,7 @@ export class BackgroundController {
       let processedBuffer: Buffer;
       let method: string;
       try {
-        const result = await removeBackgroundWithFallback(imageBuffer);
+        const result = await removeBackground(imageBuffer);
         processedBuffer = result.processedBuffer;
         method = result.method;
       } catch (error) {

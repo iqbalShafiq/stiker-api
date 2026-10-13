@@ -211,13 +211,6 @@ export class EmailNotVerifiedError extends UnauthorizedError {
   }
 }
 
-/** @deprecated Prefer UseOauthOrSetPasswordError */
-export class UseGoogleSignInError extends UnauthorizedError {
-  constructor(message: string = 'This account uses Google Sign-In. Continue with Google.') {
-    super(message, 'USE_GOOGLE_SIGN_IN');
-  }
-}
-
 export class UseOauthOrSetPasswordError extends UnauthorizedError {
   constructor(
     message: string = 'This account uses social sign-in. Continue with that provider, or set a password via email.',

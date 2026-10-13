@@ -5,7 +5,7 @@ import { ImageGenerationService } from './image-generation.service';
 import { VisionAnalysisService } from './vision-analysis.service';
 import { ImageService } from './image.service';
 import { IStorageProvider } from '../storage/interface';
-import { removeBackgroundWithFallback } from './background-removal.service';
+import { removeBackground } from './background-removal.service';
 import { textOutsideForegroundToAsset } from '../utils/text-asset-decoration';
 
 export interface GridSplitPipelineOptions {
@@ -123,7 +123,7 @@ export class GridSplitService {
       }
 
       try {
-        const result = await removeBackgroundWithFallback(buffer);
+        const result = await removeBackground(buffer);
         processedCellBuffer = result.processedBuffer;
         methodsUsed.add(result.method);
         backgroundRemovedCellCount += 1;

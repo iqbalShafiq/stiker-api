@@ -55,32 +55,6 @@ export function errorHandler(
     }
   }
 
-  // Fallback untuk error lama yang masih pakai string prefix
-  if (err.message.startsWith('INVALID_FILE_TYPE')) {
-    res.status(415).json(buildErrorResponse('INVALID_FILE_TYPE', err.message));
-    return;
-  }
-
-  if (err.message.startsWith('VALIDATION_ERROR')) {
-    res.status(400).json(buildErrorResponse('VALIDATION_ERROR', err.message));
-    return;
-  }
-
-  if (err.message.startsWith('AI_GENERATION_FAILED')) {
-    res.status(502).json(buildErrorResponse('AI_GENERATION_FAILED', err.message));
-    return;
-  }
-
-  if (err.message.startsWith('GRID_DETECTION_FAILED')) {
-    res.status(422).json(buildErrorResponse('GRID_DETECTION_FAILED', err.message));
-    return;
-  }
-
-  if (err.message.startsWith('BACKGROUND_REMOVAL_FAILED')) {
-    res.status(500).json(buildErrorResponse('BACKGROUND_REMOVAL_FAILED', err.message));
-    return;
-  }
-
   res.status(500).json(
     buildErrorResponse('INTERNAL_ERROR', 'An unexpected error occurred')
   );
