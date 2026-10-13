@@ -10,22 +10,23 @@ import {
 } from '../errors';
 import type { GridBoundary, GridDetectionResult } from '../types';
 import {
+  improvementPlanOutputSchema,
   normalizeImprovementPromptPlan,
   type ImageGenerationInput,
   type ImprovementPromptPlan,
 } from '../utils/improvement';
+import { gridDetectionOutputSchema } from '../utils/grid-detection';
+import {
+  cellTextAnalysisOutputSchema,
+  type CellTextAnalysisResult,
+} from '../utils/text-asset-decoration';
+import { generateStructuredCompletion } from '../ai/completion';
 
-interface ChatMessage {
-  role: 'system' | 'user' | 'assistant';
-  content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
-}
-
-interface ChatCompletionOptions {
-  model?: string;
-  messages: ChatMessage[];
-  responseFormat?: { type: 'json_object' | 'text' };
-  timeoutMs?: number;
-}
+export type {
+  TextStyleMetadata,
+  OutsideForegroundTextDetection,
+  CellTextAnalysisResult,
+} from '../utils/text-asset-decoration';
 
 interface GenerationResult {
   imageBuffer: Buffer;
@@ -51,22 +52,6 @@ interface ProviderErrorResponse {
   };
 }
 
-export interface TextStyleMetadata {
-  fontFamily: string;
-  color: string;
-  weight: string;
-}
-
-export interface OutsideForegroundTextDetection {
-  text: string;
-  style: TextStyleMetadata;
-}
-
-export interface CellTextAnalysisResult {
-  hasTextOutsideForeground: boolean;
-  textOutsideForeground: OutsideForegroundTextDetection[];
-}
-
 export class OpenRouterService {
   private client: OpenAI;
   private defaultTimeout: number;
@@ -82,75 +67,6 @@ export class OpenRouterService {
       timeout: timeoutMs,
     });
     this.defaultTimeout = timeoutMs;
-  }
-
-  /**
-   * Generic chat completion - reusable untuk semua endpoint
-   */
-  async chatCompletion<T = string>(options: ChatCompletionOptions): Promise<{
-    content: T;
-    generationId: string;
-    metadata: {
-      tokensPrompt?: number;
-      tokensCompletion?: number;
-      cost?: number;
-      latencyMs?: number;
-    };
-  }> {
-    const startTime = Date.now();
-    const timeoutMs = options.timeoutMs ?? this.defaultTimeout;
-
-    try {
-      const response = await Promise.race([
-        this.client.chat.completions.create({
-          model: options.model ?? config.models.imageGeneration,
-          messages: options.messages as unknown as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
-          response_format: options.responseFormat,
-        }),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new TimeoutError()), timeoutMs)
-        ),
-      ]);
-
-      const latencyMs = Date.now() - startTime;
-      const generationId = response.id;
-      const message = response.choices[0]?.message;
-
-      if (!message) {
-        throw new AIGenerationError('No message in response');
-      }
-
-      let content: T;
-      if (typeof message.content === 'string') {
-        content = message.content as T;
-      } else if (message.content) {
-        content = JSON.stringify(message.content) as T;
-      } else {
-        content = '' as T;
-      }
-
-      const metadata = {
-        tokensPrompt: response.usage?.prompt_tokens,
-        tokensCompletion: response.usage?.completion_tokens,
-        cost: this.extractCost(response),
-        latencyMs,
-      };
-
-      return { content, generationId, metadata };
-    } catch (error) {
-      if (error instanceof TimeoutError) {
-        throw error;
-      }
-      if (error instanceof AIGenerationError) {
-        throw error;
-      }
-      if (this.isProviderError(error)) {
-        throw new ProviderError(this.extractProviderErrorMessage(error));
-      }
-      throw new AIGenerationError(
-        error instanceof Error ? error.message : 'Unknown error'
-      );
-    }
   }
 
   /**
@@ -250,7 +166,6 @@ export class OpenRouterService {
     mode: 'single' | 'grid'
   ): Promise<{
     plan: ImprovementPromptPlan;
-    generationId: string;
     metadata: {
       tokensPrompt?: number;
       tokensCompletion?: number;
@@ -258,50 +173,29 @@ export class OpenRouterService {
       latencyMs?: number;
     };
   }> {
-    const content: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
-      {
-        type: 'text',
-        text:
-          mode === 'single'
-            ? this.buildSingleImprovementAgentPrompt()
-            : this.buildGridImprovementAgentPrompt(images.length),
-      },
-    ];
-
-    for (const image of images) {
-      const mime =
-        image.mimeType && /^image\/[a-z0-9.+-]+$/i.test(image.mimeType)
-          ? image.mimeType
-          : 'image/png';
-      content.push({
-        type: 'image_url',
-        image_url: { url: `data:${mime};base64,${image.buffer.toString('base64')}` },
-      });
-    }
-
-    const { content: rawContent, generationId, metadata } = await this.chatCompletion({
-      model: config.models.improvementAgent,
-      messages: [
-        {
-          role: 'system',
-          content:
-            'You are a senior sticker art director and prompt engineer. Return ONLY JSON. Do not include markdown.',
-        },
-        {
-          role: 'user',
-          content,
-        },
-      ],
-      responseFormat: { type: 'json_object' },
+    const { output, usage, cost, latencyMs } = await generateStructuredCompletion({
+      role: 'improvement',
+      instructions:
+        'You are a senior sticker art director and prompt engineer. Return ONLY JSON. Do not include markdown.',
+      prompt:
+        mode === 'single'
+          ? this.buildSingleImprovementAgentPrompt()
+          : this.buildGridImprovementAgentPrompt(images.length),
+      images,
+      outputSchema: improvementPlanOutputSchema,
       timeoutMs: 45000,
     });
 
     return {
-      plan: normalizeImprovementPromptPlan(rawContent, {
+      plan: normalizeImprovementPromptPlan(output, {
         allowTextAssetDecoration: mode === 'single',
       }),
-      generationId,
-      metadata,
+      metadata: {
+        tokensPrompt: usage.inputTokens,
+        tokensCompletion: usage.outputTokens,
+        cost,
+        latencyMs,
+      },
     };
   }
 
@@ -382,26 +276,10 @@ Task:
       .toBuffer();
   }
 
-  async analyzeCellTextOutsideForeground(imageBuffer: Buffer): Promise<CellTextAnalysisResult> {
-    const imageDataUrl = `data:image/png;base64,${imageBuffer.toString('base64')}`;
-    const baseMessages = [
-      {
-        role: 'system' as const,
-        content:
-          'You are a visual text extraction assistant for sticker cells. Return ONLY JSON. Do not include markdown.',
-      },
-    ];
+  private static readonly CELL_TEXT_INSTRUCTIONS =
+    'You are a visual text extraction assistant for sticker cells. Return ONLY JSON. Do not include markdown.';
 
-    const { content: primaryContent } = await this.chatCompletion({
-      model: config.models.agent,
-      messages: [
-        ...baseMessages,
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: `Analyze this single sticker-grid cell image.
+  private static readonly CELL_TEXT_PRIMARY_PROMPT = `Analyze this single sticker-grid cell image.
 
 Task:
 - Detect every caption/word that is visually outside the main foreground subject (usually the person/object cutout).
@@ -431,34 +309,9 @@ Style metadata:
 Rules:
 - Prioritize recall for outside-foreground captions.
 - Keep textOutsideForeground empty only when truly no outside text exists.
-- No additional keys.`,
-            },
-            {
-              type: 'image_url',
-              image_url: { url: imageDataUrl },
-            },
-          ],
-        },
-      ],
-      responseFormat: { type: 'json_object' },
-      timeoutMs: 20000,
-    });
+- No additional keys.`;
 
-    const primaryResult = this.normalizeCellTextAnalysis(primaryContent);
-    if (primaryResult.textOutsideForeground.length > 0) {
-      return primaryResult;
-    }
-
-    const { content: fallbackContent } = await this.chatCompletion({
-      model: config.models.agent,
-      messages: [
-        ...baseMessages,
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: `Second pass OCR check for this sticker cell.
+  private static readonly CELL_TEXT_FALLBACK_PROMPT = `Second pass OCR check for this sticker cell.
 
 If there is ANY readable caption text around (not covering the face/body main subject), return it.
 If no such text exists, return an empty list.
@@ -476,54 +329,58 @@ Return exact JSON only:
       }
     }
   ]
-}`,
-            },
-            {
-              type: 'image_url',
-              image_url: { url: imageDataUrl },
-            },
-          ],
-        },
-      ],
-      responseFormat: { type: 'json_object' },
+}`;
+
+  async analyzeCellTextOutsideForeground(imageBuffer: Buffer): Promise<CellTextAnalysisResult> {
+    const images = [{ buffer: imageBuffer, mimeType: 'image/png' }];
+
+    const primary = await generateStructuredCompletion({
+      role: 'vision',
+      instructions: OpenRouterService.CELL_TEXT_INSTRUCTIONS,
+      prompt: OpenRouterService.CELL_TEXT_PRIMARY_PROMPT,
+      images,
+      outputSchema: cellTextAnalysisOutputSchema,
       timeoutMs: 20000,
     });
 
-    return this.normalizeCellTextAnalysis(fallbackContent);
+    const primaryResult = this.reconcileCellTextAnalysis(primary.output);
+    if (primaryResult.textOutsideForeground.length > 0) {
+      return primaryResult;
+    }
+
+    const fallback = await generateStructuredCompletion({
+      role: 'vision',
+      instructions: OpenRouterService.CELL_TEXT_INSTRUCTIONS,
+      prompt: OpenRouterService.CELL_TEXT_FALLBACK_PROMPT,
+      images,
+      outputSchema: cellTextAnalysisOutputSchema,
+      timeoutMs: 20000,
+    });
+
+    return this.reconcileCellTextAnalysis(fallback.output);
   }
 
-  private normalizeCellTextAnalysis(content: string): CellTextAnalysisResult {
-    const parsed = JSON.parse(content) as Partial<CellTextAnalysisResult>;
-    const normalizedItems = Array.isArray(parsed.textOutsideForeground)
-      ? parsed.textOutsideForeground
-          .map((item) => {
-            const text = typeof item?.text === 'string' ? item.text.trim() : '';
-            const style = item?.style;
-            const fontFamily =
-              typeof style?.fontFamily === 'string' ? style.fontFamily.trim() : '';
-            const color = typeof style?.color === 'string' ? style.color.trim() : '';
-            const weight = typeof style?.weight === 'string' ? style.weight.trim() : '';
-            if (!text || !fontFamily || !color || !weight) {
-              return null;
-            }
-            return {
-              text,
-              style: {
-                fontFamily,
-                color,
-                weight,
-              },
-            } satisfies OutsideForegroundTextDetection;
-          })
-          .filter((item): item is OutsideForegroundTextDetection => Boolean(item))
-      : [];
+  private reconcileCellTextAnalysis(output: CellTextAnalysisResult): CellTextAnalysisResult {
+    const items = output.textOutsideForeground
+      .map((item) => ({
+        text: item.text.trim(),
+        style: {
+          fontFamily: item.style.fontFamily.trim(),
+          color: item.style.color.trim(),
+          weight: item.style.weight.trim(),
+        },
+      }))
+      .filter(
+        (item) =>
+          Boolean(item.text) &&
+          Boolean(item.style.fontFamily) &&
+          Boolean(item.style.color) &&
+          Boolean(item.style.weight)
+      );
 
     return {
-      hasTextOutsideForeground:
-        typeof parsed.hasTextOutsideForeground === 'boolean'
-          ? parsed.hasTextOutsideForeground || normalizedItems.length > 0
-          : normalizedItems.length > 0,
-      textOutsideForeground: normalizedItems,
+      hasTextOutsideForeground: output.hasTextOutsideForeground || items.length > 0,
+      textOutsideForeground: items,
     };
   }
 
@@ -546,20 +403,11 @@ Return exact JSON only:
 
     // Coba AI detection dulu
     try {
-      const { content } = await this.chatCompletion({
-        model: config.models.agent,
-        messages: [
-          {
-            role: 'system',
-            content:
-              'You are an image analysis assistant. Analyze grid images and identify cell boundaries. You must detect ALL cells including those with stickers/images and text overlays. Account for padding and gaps between cells. Return ONLY a JSON object.',
-          },
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: `Analyze this grid image carefully. The image contains a grid layout with multiple cells arranged in rows and columns.
+      const { output } = await generateStructuredCompletion({
+        role: 'vision',
+        instructions:
+          'You are an image analysis assistant. Analyze grid images and identify cell boundaries. You must detect ALL cells including those with stickers/images and text overlays. Account for padding and gaps between cells. Return ONLY a JSON object.',
+        prompt: `Analyze this grid image carefully. The image contains a grid layout with multiple cells arranged in rows and columns.
 
 IMPORTANT INSTRUCTIONS:
 1. Count the total number of rows and columns
@@ -578,30 +426,22 @@ Return a JSON object with this exact format:
 }
 
 Make sure boundaries cover the ENTIRE image without gaps or overlaps.`,
-              },
-              {
-                type: 'image_url',
-                image_url: { url: `data:image/png;base64,${imageBase64}` },
-              },
-            ] as unknown as OpenAI.Chat.Completions.ChatCompletionContentPart[],
-          },
-        ],
-        responseFormat: { type: 'json_object' },
+        images: [{ buffer: Buffer.from(imageBase64, 'base64'), mimeType: 'image/png' }],
+        outputSchema: gridDetectionOutputSchema,
         timeoutMs: 30000,
       });
 
-      const parsed = JSON.parse(content) as GridDetectionResult;
-      this.validateBoundaries(parsed.boundaries);
+      this.validateBoundaries(output.boundaries);
 
       // Validasi: cek apakah boundaries cover gambar dengan baik
       if (imageWidth && imageHeight) {
-        const isValid = this.validateGridCoverage(parsed.boundaries, imageWidth, imageHeight);
+        const isValid = this.validateGridCoverage(output.boundaries, imageWidth, imageHeight);
         if (!isValid) {
           throw new Error('Grid coverage invalid');
         }
       }
 
-      return parsed;
+      return output;
     } catch (aiError) {
       logger.warn({ error: aiError }, 'AI grid detection failed, falling back to auto-detection');
 

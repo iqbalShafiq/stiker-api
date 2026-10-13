@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type {
   TextAssetDecoration,
   TextDecorationStyle,
@@ -9,6 +10,31 @@ const DEFAULT_STYLE: TextDecorationStyle = {
   color: '#FFFFFF',
   weight: 'regular',
 };
+
+/**
+ * Model-facing schema for per-cell caption detection. String fields allow empty
+ * values on purpose: the service drops incomplete detections (recall-first),
+ * matching the previous tolerant parsing behavior.
+ */
+export const cellTextAnalysisOutputSchema = z.object({
+  hasTextOutsideForeground: z.boolean(),
+  textOutsideForeground: z
+    .array(
+      z.object({
+        text: z.string().trim().max(120),
+        style: z.object({
+          fontFamily: z.string().trim().max(80),
+          color: z.string().trim().max(40),
+          weight: z.string().trim().max(40),
+        }),
+      })
+    )
+    .max(16),
+});
+
+export type CellTextAnalysisResult = z.infer<typeof cellTextAnalysisOutputSchema>;
+export type OutsideForegroundTextDetection = CellTextAnalysisResult['textOutsideForeground'][number];
+export type TextStyleMetadata = OutsideForegroundTextDetection['style'];
 
 export function buildEmptyTextAssetDecoration(
   source: TextAssetDecoration['source'] = 'detected',

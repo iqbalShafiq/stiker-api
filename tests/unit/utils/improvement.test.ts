@@ -54,4 +54,32 @@ describe('improvement utils', () => {
       improvementPrompt: 'Improve as a 4x4 grid.',
     });
   });
+
+  it('normalizes an object plan from structured output', () => {
+    const result = normalizeImprovementPromptPlan(
+      {
+        improvementPrompt: 'Polish the sticker.',
+        textAssetDecoration: {
+          text: 'Hi',
+          style: { fontFamily: 'serif', color: '#000000', weight: 'bold' },
+        },
+      },
+      { allowTextAssetDecoration: true }
+    );
+
+    expect(result).toEqual({
+      improvementPrompt: 'Polish the sticker.',
+      textAssetDecoration: {
+        text: 'Hi',
+        style: { fontFamily: 'serif', color: '#000000', weight: 'bold' },
+        source: 'detected',
+      },
+    });
+  });
+
+  it('throws when the structured output has no improvementPrompt', () => {
+    expect(() => normalizeImprovementPromptPlan({}, { allowTextAssetDecoration: false })).toThrow(
+      'Improvement agent did not return improvementPrompt'
+    );
+  });
 });

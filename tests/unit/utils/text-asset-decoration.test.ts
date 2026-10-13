@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   buildEmptyTextAssetDecoration,
   buildTextAssetDecoration,
+  cellTextAnalysisOutputSchema,
   textOutsideForegroundToAsset,
 } from '../../../src/utils/text-asset-decoration';
 
@@ -55,5 +56,27 @@ describe('text asset decoration utils', () => {
       style: { fontFamily: 'serif', color: '#000000', weight: 'medium' },
       source: 'detected',
     });
+  });
+
+  it('validates cell text analysis output and preserves detections', () => {
+    const result = cellTextAnalysisOutputSchema.safeParse({
+      hasTextOutsideForeground: false,
+      textOutsideForeground: [
+        { text: '  Hello  ', style: { fontFamily: 'serif', color: '#111111', weight: 'bold' } },
+      ],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.textOutsideForeground[0].text).toBe('Hello');
+    }
+  });
+
+  it('rejects malformed detections', () => {
+    expect(
+      cellTextAnalysisOutputSchema.safeParse({
+        hasTextOutsideForeground: 'yes',
+        textOutsideForeground: [],
+      }).success
+    ).toBe(false);
   });
 });

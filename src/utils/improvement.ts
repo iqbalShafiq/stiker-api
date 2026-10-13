@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { TextAssetDecoration } from '../types';
 import { buildTextAssetDecoration } from './text-asset-decoration';
 
@@ -22,11 +23,32 @@ export function chunkImageInputs<T>(items: T[], chunkSize = IMPROVEMENT_GRID_MAX
   return chunks;
 }
 
+/** Model-facing schema for the improvement prompt planner (validated by Anvia before returning). */
+export const improvementPlanOutputSchema = z.object({
+  improvementPrompt: z.string().trim().min(1).max(4000),
+  textAssetDecoration: z
+    .object({
+      text: z.string().trim().min(1).max(64),
+      style: z.object({
+        fontFamily: z.string().trim().min(1).max(80),
+        color: z.string().trim().min(1).max(40),
+        weight: z.string().trim().min(1).max(40),
+      }),
+    })
+    .optional(),
+});
+
 export function normalizeImprovementPromptPlan(
-  content: string,
+  content: unknown,
   options: { allowTextAssetDecoration: boolean }
 ): ImprovementPromptPlan {
-  const parsed = parseJsonObject(content);
+  const parsed =
+    typeof content === 'string'
+      ? parseJsonObject(content)
+      : isRecord(content)
+        ? content
+        : {};
+
   const prompt =
     typeof parsed.improvementPrompt === 'string'
       ? parsed.improvementPrompt.trim()
@@ -54,4 +76,8 @@ function parseJsonObject(content: string): Record<string, unknown> {
     .trim();
 
   return JSON.parse(withoutFence) as Record<string, unknown>;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }
