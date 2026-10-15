@@ -67,6 +67,12 @@ jobs:
       - name: Run type check
         run: npm run typecheck
 
+      - name: Build
+        run: npm run build
+
+      - name: Verify compiled ESM shim
+        run: npm run check:dist
+
       - name: Run tests
         run: npx vitest run --reporter=verbose
         env:
