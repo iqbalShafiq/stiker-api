@@ -124,4 +124,17 @@ describe('images-api-model', () => {
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it('surfaces the HTTP status when the gateway returns a non-JSON error page', async () => {
+    fetchMock.mockResolvedValueOnce(new Response('<html>Bad Gateway</html>', { status: 502 }));
+
+    const model = getImagesApiModel('x/y');
+
+    await expect(
+      model.imageGeneration({ prompt: 'p', width: 1, height: 1 })
+    ).rejects.toMatchObject({
+      code: 'AI_GENERATION_FAILED',
+      message: expect.stringContaining('502'),
+    });
+  });
 });

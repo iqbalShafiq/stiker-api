@@ -175,6 +175,8 @@ async function main() {
     });
   }
 
+  // Forward guard: if the AiModelRole enum ever grows beyond the seeded
+  // catalog, stale rows are removed here.
   await prisma.aiModel.deleteMany({
     where: { role: { notIn: AI_MODEL_SEED.map((model) => model.role) } },
   });

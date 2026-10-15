@@ -1,6 +1,6 @@
 import sharp from 'sharp';
 import type { ImageGenerationResult } from '@anvia/core';
-import { AIGenerationError, ProviderError, TimeoutError } from '../errors';
+import { AIGenerationError, AppError } from '../errors';
 import { anviaCore } from '../ai/core';
 import { loadAiModel } from '../ai/models/catalog';
 import {
@@ -64,11 +64,9 @@ export class ImageGenerationService {
       });
       return this.toGenerationResult(modelId, result, startedAt);
     } catch (error) {
-      if (
-        error instanceof TimeoutError ||
-        error instanceof AIGenerationError ||
-        error instanceof ProviderError
-      ) {
+      // AppErrors (ValidationError config guard, MissingAiModelError, provider
+      // taxonomy) keep their own status and message.
+      if (error instanceof AppError) {
         throw error;
       }
       throw new AIGenerationError(

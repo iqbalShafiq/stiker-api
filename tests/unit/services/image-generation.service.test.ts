@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ImageGenerationService } from '../../../src/services/image-generation.service';
+import { AiNotConfiguredError } from '../../../src/errors';
 
 const generateImageMock = vi.hoisted(() => vi.fn());
 const loadAiModelMock = vi.hoisted(() =>
@@ -76,5 +77,14 @@ describe('ImageGenerationService', () => {
       service.generateImageWithInputs('prompt', [{ base64: 'abc', mimeType: 'image/png' }])
     ).rejects.toMatchObject({ code: 'AI_GENERATION_FAILED' });
     expect(generateImageMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps AppError taxonomy instead of wrapping it (config guard, missing catalog row)', async () => {
+    const notConfigured = new AiNotConfiguredError('AGENT_API_KEY is required for AI features');
+    generateImageMock.mockRejectedValueOnce(notConfigured);
+
+    const service = new ImageGenerationService();
+
+    await expect(service.generateImageWithInputs('prompt')).rejects.toBe(notConfigured);
   });
 });

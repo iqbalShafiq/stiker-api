@@ -1,10 +1,12 @@
 import { z } from 'zod';
 import type { TextAssetDecoration } from '../types';
 import { buildTextAssetDecoration } from './text-asset-decoration';
+import { IMAGE_API_MAX_INPUT_REFERENCES } from '../ai/provider/images-api-model';
 
 export const IMPROVEMENT_GRID_LAYOUT = '4x4';
-// Seedream accepts at most 14 input references per request.
-export const IMPROVEMENT_GRID_MAX_CELLS = 14;
+// Single source of the cap: the Images API accepts at most this many input
+// references, so a grid sheet can hold no more cells than that.
+export const IMPROVEMENT_GRID_MAX_CELLS = IMAGE_API_MAX_INPUT_REFERENCES;
 
 export interface ImageGenerationInput {
   buffer: Buffer;

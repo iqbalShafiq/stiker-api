@@ -125,7 +125,14 @@ Protected AI routes accept optional header `X-AI-Reservation-Id` from the app af
 Redis is required for real quota enforcement. `docker-compose.yml` uses profiles: `dev` runs the
 api with Postgres and Redis, `test` starts the isolated stack (Postgres on `localhost:5433`,
 Redis on `localhost:6380`), and `prod` runs the published image with migrations, seeding, and
-nginx. Use `npm run test:up && npm run test:migrate` before integration tests.
+nginx. Before running tests use `npm run test:up && npm run test:migrate` — `test:migrate`
+applies migrations **and seeds** the test database (roles, billing products, AI model catalog),
+which the suite requires. Give the test stack exclusive use; concurrent runs or an external
+`test:down -v` will produce phantom failures.
+
+Quality gates: `npm test` (full suite), `npm run lint`, `npm run typecheck`, and
+`npm run build && npm run check:dist` — the last one verifies the compiled CommonJS build can
+actually load the ESM-only `@anvia/*` packages through the shim.
 
 > Deployment posture: in the `prod` profile Postgres and Redis bind to `127.0.0.1` only, and the
 > api is exposed through nginx on host ports `8080`/`8443` (see `nginx/conf.d`); adjust the port

@@ -11,12 +11,13 @@
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
     "typecheck": "tsc --noEmit",
-    "test": "VITE_CJS_IGNORE_WARNING=true vitest run",
-    "test:watch": "VITE_CJS_IGNORE_WARNING=true vitest",
-    "test:coverage": "VITE_CJS_IGNORE_WARNING=true vitest run --coverage",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "test:up": "docker compose --profile test up -d --wait postgres-test redis-test",
     "test:migrate": "tsx scripts/test-migrate.ts",
-    "test:down": "docker compose --profile test down -v"
+    "test:down": "docker compose --profile test down -v",
+    "check:dist": "node scripts/check-dist-esm.cjs"
   },
   "keywords": [
     "express",
@@ -78,9 +79,6 @@
     "tsx": "^4.11.0",
     "typescript": "^5.4.5",
     "vitest": "^1.6.0"
-  },
-  "prisma": {
-    "seed": "node prisma/seed.js"
   },
   "engines": {
     "node": ">=20.0.0"

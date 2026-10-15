@@ -131,10 +131,18 @@ export function getImagesApiModel(modelId: string): ImageGenerationModel<unknown
           body: JSON.stringify(body),
           signal: options?.abortSignal,
         });
-        const payload = (await response.json()) as {
+        // Gateways return HTML error pages on bad days; never let a parse
+        // failure hide the HTTP status behind a JSON syntax error.
+        const responseText = await response.text();
+        let payload: {
           data?: Array<{ b64_json?: string; media_type?: string }>;
           error?: { message?: string; code?: number };
-        };
+        } = {};
+        try {
+          payload = JSON.parse(responseText) as typeof payload;
+        } catch {
+          payload = {};
+        }
         if (!response.ok) {
           throw new AIGenerationError(
             payload.error?.message ?? `Images API failed with ${response.status}`
@@ -142,7 +150,9 @@ export function getImagesApiModel(modelId: string): ImageGenerationModel<unknown
         }
         const first = payload.data?.[0];
         if (!first?.b64_json) {
-          throw new AIGenerationError('Images API returned no image data');
+          throw new AIGenerationError(
+            `Images API returned no image data (status ${response.status})`
+          );
         }
         const image: GeneratedImage = {
           data: Buffer.from(first.b64_json, 'base64'),

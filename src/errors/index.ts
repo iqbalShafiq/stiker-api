@@ -47,6 +47,17 @@ export class AIGenerationError extends AppError {
   }
 }
 
+/**
+ * Server-side AI configuration problem (missing gateway key, etc). Kept
+ * distinct from request ValidationError so it can never be confused with
+ * invalid client input, and kept consistent across every AI call path.
+ */
+export class AiNotConfiguredError extends AppError {
+  constructor(message: string = 'AGENT_API_KEY is required for AI features') {
+    super(message, 500, 'AI_NOT_CONFIGURED');
+  }
+}
+
 export class GridDetectionError extends AppError {
   constructor(message: string = 'Grid detection failed') {
     super(message, 422, 'GRID_DETECTION_FAILED');

@@ -1,4 +1,4 @@
-import { AIGenerationError } from '../errors';
+import { AIGenerationError, AppError, ValidationError } from '../errors';
 import { loadAiModel } from '../ai/models/catalog';
 import {
   VIDEO_STICKER_PACK_INPUT_LAYOUT,
@@ -42,6 +42,9 @@ export class VideoStickerPackAgentService {
     try {
       const agentRow = await loadAiModel('agent');
       const agent = await createVideoStickerPackAgent(input);
+      // No per-run timeout is applied deliberately: agent runs are long (tools +
+      // reasoning) and are bounded by the server request timeout and the agent's
+      // own retry budget. Do not "fix" this without a product decision.
       const outcome = await agent.generate({
         messages: [buildVideoStickerPackAgentUserMessage(input)],
         trace: {
@@ -88,7 +91,10 @@ export class VideoStickerPackAgentService {
         },
       };
     } catch (error) {
-      if (error instanceof AIGenerationError) {
+      // Infrastructure/config AppErrors (missing catalog row, missing gateway
+      // key, provider taxonomy) keep their own status codes. ValidationError
+      // here means the model returned an invalid plan — that is an AI failure.
+      if (error instanceof AppError && !(error instanceof ValidationError)) {
         throw error;
       }
 

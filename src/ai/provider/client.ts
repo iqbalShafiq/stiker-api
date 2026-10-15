@@ -1,6 +1,6 @@
 import type { CompletionModel, CompletionModelControls } from '@anvia/core';
 import { config } from '../../config';
-import { ValidationError } from '../../errors';
+import { AiNotConfiguredError } from '../../errors';
 import { importEsm } from '../esm';
 
 type AnviaOpenAIModule = typeof import('@anvia/openai');
@@ -44,7 +44,7 @@ const modelCache = new Map<string, CompletionModel>();
 /** Guard at the AI boundary: a missing gateway key is a configuration error, reported clearly. */
 export function requireAgentCredentials(): { apiKey: string; baseUrl: string } {
   if (!config.agent.apiKey) {
-    throw new ValidationError('AGENT_API_KEY is required for AI features');
+    throw new AiNotConfiguredError('AGENT_API_KEY is required for AI features');
   }
   return { apiKey: config.agent.apiKey, baseUrl: config.agent.baseUrl };
 }

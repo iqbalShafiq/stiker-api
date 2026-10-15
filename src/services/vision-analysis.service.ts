@@ -1,5 +1,5 @@
 import logger from '../utils/logger';
-import { GridDetectionError } from '../errors';
+import { AppError, GridDetectionError } from '../errors';
 import type { GridBoundary, GridDetectionResult } from '../types';
 import { gridDetectionOutputSchema } from '../utils/grid-detection';
 import {
@@ -14,6 +14,22 @@ import {
   type ImprovementPromptPlan,
 } from '../utils/improvement';
 import { generateStructuredCompletion } from '../ai/completion';
+
+/** Keeps an AI-suggested boundary inside the image so image extraction stays valid. */
+function clampBoundary(
+  boundary: GridBoundary,
+  imageWidth: number,
+  imageHeight: number
+): GridBoundary {
+  const x = Math.max(0, Math.min(boundary.x, imageWidth - 1));
+  const y = Math.max(0, Math.min(boundary.y, imageHeight - 1));
+  return {
+    x,
+    y,
+    width: Math.max(1, Math.min(boundary.width, imageWidth - x)),
+    height: Math.max(1, Math.min(boundary.height, imageHeight - y)),
+  };
+}
 
 export class VisionAnalysisService {
   async buildImprovementPrompt(
@@ -266,10 +282,20 @@ Make sure boundaries cover the ENTIRE image without gaps or overlaps.`,
         if (!isValid) {
           throw new Error('Grid coverage invalid');
         }
+        // Coverage tolerates a small overflow; clamp so sharp never receives
+        // an extract area outside the image.
+        output.boundaries = output.boundaries.map((boundary) =>
+          clampBoundary(boundary, imageWidth, imageHeight)
+        );
       }
 
       return output;
     } catch (aiError) {
+      // Real provider failures (timeouts, provider errors, missing catalog rows)
+      // keep their own status; only quality/validation problems become 422.
+      if (aiError instanceof AppError) {
+        throw aiError;
+      }
       logger.warn({ error: aiError }, 'AI grid detection failed');
       throw new GridDetectionError(
         aiError instanceof Error ? aiError.message : 'Grid detection failed'

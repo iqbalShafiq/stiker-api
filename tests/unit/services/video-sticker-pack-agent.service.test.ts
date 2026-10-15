@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { VideoStickerPackAgentService } from '../../../src/services/video-sticker-pack-agent.service';
 import type { VideoStickerCandidate } from '../../../src/utils/video-sticker-pack';
+import { AiNotConfiguredError } from '../../../src/errors';
 
 const generateMock = vi.hoisted(() => vi.fn());
 const createAgentMock = vi.hoisted(() => vi.fn());
@@ -140,6 +141,19 @@ describe('VideoStickerPackAgentService', () => {
     await expect(service.generatePlan(baseInput)).rejects.toMatchObject({
       code: 'AI_GENERATION_FAILED',
       statusCode: 502,
+    });
+  });
+
+  it('keeps AppError status codes from the agent boundary instead of flattening them to 502', async () => {
+    createAgentMock.mockRejectedValueOnce(
+      new AiNotConfiguredError('AGENT_API_KEY is required for AI features')
+    );
+
+    const service = new VideoStickerPackAgentService();
+
+    await expect(service.generatePlan(baseInput)).rejects.toMatchObject({
+      code: 'AI_NOT_CONFIGURED',
+      statusCode: 500,
     });
   });
 

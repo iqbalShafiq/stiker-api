@@ -4,6 +4,7 @@ import {
   improvementGridPlanOutputSchema,
   improvementPlanOutputSchema,
 } from '../../../src/utils/improvement';
+import { TimeoutError } from '../../../src/errors';
 
 const generateStructuredCompletionMock = vi.hoisted(() => vi.fn());
 
@@ -43,6 +44,35 @@ describe('VisionAnalysisService', () => {
       expect(result.gridLayout).toBe('2x2');
       expect(result.boundaries).toHaveLength(4);
       expect(generateStructuredCompletionMock).not.toHaveBeenCalled();
+    });
+
+    it('clamps boundaries that overflow the image before returning them', async () => {
+      generateStructuredCompletionMock.mockResolvedValueOnce({
+        output: {
+          gridLayout: '1x2',
+          boundaries: [
+            { x: 0, y: 0, width: 512, height: 512 },
+            { x: 507, y: 0, width: 10, height: 512 },
+          ],
+        },
+      });
+
+      const result = await service.detectGridBoundaries(
+        Buffer.from('grid').toString('base64'),
+        512,
+        512
+      );
+
+      expect(result.boundaries[1]).toEqual({ x: 507, y: 0, width: 5, height: 512 });
+    });
+
+    it('keeps provider taxonomy errors instead of masking them as 422', async () => {
+      const timeout = new TimeoutError('AI call timed out');
+      generateStructuredCompletionMock.mockRejectedValueOnce(timeout);
+
+      await expect(
+        service.detectGridBoundaries(Buffer.from('grid').toString('base64'), 512, 512)
+      ).rejects.toBe(timeout);
     });
   });
 

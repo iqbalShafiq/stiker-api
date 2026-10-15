@@ -37,6 +37,9 @@ function getClient(): Promise<LangfuseClientHandle | null> {
     )
     .catch((error: unknown) => {
       // Tracing is optional: a broken integration must never fail agent runs.
+      // Drop the cache so a transient failure does not disable tracing for the
+      // process lifetime — the next agent run retries.
+      clientPromise = undefined;
       logger.warn({ error }, 'Langfuse tracing initialization failed; continuing without tracing');
       return null;
     });
@@ -47,11 +50,20 @@ let observerPromise: Promise<AgentObserverHandle | null> | undefined;
 
 /** Langfuse AgentObserver, or null when credentials are not configured. */
 export function getLangfuseObserver(): Promise<AgentObserverHandle | null> {
-  observerPromise ??= getClient().then((client) =>
-    client
-      ? (client.observer({ captureMode: 'safe' }) as AgentObserverHandle)
-      : null
-  );
+  observerPromise ??= getClient()
+    .then((client) =>
+      client
+        ? (client.observer({ captureMode: 'safe' }) as AgentObserverHandle)
+        : null
+    )
+    .then((observer) => {
+      if (observer === null) {
+        // Never cache a null observer: tracing may be unconfigured now or the
+        // initialization may have failed transiently; each run re-evaluates.
+        observerPromise = undefined;
+      }
+      return observer;
+    });
   return observerPromise;
 }
 
