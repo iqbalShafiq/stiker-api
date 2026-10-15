@@ -64,7 +64,7 @@ docker compose --profile prod up -d
 # Check health
 echo "🏥 Checking health..."
 sleep 5
-curl -f http://localhost:3000/health || echo "⚠️  Health check failed, but services are starting..."
+curl -f http://localhost:7845/health || echo "⚠️  Health check failed, but services are starting..."
 
 echo ""
 echo "✅ Setup complete!"

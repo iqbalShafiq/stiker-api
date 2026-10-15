@@ -52,7 +52,7 @@ services:
       - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-sticker_api}
       - REDIS_URL=redis://redis:6379
     ports:
-      - "${PORT:-3000}:3000"
+      - "${PORT:-7845}:${PORT:-7845}"
     volumes:
       - uploads:/app/uploads
     depends_on:
@@ -70,10 +70,12 @@ services:
     env_file: .env
     environment:
       - NODE_ENV=production
+      # Pinned: the nginx upstream (nginx/nginx.conf) targets this exact port.
+      - PORT=7845
       - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-sticker_api}
       - REDIS_URL=redis://redis:6379
     ports:
-      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:7845:7845"
     volumes:
       - uploads:/app/uploads
       - ./logs:/app/logs

@@ -188,5 +188,5 @@ jobs:
             
             # Health checks: direct API and reverse proxy
             sleep 10
-            curl -fsS http://localhost:3000/health >/dev/null || exit 1
+            curl -fsS http://localhost:7845/health >/dev/null || exit 1
             curl -fsS http://localhost:8080/health >/dev/null || exit 1

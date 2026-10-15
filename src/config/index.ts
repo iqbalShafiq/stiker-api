@@ -100,10 +100,10 @@ if (!Number.isFinite(temporalDilateAlphaKernel) || temporalDilateAlphaKernel <= 
 }
 
 export const config = {
-  port: parseInt(process.env.PORT ?? '3000', 10),
+  port: parseInt(process.env.PORT ?? '7845', 10),
   host: process.env.HOST ?? '0.0.0.0',
   nodeEnv: process.env.NODE_ENV ?? 'development',
-  appUrl: process.env.APP_URL ?? 'http://localhost:3000',
+  appUrl: process.env.APP_URL ?? 'http://localhost:7845',
   maxFileSize: parseInt(process.env.MAX_FILE_SIZE ?? '10485760', 10),
   uploadDir: process.env.UPLOAD_DIR ?? 'uploads',
   corsOrigin: process.env.CORS_ORIGIN ?? '*',
@@ -155,11 +155,11 @@ export const config = {
     tokenTtlMinutes: Math.max(5, parseInt(process.env.PASSWORD_RESET_TOKEN_TTL_MINUTES ?? '60', 10)),
     urlBase:
       process.env.PASSWORD_RESET_URL_BASE ??
-      `${process.env.PUBLIC_WEB_BASE_URL ?? process.env.APP_URL ?? 'http://localhost:3000'}/reset-password`,
+      `${process.env.PUBLIC_WEB_BASE_URL ?? process.env.APP_URL ?? 'http://localhost:7845'}/reset-password`,
   },
   storageProvider: process.env.STORAGE_PROVIDER ?? 'local',
   appDeepLinkScheme: process.env.APP_DEEP_LINK_SCHEME ?? 'setiker',
-  publicWebBaseUrl: process.env.PUBLIC_WEB_BASE_URL ?? process.env.APP_URL ?? 'http://localhost:3000',
+  publicWebBaseUrl: process.env.PUBLIC_WEB_BASE_URL ?? process.env.APP_URL ?? 'http://localhost:7845',
   legal: {
     appName: process.env.APP_NAME ?? 'Setiker',
     developerName: process.env.DEVELOPER_NAME ?? 'Setiker',

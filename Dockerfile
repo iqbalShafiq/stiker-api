@@ -68,11 +68,11 @@ RUN mkdir -p uploads && chown -R nodejs:nodejs uploads
 USER nodejs
 
 # Expose port
-EXPOSE 3000
+EXPOSE 7845
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD node -e "require('http').get('http://localhost:3000/health', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))"
+    CMD node -e "require('http').get('http://localhost:7845/health', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))"
 
 # Start the application
 CMD ["node", "dist/server.js"]
