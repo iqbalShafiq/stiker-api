@@ -8,9 +8,9 @@ import { removeBackground } from '../services/background-removal.service';
 import { ProcessingHistoryService } from '../services/processing-history.service';
 import { classifyRasterInput } from '../utils/image-input-classifier';
 import { buildSuccessResponse } from '../utils/response-builder';
-import { AppError, ValidationError, BackgroundRemovalError } from '../errors';
+import { ValidationError } from '../errors';
 import type { ImageResult } from '../types';
-import { config } from '../config';
+import { toStorageRelativePath } from '../utils/storage-path';
 
 function fileIdFromUploadedPath(filename: string): string {
   const base = filename.split('/').pop() ?? filename;
@@ -42,22 +42,8 @@ export class BackgroundController {
       const kind = await classifyRasterInput(imageBuffer);
 
       if (kind === 'animated-gif') {
-        let processedBuffer: Buffer;
-        let method: string;
-        let frameCount: number;
-        try {
-          const gifResult = await removeBackgroundFromAnimatedGif(imageBuffer);
-          processedBuffer = gifResult.processedBuffer;
-          method = gifResult.method;
-          frameCount = gifResult.frameCount;
-        } catch (error) {
-          if (error instanceof AppError) {
-            throw error;
-          }
-          throw new BackgroundRemovalError(
-            error instanceof Error ? error.message : 'Failed to remove background from GIF'
-          );
-        }
+        const { processedBuffer, method, frameCount } =
+          await removeBackgroundFromAnimatedGif(imageBuffer);
 
         const dimensions = await sharp(processedBuffer, { animated: true }).metadata();
         const filename = await this.storageService.saveFile(processedBuffer, {
@@ -80,7 +66,7 @@ export class BackgroundController {
           inputData: { kind: 'animated-gif' },
           outputFiles: [{
             url: image.url,
-            path: image.url.replace(`${config.appUrl}/uploads/`, ''),
+            path: toStorageRelativePath(image.url),
             filename: image.id,
             width: image.width,
             height: image.height,
@@ -100,20 +86,7 @@ export class BackgroundController {
         return;
       }
 
-      let processedBuffer: Buffer;
-      let method: string;
-      try {
-        const result = await removeBackground(imageBuffer);
-        processedBuffer = result.processedBuffer;
-        method = result.method;
-      } catch (error) {
-        if (error instanceof AppError) {
-          throw error;
-        }
-        throw new BackgroundRemovalError(
-          error instanceof Error ? error.message : 'Failed to remove background'
-        );
-      }
+      const { processedBuffer, method } = await removeBackground(imageBuffer);
 
       const squareBuffer = await this.imageService.resizeToSquareContain(processedBuffer, 512);
       const filename = await this.storageService.saveFile(squareBuffer, {
@@ -137,7 +110,7 @@ export class BackgroundController {
         inputData: { kind: 'static-image' },
         outputFiles: [{
           url: image.url,
-          path: image.url.replace(`${config.appUrl}/uploads/`, ''),
+          path: toStorageRelativePath(image.url),
           filename: image.id,
           width: image.width,
           height: image.height,

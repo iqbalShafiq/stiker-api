@@ -3,6 +3,7 @@ import fs from 'fs';
 import { prisma } from '../prisma/client';
 import { config } from '../config';
 import logger from '../utils/logger';
+import { resolveStoragePath } from '../utils/storage-path';
 
 export class AccountPurgeService {
   async enqueuePaths(paths: string[]): Promise<number> {
@@ -30,7 +31,7 @@ export class AccountPurgeService {
       try {
         const fullPath = path.isAbsolute(item.filePath)
           ? item.filePath
-          : path.join(process.cwd(), config.uploadDir, item.filePath);
+          : resolveStoragePath(item.filePath, config.uploadDir);
         if (fs.existsSync(fullPath)) {
           fs.unlinkSync(fullPath);
         }

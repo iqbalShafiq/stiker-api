@@ -17,7 +17,7 @@ import {
 import {
   buildEmptyTextAssetDecoration,
 } from '../utils/text-asset-decoration';
-import { config } from '../config';
+import { toStorageRelativePath } from '../utils/storage-path';
 import type { ImageResult, GenerationMetadata } from '../types';
 import type { AuthRequest } from '../middleware/auth.middleware';
 import { VideoStickerPackAgentService } from '../services/video-sticker-pack-agent.service';
@@ -158,11 +158,9 @@ export class GenerateController {
           this.toBase64Inputs(inputImages)
         );
 
-      const requestTimestamp = Date.now();
       const imageResult = await this.saveGeneratedImage({
         imageBuffer,
         userId,
-        subDir: `generate/${requestTimestamp}`,
         baseName: 'generated-sticker',
       });
       imageResult.textAssetDecoration = buildEmptyTextAssetDecoration('input', text);
@@ -210,11 +208,9 @@ export class GenerateController {
           this.toBase64Inputs(inputImages)
         );
 
-      const requestTimestamp = Date.now();
       const imageResult = await this.saveGeneratedImage({
         imageBuffer,
         userId,
-        subDir: `generate-sticker-pack/${requestTimestamp}`,
         baseName: 'generated-sticker-pack',
       });
       imageResult.textAssetDecoration = buildEmptyTextAssetDecoration(
@@ -257,7 +253,6 @@ export class GenerateController {
       }
 
       const inputImages = files.map(file => this.fileToImageInput(file));
-      const requestTimestamp = Date.now();
 
       if (inputImages.length === 1) {
         const agent = await this.visionAnalysisService.buildImprovementPrompt(inputImages, 'single');
@@ -272,7 +267,6 @@ export class GenerateController {
         const imageResult = await this.saveGeneratedImage({
           imageBuffer,
           userId,
-          subDir: `generate-improvement/${requestTimestamp}`,
           baseName: 'improved-sticker',
         });
 
@@ -323,7 +317,6 @@ export class GenerateController {
         const imageResult = await this.saveGeneratedImage({
           imageBuffer,
           userId,
-          subDir: `generate-improvement/${requestTimestamp}`,
           baseName: `improved-grid-${String(chunkIndex + 1).padStart(2, '0')}`,
         });
         imageResult.textAssetDecoration = buildEmptyTextAssetDecoration(
@@ -443,14 +436,12 @@ export class GenerateController {
   private async saveGeneratedImage(input: {
     imageBuffer: Buffer;
     userId: string;
-    subDir: string;
     baseName: string;
   }): Promise<ImageResult> {
     const squareBuffer = await this.imageService.resizeToSquareContain(input.imageBuffer, 512);
     const uniqueBaseName = `${input.baseName}-${randomUUID()}`;
     const filename = await this.storageProvider.saveFile(squareBuffer, {
       extension: 'png',
-      subDir: input.subDir,
       baseName: uniqueBaseName,
       ownerId: input.userId,
     });
@@ -478,7 +469,7 @@ export class GenerateController {
       inputData: input.inputData,
       outputFiles: input.images.map(image => ({
         url: image.url,
-        path: image.url.replace(`${config.appUrl}/uploads/`, ''),
+        path: toStorageRelativePath(image.url),
         filename: image.id || 'generated-sticker',
         width: image.width,
         height: image.height,

@@ -8,7 +8,7 @@ import { GridSplitService } from '../services/grid-split.service';
 import { ProcessingHistoryService } from '../services/processing-history.service';
 import { buildSuccessResponse } from '../utils/response-builder';
 import { ValidationError } from '../errors';
-import { config } from '../config';
+import { toStorageRelativePath } from '../utils/storage-path';
 
 export class GridController {
   private gridSplitService: GridSplitService;
@@ -57,7 +57,7 @@ export class GridController {
         inputData: { rows, cols, normalize: shouldNormalize },
         outputFiles: images.map(image => ({
           url: image.url,
-          path: image.url.replace(`${config.appUrl}/uploads/`, ''),
+          path: toStorageRelativePath(image.url),
           filename: image.id || 'grid-sticker',
           width: image.width,
           height: image.height,

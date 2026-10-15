@@ -3,6 +3,7 @@ import request from 'supertest';
 import app from '../../src/app';
 import { prisma } from '../../src/prisma/client';
 import { StickerVisibility } from '@prisma/client';
+import fs from 'fs';
 import path from 'path';
 
 const TEST_PASSWORD = 'StrongPass1!';
@@ -857,6 +858,34 @@ describe('Upload Route Integration', () => {
     expect(response.body.data.stickerPackId).toBeDefined();
     expect(response.body.data.stickers).toHaveLength(1);
     expect(response.body.data.stickers[0].ownerId).toBe(user1Id);
+  });
+
+  test('should keep earlier uploads instead of overwriting files for the same user', async () => {
+    const first = await request(app)
+      .post('/api/v1/upload')
+      .set('Authorization', `Bearer ${user1Token}`)
+      .field('visibility', 'private')
+      .attach('images', TEST_IMAGE_BUFFER, 'first-sticker.png');
+
+    const second = await request(app)
+      .post('/api/v1/upload')
+      .set('Authorization', `Bearer ${user1Token}`)
+      .field('visibility', 'private')
+      .attach('images', TEST_IMAGE_BUFFER, 'second-sticker.png');
+
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(201);
+
+    const firstSticker = first.body.data.stickers[0];
+    const secondSticker = second.body.data.stickers[0];
+
+    expect(firstSticker.filename).toBeDefined();
+    expect(secondSticker.filename).not.toBe(firstSticker.filename);
+    expect(secondSticker.url).not.toBe(firstSticker.url);
+
+    const uploadRoot = path.join(process.cwd(), 'uploads');
+    expect(fs.existsSync(path.join(uploadRoot, firstSticker.filename))).toBe(true);
+    expect(fs.existsSync(path.join(uploadRoot, secondSticker.filename))).toBe(true);
   });
 
   test('should upload stickers to existing pack', async () => {
