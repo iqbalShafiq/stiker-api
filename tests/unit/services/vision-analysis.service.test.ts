@@ -76,6 +76,47 @@ describe('VisionAnalysisService', () => {
     });
   });
 
+  describe('analyzeCellTextOutsideForeground', () => {
+    it('falls through to the second pass when the first finds nothing', async () => {
+      generateStructuredCompletionMock
+        .mockResolvedValueOnce({
+          output: { hasTextOutsideForeground: false, textOutsideForeground: [] },
+        })
+        .mockResolvedValueOnce({
+          output: {
+            hasTextOutsideForeground: true,
+            textOutsideForeground: [
+              { text: 'HELLO', style: { fontFamily: 'sans-serif', color: '#ffffff', weight: 'bold' } },
+            ],
+          },
+        });
+
+      const result = await service.analyzeCellTextOutsideForeground(Buffer.from('cell'));
+
+      expect(generateStructuredCompletionMock).toHaveBeenCalledTimes(2);
+      expect(result.textOutsideForeground).toEqual([
+        { text: 'HELLO', style: { fontFamily: 'sans-serif', color: '#ffffff', weight: 'bold' } },
+      ]);
+    });
+
+    it('stops after the first pass when text is found and drops half-filled styles', async () => {
+      generateStructuredCompletionMock.mockResolvedValueOnce({
+        output: {
+          hasTextOutsideForeground: true,
+          textOutsideForeground: [
+            { text: 'KEEP', style: { fontFamily: 'sans-serif', color: '#000000', weight: 'bold' } },
+            { text: 'DROP', style: { fontFamily: 'sans-serif', color: '   ', weight: 'bold' } },
+          ],
+        },
+      });
+
+      const result = await service.analyzeCellTextOutsideForeground(Buffer.from('cell'));
+
+      expect(generateStructuredCompletionMock).toHaveBeenCalledTimes(1);
+      expect(result.textOutsideForeground.map((item) => item.text)).toEqual(['KEEP']);
+    });
+  });
+
   describe('buildImprovementPrompt', () => {
     it('uses the single-mode schema and returns the catalog model from the completion', async () => {
       generateStructuredCompletionMock.mockResolvedValueOnce({
