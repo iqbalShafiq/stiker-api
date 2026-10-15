@@ -138,6 +138,91 @@ export const videoStickerPackPlanSchema = z.object({
 export type VideoStickerCandidate = z.infer<typeof videoStickerCandidateSchema>;
 export type VideoStickerPackPlan = z.infer<typeof videoStickerPackPlanSchema>;
 
+const videoTextDecorationStrictSchema = z.object({
+  type: z.literal('text'),
+  text: z.string().trim().min(1).max(64),
+  style: z.object({
+    fontFamily: z.string().trim().max(80),
+    color: z.string().trim().max(40),
+    weight: z.string().trim().max(40),
+  }),
+});
+
+const videoEmojiDecorationStrictSchema = z.object({
+  type: z.literal('emoji'),
+  emoji: z.string().trim().min(1).max(16),
+});
+
+const videoStickerDecorationStrictSchema = z.union([
+  videoTextDecorationStrictSchema,
+  videoEmojiDecorationStrictSchema,
+]);
+
+const videoAnimatedFrameDecorationStrictSchema = z.object({
+  frameIndex: z.number().int().min(0).max(VIDEO_STICKER_PACK_MAX_ANIMATED_FRAMES - 1),
+  decorations: z.array(videoStickerDecorationStrictSchema),
+});
+
+/**
+ * Strict-provider variant of the agent output schema: every property is
+ * required and there are no `default`/`coerce` keywords, which OpenAI-style
+ * structured outputs reject. Placement fields (`centerX`/`centerY`/`scale`)
+ * are intentionally omitted — the full `videoStickerPackPlanSchema` fills
+ * them inside `normalizeVideoStickerPackPlan`.
+ */
+export const videoStickerPackAgentPlanSchema = z.object({
+  packTitle: z.string().trim().min(1).max(80),
+  summary: z.string().trim().max(1000),
+  staticStickers: z
+    .array(
+      z.object({
+        candidateId: z.string().trim().min(1).max(80),
+        frameIndex: z.number().int().min(0).max(10_000),
+        timestampMs: z.number().int().min(0),
+        cellId: cellIdSchema,
+        emojis: z.array(z.string().trim().min(1).max(16)).max(3),
+        accessibilityText: z.string().trim().max(125),
+        decorations: z.array(videoStickerDecorationStrictSchema),
+        rationale: z.string().trim().max(500),
+      })
+    )
+    .max(VIDEO_STICKER_PACK_MAX_STATIC_COUNT),
+  animatedStickers: z
+    .array(
+      z.object({
+        timeline: z
+          .array(
+            z.object({
+              candidateId: z.string().trim().min(1).max(80),
+              frameIndex: z.number().int().min(0).max(10_000),
+              timestampMs: z.number().int().min(0),
+              durationMs: z.number().int().min(8).max(1000),
+            })
+          )
+          .min(2)
+          .max(VIDEO_STICKER_PACK_MAX_ANIMATED_FRAMES),
+        fps: z.number().int().min(8).max(30),
+        loopCount: z.number().int().min(0).max(10),
+        emojis: z.array(z.string().trim().min(1).max(16)).max(3),
+        accessibilityText: z.string().trim().max(255),
+        baseDecorations: z.array(videoStickerDecorationStrictSchema),
+        frameDecorations: z.array(videoAnimatedFrameDecorationStrictSchema),
+        rationale: z.string().trim().max(500),
+      })
+    )
+    .max(VIDEO_STICKER_PACK_MAX_ANIMATED_COUNT),
+  rejectedCandidates: z
+    .array(
+      z.object({
+        candidateId: z.string().trim().min(1).max(80),
+        reason: z.string().trim().min(1).max(240),
+      })
+    )
+    .max(VIDEO_STICKER_PACK_MAX_CANDIDATES),
+});
+
+export type VideoStickerPackAgentPlan = z.infer<typeof videoStickerPackAgentPlanSchema>;
+
 export interface VideoStickerPackRequestShape {
   candidateGridCount: number;
   candidateCount: number;

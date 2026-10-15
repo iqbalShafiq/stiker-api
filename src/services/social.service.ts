@@ -45,9 +45,7 @@ export class SocialService {
           });
         }
 
-        if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
-          throw error;
-        }
+        throw error;
       }
 
       return tx.stickerPack.update({
@@ -120,9 +118,7 @@ export class SocialService {
           });
         }
 
-        if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
-          throw error;
-        }
+        throw error;
       }
 
       return tx.stickerPack.update({
@@ -223,9 +219,7 @@ export class SocialService {
           return { followerCount: targetUser.followerCount, followingCount: followerUser.followingCount };
         }
 
-        if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
-          throw error;
-        }
+        throw error;
       }
 
       const [targetUser, followerUser] = await Promise.all([

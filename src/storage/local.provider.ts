@@ -32,6 +32,8 @@ export class LocalStorageProvider implements IStorageProvider {
     let targetDir = this.uploadDir;
     let relativeDir = '';
 
+    // Precedence: ownerId wins over subDir. Callers that pass both are explicit
+    // about the owner layout; a time-bucketed subDir is ignored in that case.
     if (ownerId) {
       relativeDir = path.posix.join('users', ownerId, 'stickers');
       targetDir = path.join(this.uploadDir, relativeDir);

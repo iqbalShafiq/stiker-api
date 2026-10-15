@@ -77,6 +77,12 @@ jobs:
       - name: Run type check
         run: npm run typecheck
 
+      - name: Build
+        run: npm run build
+
+      - name: Verify compiled ESM shim
+        run: npm run check:dist
+
       - name: Run tests
         run: npx vitest run --reporter=verbose
         env:
@@ -160,27 +166,27 @@ jobs:
             docker pull "$IMAGE_REF"
             
             # Start database first (if not running)
-            IMAGE_TAG="$SHORT_SHA" docker compose --env-file .env.production -f docker-compose.prod.yml up -d postgres redis
+            IMAGE_TAG="$SHORT_SHA" docker compose --profile prod up -d postgres redis
             
             # Wait for database to be ready
             sleep 5
             
             # Run database migrations via dedicated service
-            IMAGE_TAG="$SHORT_SHA" docker compose --env-file .env.production -f docker-compose.prod.yml run --rm migrate
+            IMAGE_TAG="$SHORT_SHA" docker compose --profile prod run --rm migrate
 
-            # Run idempotent seed data (roles, permissions, default admin bootstrap)
-            IMAGE_TAG="$SHORT_SHA" docker compose --env-file .env.production -f docker-compose.prod.yml run --rm seed
+            # Run idempotent seed data (roles, billing products, AI model catalog)
+            IMAGE_TAG="$SHORT_SHA" docker compose --profile prod run --rm seed
             
             # Restart API with new image
-            IMAGE_TAG="$SHORT_SHA" docker compose --env-file .env.production -f docker-compose.prod.yml up -d --no-deps api
+            IMAGE_TAG="$SHORT_SHA" docker compose --profile prod up -d --no-deps app
             
             # Restart nginx
-            IMAGE_TAG="$SHORT_SHA" docker compose --env-file .env.production -f docker-compose.prod.yml up -d --no-deps nginx
+            IMAGE_TAG="$SHORT_SHA" docker compose --profile prod up -d --no-deps nginx
             
             # Cleanup old images
             docker image prune -f
             
             # Health checks: direct API and reverse proxy
             sleep 10
-            curl -fsS http://localhost:3000/health >/dev/null || exit 1
+            curl -fsS http://localhost:7845/health >/dev/null || exit 1
             curl -fsS http://localhost:8080/health >/dev/null || exit 1

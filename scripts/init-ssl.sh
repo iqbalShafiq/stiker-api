@@ -16,7 +16,7 @@ echo "🔒 Initializing SSL for $DOMAIN..."
 sed -i "s/your-domain.com/${DOMAIN}/g" nginx/conf.d/ssl.conf
 
 # Start nginx for certbot challenge
-docker-compose -f docker-compose.prod.yml up -d nginx
+docker compose --profile prod up -d nginx
 
 # Get certificate
 docker run -it --rm \
@@ -31,6 +31,6 @@ docker run -it --rm \
     -d $DOMAIN
 
 # Restart nginx with SSL
-docker-compose -f docker-compose.prod.yml restart nginx
+docker compose --profile prod restart nginx
 
 echo "✅ SSL certificate installed for $DOMAIN"

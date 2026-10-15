@@ -1,10 +1,9 @@
 import sharp from 'sharp';
 import { config } from '../config';
 import logger from '../utils/logger';
-import { ValidationError } from '../errors';
+import { BackgroundRemovalError, ValidationError } from '../errors';
 import { ImageService } from './image.service';
 import { getSegmentationBackgroundRemovalService } from './segmentation-background-removal.service';
-import { shouldUseImglyBackgroundRemoval } from './imgly-background-removal-toggle';
 
 export interface AnimatedGifRemovalResult {
   processedBuffer: Buffer;
@@ -45,7 +44,7 @@ export function assertAnimatedGifWithinLimits(
 
 /**
  * Remove background from each coalesced GIF frame (IMG.LY), resize to 512×512 contain, re-encode as animated GIF.
- * Falls back to neutral-bright-only keying on **all** frames if IMG.LY fails (lighter on coloured foreground than raw brightness threshold).
+ * IMG.LY failures surface as BackgroundRemovalError — no deterministic fallback keying.
  */
 export async function removeBackgroundFromAnimatedGif(
   gifBuffer: Buffer
@@ -68,56 +67,37 @@ export async function removeBackgroundFromAnimatedGif(
 
   const imageService = new ImageService();
 
-  let method: string;
   let framePngs512: Buffer[];
 
-  if (shouldUseImglyBackgroundRemoval()) {
-    const segmentation = getSegmentationBackgroundRemovalService();
+  const segmentation = getSegmentationBackgroundRemovalService();
 
-    try {
-      framePngs512 = [];
-      for (let page = 0; page < frameCount; page++) {
-        const framePng = await sharp(gifBuffer, { page, pages: 1 }).png().toBuffer();
-        const removed = await segmentation.remove(framePng);
-        let staged = await imageService.reinforceAlphaForGifQuantization(
-          removed,
-          config.animatedGif.alphaBoostDivisor
-        );
-        if (config.animatedGif.alphaCloseKernel >= 3) {
-          staged = await imageService.morphologicalCloseAlpha(staged, config.animatedGif.alphaCloseKernel);
-        }
-        staged = await imageService.stripResidualNearCornerBackground(
-          framePng,
-          staged,
-          config.animatedGif.cornerBackgroundStripDistance
-        );
-        const squared = await imageService.resizeToSquareContain(staged, 512);
-        framePngs512.push(squared);
-      }
-      method = 'imgly-onnx-animated-gif';
-    } catch (err) {
-      logger.warn(
-        { err },
-        'IMG.LY background removal failed for animated GIF, falling back to neutral-bright key on all frames'
-      );
-      framePngs512 = [];
-      for (let page = 0; page < frameCount; page++) {
-        const framePng = await sharp(gifBuffer, { page, pages: 1 }).png().toBuffer();
-        const removed = await imageService.removeNeutralBrightBackground(framePng);
-        const squared = await imageService.resizeToSquareContain(removed, 512);
-        framePngs512.push(squared);
-      }
-      method = 'neutral-bright-fallback-animated-gif';
-    }
-  } else {
+  try {
     framePngs512 = [];
     for (let page = 0; page < frameCount; page++) {
       const framePng = await sharp(gifBuffer, { page, pages: 1 }).png().toBuffer();
-      const removed = await imageService.removeNeutralBrightBackground(framePng);
-      const squared = await imageService.resizeToSquareContain(removed, 512);
+      const removed = await segmentation.remove(framePng);
+      let staged = await imageService.reinforceAlphaForGifQuantization(
+        removed,
+        config.animatedGif.alphaBoostDivisor
+      );
+      if (config.animatedGif.alphaCloseKernel >= 3) {
+        staged = await imageService.morphologicalCloseAlpha(staged, config.animatedGif.alphaCloseKernel);
+      }
+      staged = await imageService.stripResidualNearCornerBackground(
+        framePng,
+        staged,
+        config.animatedGif.cornerBackgroundStripDistance
+      );
+      const squared = await imageService.resizeToSquareContain(staged, 512);
       framePngs512.push(squared);
     }
-    method = 'neutral-bright-fallback-animated-gif';
+  } catch (error) {
+    logger.error({ error }, 'IMG.LY background removal failed for animated GIF');
+    throw new BackgroundRemovalError(
+      error instanceof Error
+        ? `Animated GIF background removal failed: ${error.message}`
+        : 'Animated GIF background removal failed'
+    );
   }
 
   const { temporalAlphaMaxHalf, temporalAlphaPasses, temporalDilateAlphaKernel } =
@@ -157,7 +137,7 @@ export async function removeBackgroundFromAnimatedGif(
 
   return {
     processedBuffer,
-    method,
+    method: 'imgly-onnx-animated-gif',
     frameCount,
   };
 }

@@ -3,13 +3,36 @@ import path from 'path';
 
 dotenv.config();
 
+export class MissingEnvError extends Error {
+  constructor(names: string[]) {
+    super(`Missing required environment variables: ${names.join(', ')}`);
+    this.name = 'MissingEnvError';
+  }
+}
+
+/** Throws when any requested variable is missing or blank. Pure for testability. */
+export function requiredEnvFrom(
+  source: Record<string, string | undefined>,
+  ...names: string[]
+): string {
+  const missing = names.filter((name) => {
+    const value = source[name];
+    return value === undefined || value.trim().length === 0;
+  });
+  if (missing.length > 0) {
+    throw new MissingEnvError(missing);
+  }
+  return source[names[0]] as string;
+}
+
+// Fail fast at boot: no placeholder defaults for secrets or the datasource.
+const jwtSecret = requiredEnvFrom(process.env, 'JWT_SECRET');
+const jwtRefreshSecret = requiredEnvFrom(process.env, 'JWT_REFRESH_SECRET');
+const databaseUrl = requiredEnvFrom(process.env, 'DATABASE_URL');
+
 const imglyBgModelRaw = process.env.IMGLY_BG_MODEL;
 const imglyBgModel: 'small' | 'medium' | 'large' =
   imglyBgModelRaw === 'small' || imglyBgModelRaw === 'large' ? imglyBgModelRaw : 'medium';
-const imglyBgEnabled =
-  process.env.IMGLY_BG_ENABLED === undefined
-    ? (process.env.NODE_ENV ?? 'development') !== 'test'
-    : process.env.IMGLY_BG_ENABLED !== 'false';
 
 /** Bundled WASM/ONNX live here unless you override IMGLY_BG_PUBLIC_PATH and self-host assets. */
 const defaultImglyAssetsDir = path.join(
@@ -77,16 +100,14 @@ if (!Number.isFinite(temporalDilateAlphaKernel) || temporalDilateAlphaKernel <= 
 }
 
 export const config = {
-  port: parseInt(process.env.PORT ?? '3000', 10),
+  port: parseInt(process.env.PORT ?? '7845', 10),
   host: process.env.HOST ?? '0.0.0.0',
   nodeEnv: process.env.NODE_ENV ?? 'development',
-  openRouterApiKey: process.env.OPENROUTER_API_KEY ?? '',
-  appUrl: process.env.APP_URL ?? 'http://localhost:3000',
+  appUrl: process.env.APP_URL ?? 'http://localhost:7845',
   maxFileSize: parseInt(process.env.MAX_FILE_SIZE ?? '10485760', 10),
   uploadDir: process.env.UPLOAD_DIR ?? 'uploads',
   corsOrigin: process.env.CORS_ORIGIN ?? '*',
   imglyBackgroundRemoval: {
-    enabled: imglyBgEnabled,
     publicPath: process.env.IMGLY_BG_PUBLIC_PATH ?? defaultImglyAssetsDir,
     model: imglyBgModel,
     maxConcurrency: Math.max(1, parseInt(process.env.IMGLY_BG_MAX_CONCURRENCY ?? '2', 10)),
@@ -106,16 +127,14 @@ export const config = {
     temporalAlphaPasses: temporalAlphaPasses,
     temporalDilateAlphaKernel: temporalDilateAlphaKernel,
   },
-  models: {
-    imageGeneration: process.env.IMAGE_GENERATION_MODEL ?? 'google/gemini-2.5-flash-image',
-    agent: process.env.AGENT_MODEL ?? 'google/gemini-2.5-flash-lite',
-    videoStickerPackAgent: process.env.VIDEO_STICKER_PACK_AGENT_MODEL ?? 'openai/gpt-4.1-mini',
-    improvementAgent: process.env.IMPROVEMENT_AGENT_MODEL ?? 'google/gemini-2.5-pro',
+  agent: {
+    apiKey: process.env.AGENT_API_KEY ?? '',
+    baseUrl: process.env.AGENT_BASE_URL ?? 'https://openrouter.ai/api/v1',
   },
-  databaseUrl: process.env.DATABASE_URL ?? 'postgresql://localhost:5432/sticker_api',
+  databaseUrl,
   redisUrl: process.env.REDIS_URL ?? 'redis://localhost:6379',
-  jwtSecret: process.env.JWT_SECRET ?? 'your-jwt-secret-key-change-in-production',
-  jwtRefreshSecret: process.env.JWT_REFRESH_SECRET ?? 'your-jwt-refresh-secret-key-change-in-production',
+  jwtSecret,
+  jwtRefreshSecret,
   jwtAccessExpiration: process.env.JWT_ACCESS_EXPIRATION ?? '15m',
   jwtRefreshExpiration: process.env.JWT_REFRESH_EXPIRATION ?? '7d',
   /** OAuth client IDs accepted as Google ID token `aud` (Web serverClientId + optional Android/iOS). */
@@ -136,11 +155,11 @@ export const config = {
     tokenTtlMinutes: Math.max(5, parseInt(process.env.PASSWORD_RESET_TOKEN_TTL_MINUTES ?? '60', 10)),
     urlBase:
       process.env.PASSWORD_RESET_URL_BASE ??
-      `${process.env.PUBLIC_WEB_BASE_URL ?? process.env.APP_URL ?? 'http://localhost:3000'}/reset-password`,
+      `${process.env.PUBLIC_WEB_BASE_URL ?? process.env.APP_URL ?? 'http://localhost:7845'}/reset-password`,
   },
   storageProvider: process.env.STORAGE_PROVIDER ?? 'local',
   appDeepLinkScheme: process.env.APP_DEEP_LINK_SCHEME ?? 'setiker',
-  publicWebBaseUrl: process.env.PUBLIC_WEB_BASE_URL ?? process.env.APP_URL ?? 'http://localhost:3000',
+  publicWebBaseUrl: process.env.PUBLIC_WEB_BASE_URL ?? process.env.APP_URL ?? 'http://localhost:7845',
   legal: {
     appName: process.env.APP_NAME ?? 'Setiker',
     developerName: process.env.DEVELOPER_NAME ?? 'Setiker',
@@ -152,18 +171,19 @@ export const config = {
   },
   historyExpirationDays: Math.max(1, parseInt(process.env.HISTORY_EXPIRATION_DAYS ?? '7', 10)),
   cleanupIntervalHours: Math.max(1, parseInt(process.env.CLEANUP_INTERVAL_HOURS ?? '24', 10)),
+  featured: {
+    windowHours: Math.max(1, parseInt(process.env.FEATURED_WINDOW_HOURS ?? '6', 10)),
+    cronIntervalHours: Math.max(1, parseInt(process.env.FEATURED_CRON_INTERVAL_HOURS ?? '6', 10)),
+  },
   redisEnabled: process.env.REDIS_ENABLED !== 'false',
+  langfuse: {
+    baseUrl: process.env.LANGFUSE_BASE_URL ?? '',
+    publicKey: process.env.LANGFUSE_PUBLIC_KEY ?? '',
+    secretKey: process.env.LANGFUSE_SECRET_KEY ?? '',
+  },
   aiQuotaFailClosed: process.env.AI_QUOTA_FAIL_CLOSED === undefined
     ? (process.env.NODE_ENV ?? 'development') !== 'development'
     : process.env.AI_QUOTA_FAIL_CLOSED === 'true',
-  /** @deprecated Use aiQuota.dailyPointLimit — kept for legacy env compatibility */
-  aiDailyLimits: {
-    generate: Math.max(1, parseInt(process.env.AI_DAILY_GENERATE_LIMIT ?? '50', 10)),
-    gridSplit: Math.max(1, parseInt(process.env.AI_DAILY_GRID_SPLIT_LIMIT ?? '100', 10)),
-    backgroundRemove: Math.max(1, parseInt(process.env.AI_DAILY_BACKGROUND_REMOVE_LIMIT ?? '100', 10)),
-    videoStickerPack: Math.max(1, parseInt(process.env.AI_DAILY_VIDEO_PACK_LIMIT ?? '10', 10)),
-    improve: Math.max(1, parseInt(process.env.AI_DAILY_IMPROVE_LIMIT ?? '50', 10)),
-  },
   aiQuota: {
     dailyPointLimit: Math.max(1, parseInt(process.env.AI_DAILY_POINT_LIMIT ?? '100', 10)),
     reservationTtlSeconds: Math.max(60, parseInt(process.env.AI_RESERVATION_TTL_SECONDS ?? '3600', 10)),

@@ -679,3 +679,23 @@ model PendingStoragePurge {
   @@index([scheduledAt])
   @@index([attempts])
 }
+
+enum AiModelRole {
+  agent
+  vision
+  improvement
+  image
+}
+
+model AiModel {
+  id                     String      @id @default(cuid())
+  role                   AiModelRole @unique
+  modelId                String
+  reasoningEfforts       String[]    @default([])
+  defaultReasoningEffort String?
+  temperature            Float?
+  maxTokens              Int?
+  label                  String?
+  createdAt              DateTime    @default(now())
+  updatedAt              DateTime    @updatedAt
+}

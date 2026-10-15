@@ -22,10 +22,6 @@ export class EntitlementService {
     return config.billing.freeDailyPointLimit;
   }
 
-  async getPurchasedTokenBalance(userId: string): Promise<number> {
-    return tokenLedgerService.getBalance(userId);
-  }
-
   async fulfillConsumableTokenPack(params: {
     userId: string;
     purchase: Purchase;

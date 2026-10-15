@@ -1,24 +1,27 @@
 import type { Response, NextFunction } from 'express';
 import type { AuthRequest } from '../middleware/auth.middleware';
-import { OpenRouterService } from '../services/openrouter.service';
+import { ImageGenerationService } from '../services/image-generation.service';
+import { VisionAnalysisService } from '../services/vision-analysis.service';
 import { ImageService } from '../services/image.service';
 import { StorageService } from '../services/storage.service';
 import { GridSplitService } from '../services/grid-split.service';
 import { ProcessingHistoryService } from '../services/processing-history.service';
 import { buildSuccessResponse } from '../utils/response-builder';
 import { ValidationError } from '../errors';
-import { config } from '../config';
+import { toStorageRelativePath } from '../utils/storage-path';
 
 export class GridController {
   private gridSplitService: GridSplitService;
   private processingHistoryService: ProcessingHistoryService;
 
   constructor() {
-    const openRouterService = new OpenRouterService();
+    const imageGenerationService = new ImageGenerationService();
+    const visionAnalysisService = new VisionAnalysisService();
     const imageService = new ImageService();
     const storageService = new StorageService();
     this.gridSplitService = new GridSplitService(
-      openRouterService,
+      imageGenerationService,
+      visionAnalysisService,
       imageService,
       storageService
     );
@@ -54,7 +57,7 @@ export class GridController {
         inputData: { rows, cols, normalize: shouldNormalize },
         outputFiles: images.map(image => ({
           url: image.url,
-          path: image.url.replace(`${config.appUrl}/uploads/`, ''),
+          path: toStorageRelativePath(image.url),
           filename: image.id || 'grid-sticker',
           width: image.width,
           height: image.height,

@@ -97,34 +97,6 @@ export const generateVideoStickerPackSchema = z
     }
   });
 
-export const gridSplitSchema = z.object({
-  image: z.instanceof(Buffer).or(z.any()).refine(
-    (file: unknown) => {
-      if (!file || typeof file !== 'object') return false;
-      const f = file as { mimetype?: string };
-      return f.mimetype?.startsWith('image/') ?? false;
-    },
-    {
-      message: 'File must be an image',
-    }
-  ),
-});
-
-export const removeBackgroundSchema = z.object({
-  image: z.instanceof(Buffer).or(z.any()).refine(
-    (file: unknown) => {
-      if (!file || typeof file !== 'object') return false;
-      const f = file as { mimetype?: string };
-      return f.mimetype?.startsWith('image/') ?? false;
-    },
-    {
-      message: 'File must be an image',
-    }
-  ),
-});
-
 export type GenerateImageInput = z.infer<typeof generateImageSchema>;
 export type GenerateStickerPackInput = z.infer<typeof generateStickerPackSchema>;
 export type GenerateVideoStickerPackInput = z.infer<typeof generateVideoStickerPackSchema>;
-export type GridSplitInput = z.infer<typeof gridSplitSchema>;
-export type RemoveBackgroundInput = z.infer<typeof removeBackgroundSchema>;

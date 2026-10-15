@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y \
 
 # Copy package files
 COPY package*.json ./
+COPY patches ./patches
 COPY prisma ./prisma/
 
 # Install all dependencies (including devDependencies for build)
@@ -47,16 +48,14 @@ RUN groupadd -g 1001 nodejs && \
 
 # Copy package files
 COPY package*.json ./
+COPY patches ./patches
 COPY prisma ./prisma/
 
 # Install only production dependencies
 RUN npm ci --omit=dev && npm cache clean --force
 
-# Generate Prisma client for production (needs dummy DATABASE_URL for config)
-ENV DATABASE_URL=postgresql://localhost:5432/dummy
-RUN npx prisma generate
-
-# Copy built application and config from builder stage
+# Copy built application and config from builder stage. The generated Prisma
+# client ships with it; regenerating it here would only duplicate that work.
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/docs ./docs
@@ -69,11 +68,11 @@ RUN mkdir -p uploads && chown -R nodejs:nodejs uploads
 USER nodejs
 
 # Expose port
-EXPOSE 3000
+EXPOSE 7845
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD node -e "require('http').get('http://localhost:3000/health', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))"
+    CMD node -e "require('http').get('http://localhost:7845/health', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))"
 
 # Start the application
 CMD ["node", "dist/server.js"]

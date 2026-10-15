@@ -35,15 +35,20 @@ export class InvalidFileTypeError extends AppError {
   }
 }
 
-export class FileTooLargeError extends AppError {
-  constructor(message: string = 'File size exceeds the maximum allowed size') {
-    super(message, 413, 'FILE_TOO_LARGE');
-  }
-}
-
 export class AIGenerationError extends AppError {
   constructor(message: string = 'AI generation failed') {
     super(message, 502, 'AI_GENERATION_FAILED');
+  }
+}
+
+/**
+ * Server-side AI configuration problem (missing gateway key, etc). Kept
+ * distinct from request ValidationError so it can never be confused with
+ * invalid client input, and kept consistent across every AI call path.
+ */
+export class AiNotConfiguredError extends AppError {
+  constructor(message: string = 'AGENT_API_KEY is required for AI features') {
+    super(message, 500, 'AI_NOT_CONFIGURED');
   }
 }
 
@@ -208,13 +213,6 @@ export class InvalidAppleTokenError extends UnauthorizedError {
 export class EmailNotVerifiedError extends UnauthorizedError {
   constructor(message: string = 'Email is not verified') {
     super(message, 'EMAIL_NOT_VERIFIED');
-  }
-}
-
-/** @deprecated Prefer UseOauthOrSetPasswordError */
-export class UseGoogleSignInError extends UnauthorizedError {
-  constructor(message: string = 'This account uses Google Sign-In. Continue with Google.') {
-    super(message, 'USE_GOOGLE_SIGN_IN');
   }
 }
 

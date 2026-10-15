@@ -1,12 +1,11 @@
 import type { ImageResult, TextAssetResult } from '../types';
 import logger from '../utils/logger';
-import {
-  OpenRouterService,
-  type OutsideForegroundTextDetection,
-} from './openrouter.service';
+import type { OutsideForegroundTextDetection } from '../utils/text-asset-decoration';
+import { ImageGenerationService } from './image-generation.service';
+import { VisionAnalysisService } from './vision-analysis.service';
 import { ImageService } from './image.service';
 import { IStorageProvider } from '../storage/interface';
-import { removeBackgroundWithFallback } from './background-removal.service';
+import { removeBackground } from './background-removal.service';
 import { textOutsideForegroundToAsset } from '../utils/text-asset-decoration';
 
 export interface GridSplitPipelineOptions {
@@ -21,7 +20,6 @@ export interface GridSplitMetadata {
   gridLayout: string;
   cellCount: number;
   normalizedImageUrl?: string;
-  llmBackgroundRemovedImageUrl?: string;
   outputSize: string;
   normalized: boolean;
   backgroundRemoved: boolean;
@@ -34,7 +32,8 @@ export interface GridSplitMetadata {
  */
 export class GridSplitService {
   constructor(
-    private readonly openRouterService: OpenRouterService,
+    private readonly imageGenerationService: ImageGenerationService,
+    private readonly visionAnalysisService: VisionAnalysisService,
     private readonly imageService: ImageService,
     private readonly storageService: IStorageProvider
   ) {}
@@ -49,21 +48,13 @@ export class GridSplitService {
     const rows = options.rows;
     const cols = options.cols;
 
-    const initialGridResult =
-      rows && cols
-        ? await this.openRouterService.detectGridBoundaries(
-            imageBuffer.toString('base64'),
-            dimensions.width,
-            dimensions.height,
-            rows,
-            cols
-          )
-        : (await this.imageService.detectGridBoundaries(imageBuffer)) ??
-          (await this.openRouterService.detectGridBoundaries(
-            imageBuffer.toString('base64'),
-            dimensions.width,
-            dimensions.height
-          ));
+    const initialGridResult = await this.visionAnalysisService.detectGridBoundaries(
+      imageBuffer.toString('base64'),
+      dimensions.width,
+      dimensions.height,
+      rows,
+      cols
+    );
 
     let splitSourceBuffer = imageBuffer;
     let splitBoundaries = initialGridResult.boundaries;
@@ -73,22 +64,20 @@ export class GridSplitService {
 
     if (shouldNormalize) {
       try {
-        const normalizedBuffer = await this.openRouterService.normalizeGridImage(
+        const normalizedBuffer = await this.imageGenerationService.normalizeGridImage(
           imageBuffer.toString('base64'),
           initialGridResult.gridLayout,
           dimensions.width,
           dimensions.height
         );
 
-        const normalizedGridResult =
-          (await this.imageService.detectGridBoundaries(normalizedBuffer)) ??
-          (await this.openRouterService.detectGridBoundaries(
-            normalizedBuffer.toString('base64'),
-            dimensions.width,
-            dimensions.height,
-            rows,
-            cols
-          ));
+        const normalizedGridResult = await this.visionAnalysisService.detectGridBoundaries(
+          normalizedBuffer.toString('base64'),
+          dimensions.width,
+          dimensions.height,
+          rows,
+          cols
+        );
 
         const normalizedFilename = await this.storageService.saveFile(normalizedBuffer, {
           extension: 'png',
@@ -103,7 +92,7 @@ export class GridSplitService {
       } catch (normalizationError) {
         logger.warn(
           { error: normalizationError },
-          'Grid normalization failed, fallback to original image split'
+          'Grid normalization failed; splitting the original image (metadata.normalized=false)'
         );
       }
     }
@@ -112,6 +101,7 @@ export class GridSplitService {
 
     const images: ImageResult[] = [];
     const methodsUsed = new Set<string>();
+    let cellTextAnalysisFailures = 0;
     for (const [index, buffer] of splitBuffers.entries()) {
       const cellId = `cell-${String(index + 1).padStart(2, '0')}`;
       let processedCellBuffer = buffer;
@@ -126,6 +116,7 @@ export class GridSplitService {
           };
         }
       } catch (cellTextAnalysisError) {
+        cellTextAnalysisFailures += 1;
         logger.warn(
           { error: cellTextAnalysisError },
           `Grid cell text analysis failed for ${cellId}`
@@ -133,7 +124,7 @@ export class GridSplitService {
       }
 
       try {
-        const result = await removeBackgroundWithFallback(buffer);
+        const result = await removeBackground(buffer);
         processedCellBuffer = result.processedBuffer;
         methodsUsed.add(result.method);
         backgroundRemovedCellCount += 1;
@@ -163,6 +154,12 @@ export class GridSplitService {
       });
     }
 
+    if (splitBuffers.length > 0 && cellTextAnalysisFailures === splitBuffers.length) {
+      logger.warn(
+        'All grid cell text analyses failed — text assets are omitted for this split'
+      );
+    }
+
     return {
       images,
       metadata: {
@@ -183,6 +180,7 @@ export class GridSplitService {
     metadata: GridSplitMetadata;
   }> {
     const assets: TextAssetResult[] = [];
+    let cellTextAnalysisFailures = 0;
     for (const [index, buffer] of cellBuffers.entries()) {
       const cellId = `cell-${String(index + 1).padStart(2, '0')}`;
       let textOutsideForeground: TextAssetResult['textOutsideForeground'];
@@ -196,6 +194,7 @@ export class GridSplitService {
           };
         }
       } catch (cellTextAnalysisError) {
+        cellTextAnalysisFailures += 1;
         logger.warn(
           { error: cellTextAnalysisError },
           `Grid cell text analysis failed for ${cellId}`
@@ -209,6 +208,12 @@ export class GridSplitService {
           : {}),
         ...(textOutsideForeground ? { textOutsideForeground } : {}),
       });
+    }
+
+    if (cellBuffers.length > 0 && cellTextAnalysisFailures === cellBuffers.length) {
+      logger.warn(
+        'All grid cell text analyses failed — returning cells without text assets'
+      );
     }
 
     return {
@@ -227,15 +232,15 @@ export class GridSplitService {
   private async analyzeCellTextWithRetry(
     buffer: Buffer,
     cellId: string
-  ): Promise<ReturnType<OpenRouterService['analyzeCellTextOutsideForeground']>> {
+  ): Promise<ReturnType<VisionAnalysisService['analyzeCellTextOutsideForeground']>> {
     try {
-      return await this.openRouterService.analyzeCellTextOutsideForeground(buffer);
+      return await this.visionAnalysisService.analyzeCellTextOutsideForeground(buffer);
     } catch (firstError) {
       logger.warn(
         { error: firstError },
         `Grid cell text analysis retry for ${cellId} after first failure`
       );
-      return this.openRouterService.analyzeCellTextOutsideForeground(buffer);
+      return this.visionAnalysisService.analyzeCellTextOutsideForeground(buffer);
     }
   }
 

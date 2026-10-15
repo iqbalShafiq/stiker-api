@@ -1,4 +1,5 @@
 import type { Response, NextFunction } from 'express';
+import { randomUUID } from 'crypto';
 import { StickerService } from '../services/sticker.service';
 import { StickerPackService } from '../services/sticker-pack.service';
 import { LocalStorageProvider } from '../storage/local.provider';
@@ -109,15 +110,13 @@ export class UploadController {
       }
 
       const uploadedStickers = [];
-      const requestTimestamp = Date.now();
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const squareBuffer = await this.imageService.resizeToSquareContain(file.buffer, 512);
         const filename = await this.storageProvider.saveFile(squareBuffer, {
           extension: 'png',
-          subDir: `uploads/${requestTimestamp}`,
-          baseName: `sticker-${i}`,
+          baseName: `sticker-${i}-${randomUUID()}`,
           ownerId: userId,
         });
         const dimensions = await this.imageService.getImageDimensions(squareBuffer);

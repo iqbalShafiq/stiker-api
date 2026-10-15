@@ -10,7 +10,7 @@ Use this table when completing the Google Play Data Safety form. Values must mat
 | Username, display name | Yes | No | Profile, public packs | Yes (account) | TLS | Until account deletion | In-app + web request | — |
 | Auth tokens | Yes | No | Session | Yes (signed-in use) | TLS | Access: ~15m; refresh: ~7d | Logout / delete account | — |
 | Photos/videos (user-selected) | Yes | No* | Sticker creation, AI input | Optional | TLS | Until user deletes / account deletion | Delete account | Cloud host |
-| AI prompts & outputs | Yes | No* | AI features | Optional | TLS | History: `HISTORY_EXPIRATION_DAYS` (default 7) | Auto-expire + delete account | OpenRouter / model APIs |
+| AI prompts & outputs | Yes | No* | AI features | Optional | TLS | History: `HISTORY_EXPIRATION_DAYS` (default 7) | Auto-expire + delete account | AI gateway (AGENT_BASE_URL) |
 | Sticker packs (public) | Yes | Yes (public UGC) | Explore sharing | Optional | TLS | Until deleted / account deletion | Owner delete / moderation | — |
 | Google Play purchase token | Yes | Yes (Google) | Billing verification | Optional (premium) | TLS | Legal/billing retention | Anonymized on delete | Google Play |
 | Crash/diagnostics | If enabled | Per SDK | Stability | Optional | TLS | Per SDK policy | Per SDK | Firebase/etc. if added |

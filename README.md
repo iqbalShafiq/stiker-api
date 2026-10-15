@@ -2,6 +2,20 @@
 
 Express API for Setiker sticker generation and cloud sync.
 
+## Local development
+
+```bash
+cp .env.example .env          # fill JWT secrets, DATABASE_URL, AGENT_API_KEY
+docker compose --profile dev up -d postgres redis
+npx prisma migrate deploy
+npx prisma db seed            # roles, billing products, AI model catalog
+npm run dev
+```
+
+Architecture, the AI model catalog, and tracing are documented in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). One compose file drives every environment via
+profiles: `dev`, `test`, `prod` (`docker compose --profile <name> ...`).
+
 ## Sign in with Google
 
 Mobile clients send a Google **ID token** to `POST /api/v1/auth/google`. The API verifies the token with `google-auth-library` (never trust client-only identity). Stable user key is Google **`sub`**, stored in `AuthIdentity`.
@@ -97,7 +111,8 @@ Each authenticated user has a **daily point pool** (default **100**). Each AI op
 | `AI_RESERVATION_TTL_SECONDS` | `3600` | Auto-release stale reservations |
 | `AI_QUOTA_FAIL_CLOSED` | `true` outside development | When `true`, Redis errors block quota instead of fail-open. Keep `true` in production and CI. |
 | `REDIS_ENABLED` | `true` | Disable only for local dev without Redis. Keep enabled in production. |
-| `IMGLY_BG_ENABLED` | `true` | Enables IMG.LY ONNX background removal. Tests set this to `false` and use the local fallback. |
+| `IMGLY_BG_MODEL` | `medium` | IMG.LY ONNX model size (`small`/`medium`/`large`) |
+| `IMGLY_BG_MAX_CONCURRENCY` | `2` | Parallel IMG.LY segmentations |
 
 ### Endpoints
 
@@ -107,14 +122,51 @@ Each authenticated user has a **daily point pool** (default **100**). Each AI op
 
 Protected AI routes accept optional header `X-AI-Reservation-Id` from the app after a prior reserve.
 
-Redis is required for real quota enforcement. The Docker Compose files include Redis for dev, test,
-and production. Use `npm run test:up` for the isolated test stack; it starts Redis on
-`redis://localhost:6380` and Postgres on `localhost:5433`.
+Redis is required for real quota enforcement. `docker-compose.yml` uses profiles: `dev` runs the
+api with Postgres and Redis, `test` starts the isolated stack (Postgres on `localhost:5433`,
+Redis on `localhost:6380`), and `prod` runs the published image with migrations, seeding, and
+nginx. Before running tests use `npm run test:up && npm run test:migrate` — `test:migrate`
+applies migrations **and seeds** the test database (roles, billing products, AI model catalog),
+which the suite requires. Give the test stack exclusive use; concurrent runs or an external
+`test:down -v` will produce phantom failures.
+
+Quality gates: `npm test` (full suite), `npm run lint`, `npm run typecheck`, and
+`npm run build && npm run check:dist` — the last one verifies the compiled CommonJS build can
+actually load the ESM-only `@anvia/*` packages through the shim.
+
+> Deployment posture: in the `prod` profile Postgres and Redis bind to `127.0.0.1` only, and the
+> api is exposed through nginx on host ports `8080`/`8443` (see `nginx/conf.d`); adjust the port
+> mappings for your TLS terminator.
 
 ### Billing rules
 
 - **HTTP 2xx** on an AI route → reservation committed (points used).
 - **HTTP error** → reservation released (no charge).
+
+## AI engine (Anvia + Langfuse)
+
+AI flows run on [Anvia](https://docs.anvia.dev) with an OpenAI-compatible gateway
+(`AGENT_BASE_URL`, defaults to OpenRouter):
+
+- **Video sticker pack agent** — Anvia `Agent` with typed tools and schema-validated structured output.
+- **Vision analyses** (improvement prompt, grid detection, cell text) — Anvia parsed completions with zod schemas.
+- **Image generation** — Anvia `ImageGenerationModel` contract backed by the OpenRouter Images API.
+
+Models live in the `AiModel` table (one row per role with reasoning efforts, temperature and token
+limits) and are seeded by `npx prisma db seed`; change a model by updating the row or the seeder
+(`prisma/ai-models.seed.js`) — no deploy needed. Agent runs are traced to Langfuse when
+`LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY` are set. See
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full picture.
+
+| Env var | Default | Purpose |
+| --- | --- | --- |
+| `AGENT_API_KEY` | _(empty)_ | Gateway API key (required for AI features) |
+| `AGENT_BASE_URL` | `https://openrouter.ai/api/v1` | OpenAI-compatible gateway root |
+| `LANGFUSE_BASE_URL` | `https://cloud.langfuse.com` | Langfuse host |
+| `LANGFUSE_PUBLIC_KEY` | _(empty)_ | Enables agent-run tracing when set with the secret key |
+| `LANGFUSE_SECRET_KEY` | _(empty)_ | Enables agent-run tracing when set with the public key |
+
+Agent runs are traced to Langfuse when both keys are set; without them tracing is a no-op.
 
 ## Store-compliant billing (Google Play / Apple IAP)
 

@@ -1,6 +1,7 @@
 import path from 'path';
 import multer from 'multer';
 import { config } from '../config';
+import { InvalidFileTypeError } from '../errors';
 
 const ALLOWED_MIME_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif'];
 
@@ -33,7 +34,7 @@ export const upload = multer({
     if (ALLOWED_MIME_TYPES.includes(effectiveMime)) {
       cb(null, true);
     } else {
-      cb(new Error('INVALID_FILE_TYPE: Only PNG, JPG, JPEG, WebP, and GIF are allowed'));
+      cb(new InvalidFileTypeError());
     }
   },
 });

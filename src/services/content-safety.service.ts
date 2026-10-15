@@ -39,17 +39,6 @@ export class ContentSafetyService {
       }
     }
   }
-
-  scanText(text: string): { flagged: boolean; reason?: string } {
-    if (!this.isEnabled()) return { flagged: false };
-    const lower = text.toLowerCase();
-    for (const keyword of BLOCKLIST_KEYWORDS) {
-      if (lower.includes(keyword)) {
-        return { flagged: true, reason: `Matched safety keyword: ${keyword}` };
-      }
-    }
-    return { flagged: false };
-  }
 }
 
 export const contentSafetyService = new ContentSafetyService();

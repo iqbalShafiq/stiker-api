@@ -1,15 +1,58 @@
+name: stiker-api
+
 services:
+  postgres:
+    image: postgres:16-alpine
+    profiles: [dev, prod]
+    container_name: stiker-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-sticker_api}
+    ports:
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-sticker_api}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks: [stiker-network]
+
+  redis:
+    image: redis:7-alpine
+    profiles: [dev, prod]
+    container_name: stiker-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks: [stiker-network]
+
   api:
+    profiles: [dev]
     build:
       context: .
       dockerfile: Dockerfile
-    ports:
-      - "${PORT:-3000}:3000"
-    env_file:
-      - .env
+    env_file: .env
     environment:
-      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@postgres:5432/${DB_NAME:-sticker_api}
+      - NODE_ENV=${NODE_ENV:-development}
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-sticker_api}
       - REDIS_URL=redis://redis:6379
+    ports:
+      - "${PORT:-7845}:${PORT:-7845}"
     volumes:
       - uploads:/app/uploads
     depends_on:
@@ -17,48 +60,116 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    networks:
-      - sticker-network
+    networks: [stiker-network]
 
-  postgres:
-    image: postgres:16-alpine
-    ports:
-      - "${DB_PORT:-5432}:5432"
+  app:
+    profiles: [prod]
+    image: ghcr.io/iqbalshafiq/stiker-api:${IMAGE_TAG:-latest}
+    container_name: api
+    restart: unless-stopped
+    env_file: .env
     environment:
-      - POSTGRES_USER=${DB_USER:-postgres}
-      - POSTGRES_PASSWORD=${DB_PASSWORD:-password}
-      - POSTGRES_DB=${DB_NAME:-sticker_api}
+      - NODE_ENV=production
+      # Pinned: the nginx upstream (nginx/nginx.conf) targets this exact port.
+      - PORT=7845
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-sticker_api}
+      - REDIS_URL=redis://redis:6379
+    ports:
+      - "127.0.0.1:7845:7845"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - uploads:/app/uploads
+      - ./logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [stiker-network]
+    cpus: '2.0'
+    mem_limit: 2g
+
+  migrate:
+    profiles: [prod]
+    image: ghcr.io/iqbalshafiq/stiker-api:${IMAGE_TAG:-latest}
+    env_file: .env
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-sticker_api}
+    command: ["npx", "prisma", "migrate", "deploy"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    networks: [stiker-network]
+
+  seed:
+    profiles: [prod]
+    image: ghcr.io/iqbalshafiq/stiker-api:${IMAGE_TAG:-latest}
+    env_file: .env
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-sticker_api}
+    command: ["npx", "prisma", "db", "seed"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    networks: [stiker-network]
+
+  nginx:
+    profiles: [prod]
+    image: nginx:alpine
+    container_name: stiker-nginx
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+      - "8443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./certbot/conf:/etc/letsencrypt:ro
+      - ./certbot/www:/var/www/certbot:ro
+      - uploads:/app/uploads:ro
+    depends_on: [app]
+    networks: [stiker-network]
+    command: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
+
+  postgres-test:
+    profiles: [test]
+    image: postgres:16-alpine
+    container_name: stiker-postgres-test
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: sticker_api_test
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-sticker_api}"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d sticker_api_test"]
       interval: 5s
       timeout: 5s
       retries: 5
-      start_period: 10s
-    networks:
-      - sticker-network
 
-  redis:
+  redis-test:
+    profiles: [test]
     image: redis:7-alpine
+    container_name: stiker-api-redis-test
     ports:
-      - "${REDIS_PORT:-6379}:6379"
-    volumes:
-      - redis_data:/data
+      - "6380:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
-      start_period: 5s
-    networks:
-      - sticker-network
 
 networks:
-  sticker-network:
+  stiker-network:
     driver: bridge
 
 volumes:
   postgres_data:
   redis_data:
   uploads:
+  postgres_test_data:

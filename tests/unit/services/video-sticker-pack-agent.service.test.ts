@@ -1,23 +1,39 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { VideoStickerPackAgentService } from '../../../src/services/video-sticker-pack-agent.service';
 import type { VideoStickerCandidate } from '../../../src/utils/video-sticker-pack';
+import { AiNotConfiguredError } from '../../../src/errors';
 
-const invokeMock = vi.hoisted(() => vi.fn());
-const createAgentMock = vi.hoisted(() => vi.fn(() => ({ invoke: invokeMock })));
-const toolMock = vi.hoisted(() => vi.fn((fn, fields) => ({ ...fields, fn })));
-const toolStrategyMock = vi.hoisted(() => vi.fn(schema => ({ schema, strategy: 'tool' })));
+const generateMock = vi.hoisted(() => vi.fn());
+const createAgentMock = vi.hoisted(() => vi.fn());
+const buildUserMessageMock = vi.hoisted(() =>
+  vi.fn(() => ({ role: 'user', content: [{ type: 'text', text: 'built-message' }] }))
+);
 
-vi.mock('langchain', () => ({
-  createAgent: createAgentMock,
-  tool: toolMock,
-  toolStrategy: toolStrategyMock,
+vi.mock('../../../src/ai/agents/video-sticker-pack/agent', () => ({
+  VIDEO_STICKER_PACK_AGENT_ID: 'video-sticker-pack',
+  createVideoStickerPackAgent: createAgentMock,
+  buildVideoStickerPackAgentUserMessage: buildUserMessageMock,
 }));
 
-vi.mock('@langchain/openrouter', () => ({
-  ChatOpenRouter: vi.fn(function ChatOpenRouter(fields) {
-    return { fields };
-  }),
+vi.mock('../../../src/ai/models/catalog', () => ({
+  loadAiModel: vi.fn(async () => ({
+    role: 'agent',
+    modelId: 'meta/muse-spark-1.3-contributor',
+    reasoningEfforts: ['low', 'medium', 'high', 'max'],
+    defaultReasoningEffort: 'high',
+    temperature: 0.2,
+    maxTokens: 4000,
+  })),
+  MissingAiModelError: class MissingAiModelError extends Error {},
 }));
+
+const usage = {
+  inputTokens: 123,
+  outputTokens: 45,
+  totalTokens: 168,
+  cachedInputTokens: 0,
+  cacheCreationInputTokens: 0,
+};
 
 const candidates: VideoStickerCandidate[] = [
   {
@@ -42,14 +58,24 @@ const candidates: VideoStickerCandidate[] = [
   },
 ];
 
+const baseInput = {
+  candidateGrids: [{ buffer: Buffer.from('grid'), mimeType: 'image/png' }],
+  candidates,
+  selectedStartMs: 0,
+  selectedEndMs: 10_000,
+  sourceDurationMs: 30_000,
+};
+
 describe('VideoStickerPackAgentService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    createAgentMock.mockResolvedValue({ generate: generateMock });
   });
 
-  it('reads structuredResponse from LangChain agent and normalizes candidate references', async () => {
-    invokeMock.mockResolvedValueOnce({
-      structuredResponse: {
+  it('normalizes candidate references from the validated agent output and maps usage metadata', async () => {
+    generateMock.mockResolvedValueOnce({
+      type: 'response',
+      output: {
         packTitle: 'Video Reactions',
         staticStickers: [
           {
@@ -73,37 +99,28 @@ describe('VideoStickerPackAgentService', () => {
           },
         ],
       },
-      messages: [
-        {
-          usage_metadata: {
-            input_tokens: 123,
-            output_tokens: 45,
-          },
-        },
-      ],
+      usage,
     });
 
     const service = new VideoStickerPackAgentService();
-    const result = await service.generatePlan({
-      candidateGrids: [{ buffer: Buffer.from('grid'), mimeType: 'image/png' }],
-      candidates,
-      selectedStartMs: 0,
-      selectedEndMs: 10_000,
-      sourceDurationMs: 30_000,
-    });
+    const result = await service.generatePlan({ ...baseInput, userId: 'user-1' });
 
     expect(createAgentMock).toHaveBeenCalledTimes(1);
-    expect(toolStrategyMock).toHaveBeenCalledTimes(1);
-    expect(invokeMock).toHaveBeenCalledTimes(1);
+    expect(generateMock).toHaveBeenCalledTimes(1);
+    expect(buildUserMessageMock).toHaveBeenCalledTimes(1);
+    expect(generateMock.mock.calls[0][0].trace.userId).toBe('user-1');
     expect(result.plan.staticStickers[0]).toMatchObject({
       candidateId: 'f_001',
       frameIndex: 1,
       timestampMs: 1_000,
       cellId: 'A1',
     });
-    expect(result.plan.animatedStickers[0].timeline.map(frame => frame.candidateId)).toEqual(['f_001', 'f_002']);
+    expect(result.plan.animatedStickers[0].timeline.map(frame => frame.candidateId)).toEqual([
+      'f_001',
+      'f_002',
+    ]);
     expect(result.metadata).toMatchObject({
-      model: 'openai/gpt-4.1-mini',
+      model: 'meta/muse-spark-1.3-contributor',
       mode: 'video-sticker-pack',
       candidateGridCount: 1,
       candidateCount: 2,
@@ -112,42 +129,38 @@ describe('VideoStickerPackAgentService', () => {
     });
   });
 
-  it('falls back to parsing final message JSON when structuredResponse is absent', async () => {
-    invokeMock.mockResolvedValueOnce({
-      messages: [
-        {
-          content: JSON.stringify({
-            packTitle: 'Fallback',
-            staticStickers: [
-              {
-                candidateId: 'f_002',
-                frameIndex: 2,
-                timestampMs: 1_500,
-                cellId: 'A2',
-                emojis: ['⭐'],
-                decorations: [],
-              },
-            ],
-          }),
-        },
-      ],
+  it('fails when the agent run does not produce a response outcome', async () => {
+    generateMock.mockResolvedValueOnce({
+      type: 'interaction',
+      interaction: { type: 'tool-approval' },
+      usage,
     });
 
     const service = new VideoStickerPackAgentService();
-    const result = await service.generatePlan({
-      candidateGrids: [{ buffer: Buffer.from('grid'), mimeType: 'image/png' }],
-      candidates,
-      selectedStartMs: 0,
-      selectedEndMs: 10_000,
-    });
 
-    expect(result.plan.packTitle).toBe('Fallback');
-    expect(result.plan.staticStickers[0].candidateId).toBe('f_002');
+    await expect(service.generatePlan(baseInput)).rejects.toMatchObject({
+      code: 'AI_GENERATION_FAILED',
+      statusCode: 502,
+    });
   });
 
-  it('wraps invalid agent responses as AI generation errors', async () => {
-    invokeMock.mockResolvedValueOnce({
-      structuredResponse: {
+  it('keeps AppError status codes from the agent boundary instead of flattening them to 502', async () => {
+    createAgentMock.mockRejectedValueOnce(
+      new AiNotConfiguredError('AGENT_API_KEY is required for AI features')
+    );
+
+    const service = new VideoStickerPackAgentService();
+
+    await expect(service.generatePlan(baseInput)).rejects.toMatchObject({
+      code: 'AI_NOT_CONFIGURED',
+      statusCode: 500,
+    });
+  });
+
+  it('wraps invalid agent outputs as AI generation errors', async () => {
+    generateMock.mockResolvedValueOnce({
+      type: 'response',
+      output: {
         packTitle: 'Bad',
         staticStickers: [
           {
@@ -158,16 +171,12 @@ describe('VideoStickerPackAgentService', () => {
           },
         ],
       },
+      usage,
     });
 
     const service = new VideoStickerPackAgentService();
 
-    await expect(service.generatePlan({
-      candidateGrids: [{ buffer: Buffer.from('grid'), mimeType: 'image/png' }],
-      candidates,
-      selectedStartMs: 0,
-      selectedEndMs: 10_000,
-    })).rejects.toMatchObject({
+    await expect(service.generatePlan(baseInput)).rejects.toMatchObject({
       code: 'AI_GENERATION_FAILED',
       statusCode: 502,
     });

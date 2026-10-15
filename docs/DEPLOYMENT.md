@@ -25,19 +25,27 @@ cd stiker-api
 
 ### 2. Configure Environment
 
-```bash
-# Copy production environment template
-cp .env.production.example .env.production
+There is a single env file for every environment:
 
-# Edit with your values
-nano .env.production
+```bash
+cp .env.example .env
+nano .env
 ```
+
+The API listens on **7845** (`PORT`), a unique port chosen so it never fights the
+generic 3000/8080 used by other projects. In the `prod` profile the port is pinned in
+`docker-compose.yml` because the nginx upstream targets it; nginx itself is published on
+host ports `8080`/`8443`.
 
 ### 3. Run Setup Script
 
 ```bash
 ./scripts/setup-production.sh
 ```
+
+This generates JWT secrets when missing, starts Postgres/Redis, applies migrations,
+seeds the database (roles, billing products, AI model catalog), and starts the full
+`prod` profile.
 
 ### 4. Configure SSL
 
@@ -63,12 +71,23 @@ Go to Settings > Secrets and variables > Actions, add these secrets:
 
 The pipeline automatically pushes to GHCR. Make sure your repository has package write permissions.
 
+## Compose Profiles
+
+One compose file drives every environment:
+
+```bash
+docker compose --profile dev up -d     # local api + postgres + redis
+docker compose --profile test up -d    # isolated test stack
+docker compose --profile prod up -d    # published image + nginx
+```
+
 ## Database Migrations
 
 Migrations run automatically during deployment. To run manually:
 
 ```bash
-docker-compose -f docker-compose.prod.yml run --rm api npx prisma migrate deploy
+docker compose --profile prod run --rm migrate
+docker compose --profile prod run --rm seed   # idempotent: roles, billing products, AI catalog
 ```
 
 ## Backups
@@ -94,20 +113,21 @@ crontab -e
 ### Health Check
 
 ```bash
-curl https://your-domain.com/health
+curl http://localhost:7845/health     # API directly (VPS-local)
+curl https://your-domain.com/health   # through nginx
 ```
 
 ### Logs
 
 ```bash
 # API logs
-docker-compose -f docker-compose.prod.yml logs -f api
+docker compose --profile prod logs -f app
 
 # Nginx logs
-docker-compose -f docker-compose.prod.yml logs -f nginx
+docker compose --profile prod logs -f nginx
 
 # All logs
-docker-compose -f docker-compose.prod.yml logs -f
+docker compose --profile prod logs -f
 ```
 
 ### View Logs File
@@ -126,13 +146,13 @@ Push to master branch triggers automatic deployment.
 
 ```bash
 # Pull latest code
-git pull origin main
+git pull origin master
 
 # Pull latest image
-docker pull ghcr.io/iqbalShafiq/stiker-api:latest
+docker pull ghcr.io/iqbalshafiq/stiker-api:latest
 
-# Restart services
-docker-compose -f docker-compose.prod.yml up -d
+# Restart the API with the new image
+docker compose --profile prod up -d app
 ```
 
 ## Troubleshooting
@@ -141,30 +161,33 @@ docker-compose -f docker-compose.prod.yml up -d
 
 ```bash
 # Check logs
-docker-compose -f docker-compose.prod.yml logs api
+docker compose --profile prod logs app
 
-# Check health
-docker-compose -f docker-compose.prod.yml ps
+# Check status
+docker compose --profile prod ps
 ```
 
 ### Database Connection Issues
 
 ```bash
 # Check if postgres is running
-docker-compose -f docker-compose.prod.yml ps postgres
+docker compose --profile prod ps postgres
 
 # Check database logs
-docker-compose -f docker-compose.prod.yml logs postgres
+docker compose --profile prod logs postgres
 ```
 
 ### SSL Issues
 
 ```bash
 # Renew certificates manually
-docker-compose -f docker-compose.prod.yml run --rm certbot certbot renew
+docker run --rm \
+    -v "$(pwd)/certbot/conf:/etc/letsencrypt" \
+    -v "$(pwd)/certbot/www:/var/www/certbot" \
+    certbot/certbot renew
 
 # Restart nginx
-docker-compose -f docker-compose.prod.yml restart nginx
+docker compose --profile prod restart nginx
 ```
 
 ## Security Checklist

@@ -1,8 +1,8 @@
 import fs from 'fs';
-import path from 'path';
 import { ProcessingHistoryService } from '../services/processing-history.service';
 import { config } from '../config';
 import { accountPurgeService } from '../services/account-purge.service';
+import { resolveStoragePath } from './storage-path';
 
 export class CleanupService {
   private historyService: ProcessingHistoryService;
@@ -53,7 +53,7 @@ export class CleanupService {
 
     for (const filePath of filePaths) {
       try {
-        const fullPath = path.join(process.cwd(), config.uploadDir, filePath);
+        const fullPath = resolveStoragePath(filePath, config.uploadDir);
         if (fs.existsSync(fullPath)) {
           fs.unlinkSync(fullPath);
           deletedCount++;

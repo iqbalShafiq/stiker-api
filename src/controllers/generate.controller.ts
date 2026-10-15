@@ -1,6 +1,7 @@
 import type { Response, NextFunction } from 'express';
 import { randomUUID } from 'crypto';
-import { OpenRouterService } from '../services/openrouter.service';
+import { ImageGenerationService } from '../services/image-generation.service';
+import { VisionAnalysisService } from '../services/vision-analysis.service';
 import { ImageService } from '../services/image.service';
 import { LocalStorageProvider } from '../storage/local.provider';
 import { ProcessingHistoryService } from '../services/processing-history.service';
@@ -16,7 +17,7 @@ import {
 import {
   buildEmptyTextAssetDecoration,
 } from '../utils/text-asset-decoration';
-import { config } from '../config';
+import { toStorageRelativePath } from '../utils/storage-path';
 import type { ImageResult, GenerationMetadata } from '../types';
 import type { AuthRequest } from '../middleware/auth.middleware';
 import { VideoStickerPackAgentService } from '../services/video-sticker-pack-agent.service';
@@ -123,14 +124,16 @@ function sumOptional(left: number | undefined, right: number | undefined): numbe
 }
 
 export class GenerateController {
-  private openRouterService: OpenRouterService;
+  private imageGenerationService: ImageGenerationService;
+  private visionAnalysisService: VisionAnalysisService;
   private imageService: ImageService;
   private storageProvider: LocalStorageProvider;
   private processingHistoryService: ProcessingHistoryService;
   private videoStickerPackAgentService: VideoStickerPackAgentService;
 
   constructor() {
-    this.openRouterService = new OpenRouterService();
+    this.imageGenerationService = new ImageGenerationService();
+    this.visionAnalysisService = new VisionAnalysisService();
     this.imageService = new ImageService();
     this.storageProvider = new LocalStorageProvider();
     this.processingHistoryService = new ProcessingHistoryService();
@@ -150,16 +153,14 @@ export class GenerateController {
 
       const inputImages = file ? [this.fileToImageInput(file)] : [];
       const { imageBuffer, metadata: aiMetadata } =
-        await this.openRouterService.generateImageWithInputs(
+        await this.imageGenerationService.generateImageWithInputs(
           buildPromptSingle(text),
           this.toBase64Inputs(inputImages)
         );
 
-      const requestTimestamp = Date.now();
       const imageResult = await this.saveGeneratedImage({
         imageBuffer,
         userId,
-        subDir: `generate/${requestTimestamp}`,
         baseName: 'generated-sticker',
       });
       imageResult.textAssetDecoration = buildEmptyTextAssetDecoration('input', text);
@@ -170,7 +171,6 @@ export class GenerateController {
       });
 
       const metadata: GenerationMetadata = {
-        model: config.models.imageGeneration,
         ...aiMetadata,
         mode: 'single',
         inputCount: inputImages.length,
@@ -203,16 +203,14 @@ export class GenerateController {
       }
 
       const { imageBuffer, metadata: aiMetadata } =
-        await this.openRouterService.generateImageWithInputs(
+        await this.imageGenerationService.generateImageWithInputs(
           buildPromptStickerPack(text, gridDims.rows, gridDims.cols),
           this.toBase64Inputs(inputImages)
         );
 
-      const requestTimestamp = Date.now();
       const imageResult = await this.saveGeneratedImage({
         imageBuffer,
         userId,
-        subDir: `generate-sticker-pack/${requestTimestamp}`,
         baseName: 'generated-sticker-pack',
       });
       imageResult.textAssetDecoration = buildEmptyTextAssetDecoration(
@@ -232,7 +230,6 @@ export class GenerateController {
       }, 'sticker-pack');
 
       const metadata: GenerationMetadata = {
-        model: config.models.imageGeneration,
         ...aiMetadata,
         gridLayout: `${gridDims.rows}x${gridDims.cols}`,
         cellCount: gridDims.rows * gridDims.cols,
@@ -256,24 +253,20 @@ export class GenerateController {
       }
 
       const inputImages = files.map(file => this.fileToImageInput(file));
-      const requestTimestamp = Date.now();
 
       if (inputImages.length === 1) {
-        const agent = await this.openRouterService.buildImprovementPrompt(inputImages, 'single');
+        const agent = await this.visionAnalysisService.buildImprovementPrompt(inputImages, 'single');
         const { imageBuffer, metadata: aiMetadata } =
-          await this.openRouterService.generateImageWithInputs(
+          await this.imageGenerationService.generateImageWithInputs(
             buildSingleImprovementGenerationPrompt(
               agent.plan.improvementPrompt,
               Boolean(agent.plan.textAssetDecoration)
             ),
             this.toBase64Inputs(inputImages),
-            config.models.imageGeneration,
-            false
           );
         const imageResult = await this.saveGeneratedImage({
           imageBuffer,
           userId,
-          subDir: `generate-improvement/${requestTimestamp}`,
           baseName: 'improved-sticker',
         });
 
@@ -287,8 +280,8 @@ export class GenerateController {
         }, 'improve');
 
         const metadata: GenerationMetadata = {
-          model: config.models.imageGeneration,
-          improvementAgentModel: config.models.improvementAgent,
+          model: aiMetadata.model,
+          improvementAgentModel: agent.metadata.model,
           ...mergeAiMetadata([agent.metadata, aiMetadata]),
           mode: 'single',
           inputCount: 1,
@@ -305,24 +298,25 @@ export class GenerateController {
       const chunks = chunkImageInputs(inputImages, IMPROVEMENT_GRID_MAX_CELLS);
       const images: ImageResult[] = [];
       const metadataParts: AiMetadata[] = [];
+      let imageModel = '';
+      let improvementModel = '';
 
       for (const [chunkIndex, chunk] of chunks.entries()) {
-        const agent = await this.openRouterService.buildImprovementPrompt(chunk, 'grid');
+        const agent = await this.visionAnalysisService.buildImprovementPrompt(chunk, 'grid');
         metadataParts.push(agent.metadata);
+        improvementModel = agent.metadata.model;
 
         const { imageBuffer, metadata: aiMetadata } =
-          await this.openRouterService.generateImageWithInputs(
+          await this.imageGenerationService.generateImageWithInputs(
             buildGridImprovementGenerationPrompt(agent.plan.improvementPrompt, chunk.length),
             this.toBase64Inputs(chunk),
-            config.models.imageGeneration,
-            false
           );
         metadataParts.push(aiMetadata);
+        imageModel = aiMetadata.model;
 
         const imageResult = await this.saveGeneratedImage({
           imageBuffer,
           userId,
-          subDir: `generate-improvement/${requestTimestamp}`,
           baseName: `improved-grid-${String(chunkIndex + 1).padStart(2, '0')}`,
         });
         imageResult.textAssetDecoration = buildEmptyTextAssetDecoration(
@@ -343,8 +337,8 @@ export class GenerateController {
       }, 'improve');
 
       const metadata: GenerationMetadata = {
-        model: config.models.imageGeneration,
-        improvementAgentModel: config.models.improvementAgent,
+        model: imageModel,
+        improvementAgentModel: improvementModel,
         ...mergeAiMetadata(metadataParts),
         mode: 'grid',
         inputCount: inputImages.length,
@@ -388,6 +382,7 @@ export class GenerateController {
         prompt: typeof body.prompt === 'string' ? body.prompt : undefined,
         maxStaticStickers: Number(body.maxStaticStickers),
         maxAnimatedStickers: Number(body.maxAnimatedStickers),
+        userId,
       });
 
       await this.processingHistoryService.create({
@@ -441,14 +436,12 @@ export class GenerateController {
   private async saveGeneratedImage(input: {
     imageBuffer: Buffer;
     userId: string;
-    subDir: string;
     baseName: string;
   }): Promise<ImageResult> {
     const squareBuffer = await this.imageService.resizeToSquareContain(input.imageBuffer, 512);
     const uniqueBaseName = `${input.baseName}-${randomUUID()}`;
     const filename = await this.storageProvider.saveFile(squareBuffer, {
       extension: 'png',
-      subDir: input.subDir,
       baseName: uniqueBaseName,
       ownerId: input.userId,
     });
@@ -476,7 +469,7 @@ export class GenerateController {
       inputData: input.inputData,
       outputFiles: input.images.map(image => ({
         url: image.url,
-        path: image.url.replace(`${config.appUrl}/uploads/`, ''),
+        path: toStorageRelativePath(image.url),
         filename: image.id || 'generated-sticker',
         width: image.width,
         height: image.height,

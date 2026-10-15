@@ -1,8 +1,12 @@
+import { z } from 'zod';
 import type { TextAssetDecoration } from '../types';
 import { buildTextAssetDecoration } from './text-asset-decoration';
+import { IMAGE_API_MAX_INPUT_REFERENCES } from '../ai/provider/images-api-model';
 
 export const IMPROVEMENT_GRID_LAYOUT = '4x4';
-export const IMPROVEMENT_GRID_MAX_CELLS = 16;
+// Single source of the cap: the Images API accepts at most this many input
+// references, so a grid sheet can hold no more cells than that.
+export const IMPROVEMENT_GRID_MAX_CELLS = IMAGE_API_MAX_INPUT_REFERENCES;
 
 export interface ImageGenerationInput {
   buffer: Buffer;
@@ -22,11 +26,39 @@ export function chunkImageInputs<T>(items: T[], chunkSize = IMPROVEMENT_GRID_MAX
   return chunks;
 }
 
+/**
+ * Model-facing schemas for the improvement planner. Strict providers require
+ * every property in `required` and reject `default`/`optional`, so single mode
+ * always asks for `textAssetDecoration` (empty strings allowed; the normalizer
+ * drops empties) and grid mode omits the field entirely.
+ */
+export const improvementPlanOutputSchema = z.object({
+  improvementPrompt: z.string().trim().min(1).max(4000),
+  textAssetDecoration: z.object({
+    text: z.string().trim().max(64),
+    style: z.object({
+      fontFamily: z.string().trim().max(80),
+      color: z.string().trim().max(40),
+      weight: z.string().trim().max(40),
+    }),
+  }),
+});
+
+export const improvementGridPlanOutputSchema = z.object({
+  improvementPrompt: z.string().trim().min(1).max(4000),
+});
+
 export function normalizeImprovementPromptPlan(
-  content: string,
+  content: unknown,
   options: { allowTextAssetDecoration: boolean }
 ): ImprovementPromptPlan {
-  const parsed = parseJsonObject(content);
+  const parsed =
+    typeof content === 'string'
+      ? parseJsonObject(content)
+      : isRecord(content)
+        ? content
+        : {};
+
   const prompt =
     typeof parsed.improvementPrompt === 'string'
       ? parsed.improvementPrompt.trim()
@@ -54,4 +86,8 @@ function parseJsonObject(content: string): Record<string, unknown> {
     .trim();
 
   return JSON.parse(withoutFence) as Record<string, unknown>;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }
