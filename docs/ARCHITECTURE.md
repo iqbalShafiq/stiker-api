@@ -14,10 +14,12 @@ routes (src/app.ts)
                   └─ AI gateway (AGENT_BASE_URL — OpenAI-compatible, default OpenRouter)
 ```
 
-- **`src/ai/`** is the only place allowed to import `@anvia/*`. The packages are ESM-only and
+- **`src/ai/`** is the only place that imports `@anvia/*` at runtime. The packages are ESM-only and
   their `exports` maps declare no `require` condition, so they are loaded lazily through
   `src/ai/esm.ts` (`importEsm`) and every module there keeps its runtime dependencies behind that
-  seam. `src/ai/core.ts` caches the `@anvia/core` module for the process.
+  seam. `src/ai/core.ts` caches the `@anvia/core` module for the process. Type-only imports
+  elsewhere (e.g. `ImageGenerationResult` in `ImageGenerationService`) are fine — they are erased
+  at compile time.
 - **Provider boundary** — `src/ai/provider/`:
   - `client.ts`: Anvia `OpenAIClient` bound to `AGENT_BASE_URL`/`AGENT_API_KEY`, plus
     `requireAgentCredentials()` (the clear error when the gateway key is missing).

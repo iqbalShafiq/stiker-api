@@ -1,5 +1,6 @@
 import { prisma } from '../prisma/client';
 import { Prisma } from '@prisma/client';
+import { config } from '../config';
 import { NotFoundError, ValidationError } from '../errors';
 
 export type ProcessingHistoryType =
@@ -39,9 +40,8 @@ export class ProcessingHistoryService {
   }
 
   async create(input: CreateHistoryInput): Promise<void> {
-    const expirationDays = parseInt(process.env.HISTORY_EXPIRATION_DAYS ?? '7', 10);
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + expirationDays);
+    expiresAt.setDate(expiresAt.getDate() + config.historyExpirationDays);
 
     await prisma.processingHistory.create({
       data: {

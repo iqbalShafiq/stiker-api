@@ -1,13 +1,12 @@
 import { prisma } from '../prisma/client';
 import { StickerVisibility } from '@prisma/client';
+import { config } from '../config';
 import { PUBLIC_PACK_INCLUDE, type PackWithPublicInclude } from '../utils/pack-query';
-
-const FEATURED_WINDOW_HOURS = Math.max(1, parseInt(process.env.FEATURED_WINDOW_HOURS ?? '6', 10));
 
 export class FeaturedService {
   async recomputeFeaturedPack(): Promise<void> {
     const now = new Date();
-    const windowStart = new Date(now.getTime() - FEATURED_WINDOW_HOURS * 60 * 60 * 1000);
+    const windowStart = new Date(now.getTime() - config.featured.windowHours * 60 * 60 * 1000);
 
     const packs = await prisma.stickerPack.findMany({
       where: {
@@ -59,7 +58,7 @@ export class FeaturedService {
       return;
     }
 
-    const windowEnd = new Date(now.getTime() + FEATURED_WINDOW_HOURS * 60 * 60 * 1000);
+    const windowEnd = new Date(now.getTime() + config.featured.windowHours * 60 * 60 * 1000);
 
     await prisma.featuredStickerPack.upsert({
       where: { stickerPackId: bestPackId },
@@ -114,6 +113,6 @@ export class FeaturedService {
 export const featuredService = new FeaturedService();
 
 export function getFeaturedCronIntervalMs(): number {
-  const hours = Math.max(1, parseInt(process.env.FEATURED_CRON_INTERVAL_HOURS ?? '6', 10));
+  const hours = config.featured.cronIntervalHours;
   return hours * 60 * 60 * 1000;
 }

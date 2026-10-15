@@ -34,7 +34,6 @@ export const cellTextAnalysisOutputSchema = z.object({
 
 export type CellTextAnalysisResult = z.infer<typeof cellTextAnalysisOutputSchema>;
 export type OutsideForegroundTextDetection = CellTextAnalysisResult['textOutsideForeground'][number];
-export type TextStyleMetadata = OutsideForegroundTextDetection['style'];
 
 export function buildEmptyTextAssetDecoration(
   source: TextAssetDecoration['source'] = 'detected',

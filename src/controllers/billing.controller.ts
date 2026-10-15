@@ -1,7 +1,7 @@
 import type { Response, NextFunction, Request } from 'express';
 import type { AuthRequest } from '../middleware/auth.middleware';
 import { ValidationError } from '../errors';
-import { buildSuccessResponse } from '../utils/response-builder';
+import { buildErrorResponse, buildSuccessResponse } from '../utils/response-builder';
 import { billingCatalogService } from '../services/billing/billing-catalog.service';
 import { billingVerifyService } from '../services/billing/billing-verify.service';
 import { billingRestoreService } from '../services/billing/billing-restore.service';
@@ -91,7 +91,7 @@ export class BillingController {
       const token = req.query.token ?? req.headers['x-goog-channel-token'];
       const expected = config.billing.googlePlay.rtdnVerificationToken;
       if (expected && token !== expected) {
-        res.status(401).json({ success: false });
+        res.status(401).json(buildErrorResponse('UNAUTHORIZED', 'Invalid webhook token'));
         return;
       }
       await googlePlayRtdnHandler.handlePubSubBody(req.body as Parameters<typeof googlePlayRtdnHandler.handlePubSubBody>[0]);
@@ -131,7 +131,7 @@ export class BillingController {
         config.billing.xendit.webhookToken &&
         callbackToken !== config.billing.xendit.webhookToken
       ) {
-        res.status(401).json({ success: false });
+        res.status(401).json(buildErrorResponse('UNAUTHORIZED', 'Invalid webhook token'));
         return;
       }
       const eventId = String((req.body as { id?: string }).id ?? Date.now());

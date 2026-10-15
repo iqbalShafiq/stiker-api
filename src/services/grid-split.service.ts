@@ -20,7 +20,6 @@ export interface GridSplitMetadata {
   gridLayout: string;
   cellCount: number;
   normalizedImageUrl?: string;
-  llmBackgroundRemovedImageUrl?: string;
   outputSize: string;
   normalized: boolean;
   backgroundRemoved: boolean;

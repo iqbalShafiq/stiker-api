@@ -48,8 +48,3 @@ export function requireAiQuota(operation: AiOperation) {
     })().catch(next);
   };
 }
-
-/** Call when the client already finalized (e.g. cancel commit) to avoid double finalize on finish. */
-export function markAiQuotaFinalized(res: Response): void {
-  res.locals.aiQuotaFinalized = true;
-}

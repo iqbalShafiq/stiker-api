@@ -35,12 +35,6 @@ export class InvalidFileTypeError extends AppError {
   }
 }
 
-export class FileTooLargeError extends AppError {
-  constructor(message: string = 'File size exceeds the maximum allowed size') {
-    super(message, 413, 'FILE_TOO_LARGE');
-  }
-}
-
 export class AIGenerationError extends AppError {
   constructor(message: string = 'AI generation failed') {
     super(message, 502, 'AI_GENERATION_FAILED');

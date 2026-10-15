@@ -154,7 +154,7 @@ Rules:
 - Keep textOutsideForeground empty only when truly no outside text exists.
 - No additional keys.`;
 
-  private static readonly CELL_TEXT_FALLBACK_PROMPT = `Second pass OCR check for this sticker cell.
+  private static readonly CELL_TEXT_SECOND_PASS_PROMPT = `Second pass OCR check for this sticker cell.
 
 If there is ANY readable caption text around (not covering the face/body main subject), return it.
 If no such text exists, return an empty list.
@@ -191,16 +191,16 @@ Return exact JSON only:
       return primaryResult;
     }
 
-    const fallback = await generateStructuredCompletion({
+    const secondPass = await generateStructuredCompletion({
       role: 'vision',
       instructions: VisionAnalysisService.CELL_TEXT_INSTRUCTIONS,
-      prompt: VisionAnalysisService.CELL_TEXT_FALLBACK_PROMPT,
+      prompt: VisionAnalysisService.CELL_TEXT_SECOND_PASS_PROMPT,
       images,
       outputSchema: cellTextAnalysisOutputSchema,
       timeoutMs: 20000,
     });
 
-    return this.reconcileCellTextAnalysis(fallback.output);
+    return this.reconcileCellTextAnalysis(secondPass.output);
   }
 
   private reconcileCellTextAnalysis(output: CellTextAnalysisResult): CellTextAnalysisResult {

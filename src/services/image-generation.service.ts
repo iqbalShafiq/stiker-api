@@ -8,11 +8,6 @@ import {
   getImagesApiModel,
 } from '../ai/provider/images-api-model';
 
-export interface ImageGenerationInput {
-  buffer: Buffer;
-  mimeType: string;
-}
-
 export interface GenerationResult {
   imageBuffer: Buffer;
   metadata: {

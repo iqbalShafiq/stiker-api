@@ -2,6 +2,7 @@ import app from './app';
 import { config } from './config';
 import logger from './utils/logger';
 import { CleanupService } from './utils/cleanup';
+import { closeRedis } from './utils/redis-client';
 import { featuredService, getFeaturedCronIntervalMs } from './services/featured.service';
 import { closeAiTracing, flushAiTracing } from './ai/tracing';
 
@@ -50,6 +51,11 @@ async function finalizeTracingAndExit(): Promise<void> {
     await closeAiTracing();
   } catch (tracingError) {
     logger.error({ error: tracingError }, 'Failed to close AI tracing');
+  }
+  try {
+    await closeRedis();
+  } catch (redisError) {
+    logger.error({ error: redisError }, 'Failed to close Redis client');
   }
   process.exit(0);
 }
