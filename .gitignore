@@ -23,6 +23,7 @@ Desktop.ini
 # Logs & runtime dirs
 *.log
 logs/
+*.err
 backups/
 certbot/
 uploads/*
