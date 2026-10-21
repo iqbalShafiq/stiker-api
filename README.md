@@ -1,206 +1,162 @@
-# stiker-api
+<p align="center">
+  <img src="docs/images/logo.svg" alt="stiker-api" width="96" height="96">
+</p>
 
-Express API for Setiker sticker generation and cloud sync.
+<h1 align="center">stiker-api</h1>
 
-## Local development
+<p align="center">
+  The backend for <a href="https://github.com/iqbalShafiq/setiker">Setiker</a>, the neubrutal WhatsApp sticker maker.
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-coral" alt="MIT License"></a>
+  <img src="https://img.shields.io/badge/node-20%2B-339933?logo=node.js&logoColor=white" alt="Node.js 20+">
+  <img src="https://img.shields.io/badge/Express-4-000000?logo=express&logoColor=white" alt="Express 4">
+  <img src="https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL 16">
+  <img src="https://img.shields.io/badge/Prisma-7-2D3748?logo=prisma&logoColor=white" alt="Prisma 7">
+  <img src="https://img.shields.io/badge/tests-415%20passing-4C1" alt="415 tests passing">
+</p>
+
+Accounts, cloud sync, the public pack feed, AI generation and background removal, and store billing
+for one app. It is a single Express service: thin routes, controllers that only translate HTTP,
+services that own the product behaviour, and every AI call confined to one directory.
+
+## Quick start
+
+You need **Node.js 20+** and **Docker**.
 
 ```bash
-cp .env.example .env          # fill JWT secrets, DATABASE_URL, AGENT_API_KEY
+git clone https://github.com/iqbalShafiq/stiker-api.git
+cd stiker-api
+
+cp .env.example .env          # JWT secrets, DATABASE_URL, AGENT_API_KEY
 docker compose --profile dev up -d postgres redis
 npx prisma migrate deploy
 npx prisma db seed            # roles, billing products, AI model catalog
 npm run dev
 ```
 
-Architecture, the AI model catalog, and tracing are documented in
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). One compose file drives every environment via
-profiles: `dev`, `test`, `prod` (`docker compose --profile <name> ...`).
+The API listens on `:7845`. `GET /health` returns the readiness of Postgres, Redis and the model
+catalog, and `GET /docs` opens the Scalar API reference.
 
-## Sign in with Google
+| | |
+| --- | --- |
+| API | http://localhost:7845 |
+| Health | http://localhost:7845/health |
+| API reference | http://localhost:7845/docs |
+| OpenAPI 3.1 | http://localhost:7845/openapi.json |
 
-Mobile clients send a Google **ID token** to `POST /api/v1/auth/google`. The API verifies the token with `google-auth-library` (never trust client-only identity). Stable user key is Google **`sub`**, stored in `AuthIdentity`.
+One compose file drives every environment through profiles: `dev`, `test` (Postgres on `5433`, Redis
+on `6380`) and `prod` (the published image behind nginx on `8080`/`8443`).
 
-### Google Cloud Console checklist
+## The API
 
-1. Use **separate** Cloud projects for development and production.
-2. Configure the **OAuth consent screen** (app name, logo, generic support email, Privacy Policy / ToS URLs).
-3. Create OAuth client IDs in the same brand project:
-   - **Web** application — this client ID is the Android Credential Manager `serverClientId` and the primary `aud` for server verification.
-   - **Android** — package name `com.setiker.app` plus SHA-1 fingerprints for **debug** keystore and **Play App Signing**.
-4. Set API env `GOOGLE_CLIENT_IDS` to a comma-separated list of accepted audiences (at minimum the Web client ID).
+| Group | What it covers |
+| --- | --- |
+| `/api/v1/auth` | Email and password, Google, Apple, sessions, password reset |
+| `/api/v1/users` | Profiles, public profiles, search, blocking |
+| `/api/v1/sticker-packs` | Packs, stickers inside them, reordering, visibility, sharing |
+| `/api/v1/stickers` | Sticker CRUD, sharing, share links |
+| `/api/v1/sync` | The pull and push reconciliation the app runs on launch |
+| `/api/v1/ai` | The daily quota, and the AI usage snapshot |
+| `/api/v1/billing` | Products, purchase verification, subscriptions, restore |
+| `/api/v1/share` | Public share previews |
+| `/api/v1/notifications` | Likes, follows and imports |
+| `/api/v1/legal` | The legal documents the app links to |
+| `/api/v1/processing-history` | Failed and finished background work |
+| `/api/v1/prompt-presets` | The AI prompt presets the app offers |
+| `/api/v1/featured/today` | The pack the Explore tab features |
+| `/api/v1/admin` | Moderation and content review |
 
-### Debug SHA-1 (local Android)
+## Configuration
 
-```bash
-keytool -list -v -alias androiddebugkey -keystore ~/.android/debug.keystore -storepass android -keypass android
+Copy `.env.example` and fill in the keys for the parts you want running. The database URLs already
+match the compose file.
+
+| Variable | What it unlocks |
+| --- | --- |
+| `DATABASE_URL`, `REDIS_URL` | Postgres and Redis. Required at boot. |
+| `JWT_SECRET`, `JWT_REFRESH_SECRET` | Signed sessions. Required at boot, no placeholder defaults. |
+| `AGENT_API_KEY`, `AGENT_BASE_URL` | The AI gateway. `AGENT_BASE_URL` is OpenAI-compatible and defaults to OpenRouter. |
+| `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` | Traces for each agent run. |
+| `GOOGLE_CLIENT_IDS`, `APPLE_CLIENT_IDS` | Accepted sign-in audiences. |
+| `RESEND_API_KEY`, `RESEND_FROM` | Password reset and set-password email. |
+| `IMGLY_BG_MODEL` | The background removal model size. |
+| `GOOGLE_PLAY_MOCK_MODE`, `APPLE_MOCK_MODE` | Mock store verifiers for local work. |
+| `XENDIT_ENABLED` | Optional checkout for builds that are not in a store. |
+
+The full list, with defaults, is in [`.env.example`](.env.example).
+
+## Architecture
+
+```mermaid
+flowchart LR
+  Routes["app.ts\nroutes"] --> MW["middleware\nauth · quota · upload"]
+  MW --> C["controllers\nHTTP only"]
+  C --> S["services\nproduct logic"]
+  S --> AI["src/ai\nAnvia runtime boundary"]
+  AI --> GW["AI gateway\nOpenRouter"]
+  S --> PG[("Postgres")]
+  S --> RD[("Redis")]
+  S --> ST[("Object storage")]
 ```
 
-On Windows the debug keystore is typically `%USERPROFILE%\.android\debug.keystore`.
+| Directory | Responsibility |
+| --- | --- |
+| `src/ai/` | The only place that imports `@anvia/*` at runtime. The packages are ESM-only, so they load through the `src/ai/esm.ts` seam. |
+| `src/controllers/` | HTTP translation only. No product logic. |
+| `src/services/` | The product behaviour: stickers, packs, billing, grid split, image and vision AI. |
+| `src/ai/provider/` | The gateway boundary: the client, the completion model, and the Images API adapter. |
+| `prisma/` | The schema, the base seed, and the AI model catalog. |
 
-### Auth endpoints (Google)
+Model selection is **data, not environment**: the `AiModel` table has one row per role, so a model
+can be changed with an `UPDATE` and a restart, without a deploy.
 
-| Method | Path | Auth | Purpose |
-|--------|------|------|---------|
-| `POST` | `/api/v1/auth/google` | Public | Login or register with ID token |
-| `POST` | `/api/v1/auth/google/link-with-password` | Public | Link Google when email already has a password |
-| `POST` | `/api/v1/auth/google/link` | Bearer | Link Google while signed in |
-| `DELETE` | `/api/v1/auth/google` | Bearer | Unlink Google (blocked if sole login method) |
-| `POST` | `/api/v1/auth/set-password` | Bearer | Set a password on a Google-only account |
+The full picture, including the ESM seam and the provider boundary, is in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-### Environment
+## Quality gates
 
-| Variable | Description |
-|----------|-------------|
-| `GOOGLE_CLIENT_IDS` | Comma-separated OAuth client IDs accepted as ID token `aud` |
+```bash
+npm run lint          # eslint
+npm run typecheck     # tsc --noEmit
+npm test              # vitest, 415 tests
+npm run build && npm run check:dist
+```
 
-## Sign in with Apple
+`check:dist` verifies that the compiled build can actually load the ESM-only `@anvia/*` packages
+through the shim.
 
-Clients send an Apple **identity token** to `POST /api/v1/auth/apple`. The API verifies the JWT against Apple JWKS (`iss` = `https://appleid.apple.com`, `aud` ∈ `APPLE_CLIENT_IDS`). Stable key is Apple **`sub`** in `AuthIdentity` with provider `APPLE`.
+The suite needs its own database:
 
-### Auth endpoints (Apple) — mirror Google
+```bash
+npm run test:up        # postgres-test and redis-test
+npm run test:migrate   # migrate AND seed the test database
+npm test
+npm run test:down
+```
 
-| Method | Path | Auth | Purpose |
-|--------|------|------|---------|
-| `POST` | `/api/v1/auth/apple` | Public | Login or register |
-| `POST` | `/api/v1/auth/apple/link-with-password` | Public | Link Apple when email has a password |
-| `POST` | `/api/v1/auth/apple/link` | Bearer | Link while signed in |
-| `DELETE` | `/api/v1/auth/apple` | Bearer | Unlink (blocked if sole method) |
+`test:migrate` applies the migrations and seeds the test database (roles, billing products, the AI
+model catalog), which the suite requires. Give the test stack exclusive use: concurrent runs, or an
+external `test:down -v`, produce phantom failures.
 
-### Password reset / set-password via email (Resend)
+CI runs the same gates on every pull request, and builds and publishes the image on `master`.
 
-| Method | Path | Behavior |
-|--------|------|----------|
-| `POST` | `/api/v1/auth/forgot-password` | Body `{ email }`. Always **200**. Sends magic link if active user exists (including OAuth-only / no password). |
-| `POST` | `/api/v1/auth/reset-password` | Body `{ token, newPassword }`. Sets password, invalidates token + refresh tokens. |
+## Reference
 
-Email deep link: `{APP_DEEP_LINK_SCHEME}://auth/reset-password?token=…` plus `PASSWORD_RESET_URL_BASE` web fallback.
+| Document | What is in it |
+| --- | --- |
+| [docs/AUTH.md](docs/AUTH.md) | Google, Apple and password: the setup checklists, the endpoints, and the continuity rules. |
+| [docs/AI.md](docs/AI.md) | The daily quota, the gateway, the model catalog and the tracing. |
+| [docs/BILLING.md](docs/BILLING.md) | Store compliance, the purchase endpoints and how the AI quota is charged. |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The layers, the AI runtime boundary and the model catalog. |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Production setup, TLS and the deployment scripts. |
 
-### Continuity rules
+## Contributing
 
-- Never auto-link Google ↔ Apple by email.
-- Password login without `passwordHash` → `USE_OAUTH_OR_SET_PASSWORD` + `providers`.
-- OAuth sign-in when email exists with another OAuth and no password → `ACCOUNT_EXISTS_OTHER_PROVIDER`.
+Issues and pull requests are welcome. Open a branch from `master`, keep the change focused, and say
+what you ran.
 
-### Environment (auth)
+## License
 
-| Variable | Description |
-|----------|-------------|
-| `GOOGLE_CLIENT_IDS` | Accepted Google ID token audiences |
-| `APPLE_CLIENT_IDS` | Accepted Apple identity token audiences |
-| `RESEND_API_KEY` | Resend API key (empty = log-only in tests/dev) |
-| `RESEND_FROM` | From address |
-| `PASSWORD_RESET_URL_BASE` | HTTPS fallback URL for reset |
-| `PASSWORD_RESET_TOKEN_TTL_MINUTES` | Token lifetime (default 60) |
-| `APP_DEEP_LINK_SCHEME` | Default `setiker` |
-
-## AI quota (daily points)
-
-Each authenticated user has a **daily point pool** (default **100**). Each AI operation consumes configurable points. Outstanding reservations count toward the limit so concurrent requests from multiple devices cannot overshoot quota.
-
-### Environment
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `AI_DAILY_POINT_LIMIT` | `100` | Total points per user per UTC day |
-| `AI_OPERATION_COSTS` | (see below) | JSON object, e.g. `{"generate":1,"gridSplit":1,"backgroundRemove":1,"videoStickerPack":1,"improve":1}` |
-| `AI_COST_GENERATE` | `1` | Per-operation override when JSON not set |
-| `AI_COST_GRID_SPLIT` | `1` | |
-| `AI_COST_BACKGROUND_REMOVE` | `1` | |
-| `AI_COST_VIDEO_PACK` | `1` | |
-| `AI_COST_IMPROVE` | `1` | |
-| `AI_RESERVATION_TTL_SECONDS` | `3600` | Auto-release stale reservations |
-| `AI_QUOTA_FAIL_CLOSED` | `true` outside development | When `true`, Redis errors block quota instead of fail-open. Keep `true` in production and CI. |
-| `REDIS_ENABLED` | `true` | Disable only for local dev without Redis. Keep enabled in production. |
-| `IMGLY_BG_MODEL` | `medium` | IMG.LY ONNX model size (`small`/`medium`/`large`) |
-| `IMGLY_BG_MAX_CONCURRENCY` | `2` | Parallel IMG.LY segmentations |
-
-### Endpoints
-
-- `GET /api/v1/ai/usage` — snapshot (`pointsUsed`, `pointsOutstanding`, `pointsRemaining`, `operationCosts`)
-- `POST /api/v1/ai/quota/reserve` — body `{ "operation": "generate" }`
-- `POST /api/v1/ai/quota/finalize` — body `{ "reservationId", "outcome": "committed" | "released" }`
-
-Protected AI routes accept optional header `X-AI-Reservation-Id` from the app after a prior reserve.
-
-Redis is required for real quota enforcement. `docker-compose.yml` uses profiles: `dev` runs the
-api with Postgres and Redis, `test` starts the isolated stack (Postgres on `localhost:5433`,
-Redis on `localhost:6380`), and `prod` runs the published image with migrations, seeding, and
-nginx. Before running tests use `npm run test:up && npm run test:migrate` — `test:migrate`
-applies migrations **and seeds** the test database (roles, billing products, AI model catalog),
-which the suite requires. Give the test stack exclusive use; concurrent runs or an external
-`test:down -v` will produce phantom failures.
-
-Quality gates: `npm test` (full suite), `npm run lint`, `npm run typecheck`, and
-`npm run build && npm run check:dist` — the last one verifies the compiled CommonJS build can
-actually load the ESM-only `@anvia/*` packages through the shim.
-
-> Deployment posture: in the `prod` profile Postgres and Redis bind to `127.0.0.1` only, and the
-> api is exposed through nginx on host ports `8080`/`8443` (see `nginx/conf.d`); adjust the port
-> mappings for your TLS terminator.
-
-### Billing rules
-
-- **HTTP 2xx** on an AI route → reservation committed (points used).
-- **HTTP error** → reservation released (no charge).
-
-## AI engine (Anvia + Langfuse)
-
-AI flows run on [Anvia](https://docs.anvia.dev) with an OpenAI-compatible gateway
-(`AGENT_BASE_URL`, defaults to OpenRouter):
-
-- **Video sticker pack agent** — Anvia `Agent` with typed tools and schema-validated structured output.
-- **Vision analyses** (improvement prompt, grid detection, cell text) — Anvia parsed completions with zod schemas.
-- **Image generation** — Anvia `ImageGenerationModel` contract backed by the OpenRouter Images API.
-
-Models live in the `AiModel` table (one row per role with reasoning efforts, temperature and token
-limits) and are seeded by `npx prisma db seed`; change a model by updating the row or the seeder
-(`prisma/ai-models.seed.js`) — no deploy needed. Agent runs are traced to Langfuse when
-`LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY` are set. See
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full picture.
-
-| Env var | Default | Purpose |
-| --- | --- | --- |
-| `AGENT_API_KEY` | _(empty)_ | Gateway API key (required for AI features) |
-| `AGENT_BASE_URL` | `https://openrouter.ai/api/v1` | OpenAI-compatible gateway root |
-| `LANGFUSE_BASE_URL` | `https://cloud.langfuse.com` | Langfuse host |
-| `LANGFUSE_PUBLIC_KEY` | _(empty)_ | Enables agent-run tracing when set with the secret key |
-| `LANGFUSE_SECRET_KEY` | _(empty)_ | Enables agent-run tracing when set with the public key |
-
-Agent runs are traced to Langfuse when both keys are set; without them tracing is a no-op.
-
-## Store-compliant billing (Google Play / Apple IAP)
-
-Setiker Play Store and App Store builds must use **Google Play Billing** and **StoreKit** for digital goods (token packs, subscriptions). Xendit is optional for non-store builds only (`XENDIT_ENABLED=true`).
-
-### Compliance
-
-- Do not expose Xendit/QRIS checkout in Google Play or App Store builds for in-app digital goods.
-- Purchases are verified server-side before entitlements are granted.
-- Purchased token balance is stored in Postgres (`UserCreditBalance` + `TokenLedgerEntry`).
-- Daily AI quota resets in `BILLING_DAILY_RESET_TIMEZONE` (default `Asia/Jakarta`).
-- Consumption order: subscription/free daily allowance first, then purchased tokens.
-
-### Billing endpoints
-
-- `GET /api/v1/billing/products` — product catalog (no localized prices)
-- `POST /api/v1/billing/google-play/verify` — verify Play purchase token
-- `POST /api/v1/billing/apple/verify` — verify StoreKit transaction
-- `GET /api/v1/billing/purchases` — purchase history
-- `GET /api/v1/billing/subscription/me` — active subscription
-- `POST /api/v1/billing/restore` — restore entitlements
-- `POST /api/v1/billing/google-play/rtdn` — Play Real-time Developer Notifications
-- `POST /api/v1/billing/apple/notifications` — App Store Server Notifications
-
-### Billing environment
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `BILLING_DAILY_RESET_TIMEZONE` | `Asia/Jakarta` | Daily quota reset timezone |
-| `BILLING_FREE_DAILY_POINT_LIMIT` | `100` | Free tier daily points |
-| `BILLING_PREMIUM_DAILY_POINT_LIMIT` | `500` | Premium tier daily points |
-| `GOOGLE_PLAY_PACKAGE_NAME` | `com.setiker.app` | Android package name |
-| `GOOGLE_PLAY_MOCK_MODE` | `false` | Mock verifier for dev/test |
-| `APPLE_MOCK_MODE` | `false` | Mock Apple verifier for dev/test |
-| `XENDIT_ENABLED` | `false` | Non-store checkout only |
-- **Client finalize `committed`** (e.g. user cancel) → charged even without 2xx.
-- **Client finalize `released`** → not charged.
+stiker-api is open source under the [MIT License](LICENSE).
